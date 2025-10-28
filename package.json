@@ -1,0 +1,21 @@
+{
+  "name": "round-robin-storybot",
+  "version": "0.1.0",
+  "description": "A Discord bot to run round-robin collaborative stories",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "lint": "eslint . || true",
+    "test": "echo \"no tests yet\" && exit 0"
+  },
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16"
+  },
+  "dependencies": {
+    "mysql2": "^3.15.3"
+  }
+}
