@@ -12,7 +12,7 @@ This Discord bot manages collaborative round-robin story writing events with the
 - **Story states**: Stories can be active, paused, or closed
 - **Admin controls**: Admins can manage user and story settings
 - **Timeout tracking**: System tracks user timeouts and manual passing
-- **Entry system**: Writers can submit multiple entries per turn
+- **Entry system**: Writers can submit multiple entries per turn from the private thread that is opened when their turn starts. Media entries are forwarded to a media channel and the post id of the forwarded message is stored. Entries within a turn are kept in order posted.
 - **Publishing integration**: Closed stories can be exported to PDF and posted to AO3
 - **Job scheduling**: Background job system for reminders and turn timeouts
 
