@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS story_writer (
   status TINYINT(1) DEFAULT 1,
   joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   left_at TIMESTAMP NULL,
+  thread_id VARCHAR(255),
   UNIQUE KEY (story_id, user_id)
 );
 
