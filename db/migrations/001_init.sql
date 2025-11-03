@@ -4,40 +4,46 @@ DROP TABLE IF EXISTS turn;
 DROP TABLE IF EXISTS story_entry;  
 DROP TABLE IF EXISTS story_writer;
 DROP TABLE IF EXISTS story;
+DROP TABLE IF EXISTS config;
 
 -- initial schema (story, story_writer, turn, job)
 CREATE TABLE IF NOT EXISTS story (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  title VARCHAR(255) NOT NULL,
-  URL VARCHAR(255),
-  status TINYINT(1) DEFAULT 1,
+  story_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  guild_id BIGINT DEFAULT NULL,
+  title TEXT NOT NULL,
+  ao3_URL VARCHAR(255),
+  story_status TINYINT(1) DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   quick_mode TINYINT(1) DEFAULT 0,
   turn_length_hours INT DEFAULT 24,
-  reminder_b4_timeout_hours INT DEFAULT 12,
+  timeout_reminder_percent INT DEFAULT 50,
   next_writer_id BIGINT NULL,
-  FOREIGN KEY (next_writer_id) REFERENCES story_writer(id) ON DELETE SET NULL 
+  story_thread_id BIGINT,
+  story_turn_privacy TINYINT(1) DEFAULT 1,
+  story_delay_hours INT DEFAULT 0,
+  story_delay_users INT DEFAULT NULL,
+  FOREIGN KEY (next_writer_id) REFERENCES story_writer(story_writer_id) ON DELETE SET NULL 
 );
 
 CREATE TABLE IF NOT EXISTS story_writer (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  story_writer_id BIGINT PRIMARY KEY AUTO_INCREMENT,
   story_id BIGINT NOT NULL,
-  FOREIGN KEY (story_id) REFERENCES story(id) ON DELETE CASCADE,
-  user_id BIGINT NOT NULL,
-  display_name VARCHAR(255),
-  pen_name VARCHAR(255),
-  status TINYINT(1) DEFAULT 1,
+  FOREIGN KEY (story_id) REFERENCES story(story_id) ON DELETE CASCADE,
+  discord_user_id BIGINT NOT NULL,
+  discord_display_name VARCHAR(255),
+  AO3_name VARCHAR(255),
+  turn_privacy TINYINT(1) DEFAULT 1,
+  sw_status TINYINT(1) DEFAULT 1,
   joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   left_at TIMESTAMP NULL,
-  thread_id VARCHAR(255),
-  UNIQUE KEY (story_id, user_id)
+  UNIQUE KEY (story_id, discord_user_id)
 );
 
 CREATE TABLE story_entry (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  story_entry_id BIGINT PRIMARY KEY AUTO_INCREMENT,
   turn_id BIGINT NOT NULL,
-  FOREIGN KEY (turn_id) REFERENCES turn(id) ON DELETE CASCADE,
+  FOREIGN KEY (turn_id) REFERENCES turn(turn_id) ON DELETE CASCADE,
   content TEXT NOT NULL,
   order_in_turn INT DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -45,19 +51,29 @@ CREATE TABLE story_entry (
 );
 
 CREATE TABLE IF NOT EXISTS turn (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  turn_id BIGINT PRIMARY KEY AUTO_INCREMENT,
   story_writer_id BIGINT NOT NULL,
-  FOREIGN KEY (story_writer_id) REFERENCES story_writer(id) ON DELETE CASCADE,
+  FOREIGN KEY (story_writer_id) REFERENCES story_writer(story_writer_id) ON DELETE CASCADE,
   started_at TIMESTAMP NULL,
   ended_at TIMESTAMP NULL,
-  status TINYINT(1) DEFAULT 0
+  thread_id VARCHAR(255),
+  turn_status TINYINT(1) DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS job (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  type VARCHAR(50) NOT NULL,
+  job_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  job_type VARCHAR(50) NOT NULL,
   payload JSON,
   run_at TIMESTAMP,
   attempts INT DEFAULT 0,
-  status TINYINT(1) DEFAULT 0
+  job_status TINYINT(1) DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS config (
+  config_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  config_key VARCHAR(255) NOT NULL UNIQUE,
+  config_value TEXT NOT NULL,
+  language_code VARCHAR(10) DEFAULT 'en',
+  guild_id BIGINT DEFAULT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );

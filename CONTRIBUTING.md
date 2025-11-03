@@ -18,6 +18,39 @@ This Discord bot manages collaborative round-robin story writing events with the
 
 ## Development Guidelines
 
-- Use feature branches and open pull requests against `main`.
-- Run `npm test` and `npm run lint` before opening a PR.
-- Keep secrets out of the repository; use `config.json` or environment variables.
+### Code Organization
+- Keep Discord client logic in `index.js`
+- Keep story engine logic in `storybot.js` with event emission to index.js
+- Shared utilities go in `utilities.js`
+- Command handlers in separate files under `commands/` directory
+- Database schema changes use numbered migration files
+
+### Naming Conventions
+- Function names and parameters use camelCase + ID: guildID, storyID, userID, etc.
+- Database fields and tables use snake_case: guild_id, story_id, user_id, etc.
+- Local variables from Discord objects use camelCase + Id: guildId, userId, channelId
+
+### Configuration Management
+- Use `getConfigValue(key, guildID)` for all user-facing text and configuration variables
+- getConfigValue supports multi-language configuration by retrieving a guild-specific language_code
+- User-facing text is stored as `txtFieldName`, form labels are `lblFieldName`, and configuration variables are `cfgFieldName`. 
+- Variables in template text that must be replaced with contextual values use bracket notation: `[story_id]`and use `replaceTemplateVariables()` for processing, passing a valueKeyMap with contextual data.
+
+### Error Handling Standards
+- Error messages should be sent to the console beginning with: `${formattedDate()}: [Guild ${guild_id}] ` + Error description
+- Include function name in error message: `FunctionName failed:` or `Error in FunctionName:`
+- Include key parameters for debugging context where helpful (e.g., IDs, user input)
+- Return structured objects with `success` boolean and `error`/`message` fields
+- Use database transactions for multi-step operations with rollback on errors
+
+### Database Interaction Guidelines
+- Use prepared sql statements with parameter binding
+- Use explicit transactions for operations affecting multiple tables
+- Release connections in `finally` blocks to prevent connection leaks
+- Follow the pattern: `await connection.beginTransaction()` → operations → `await connection.commit()` → `connection.release()`
+
+### Discord API Best Practices  
+- Use `interaction.deferReply()` for operations that may take longer than 3 seconds
+- Handle modal submissions with two-stage validation (client-side + server-side)
+- Include reason parameters where applicable for audit log clarity
+
