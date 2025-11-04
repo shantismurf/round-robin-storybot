@@ -4,11 +4,11 @@ import { CreateStory } from '../storybot.js';
 
 const data = new SlashCommandBuilder()
   .setName('story')
-  .setDescription('Manage round-robin stories')
+  .setDescription('Manage stories')
   .addSubcommand(subcommand =>
     subcommand
       .setName('add')
-      .setDescription('Create a new round-robin story')
+      .setDescription('Create a new story')
   )
   .addSubcommand(subcommand =>
     subcommand
@@ -39,6 +39,15 @@ const data = new SlashCommandBuilder()
         option.setName('story_id')
           .setDescription('Story ID where you want to submit')
           .setRequired(true))
+  )
+  .addSubcommand(subcommand =>
+    subcommand
+      .setName('join')
+      .setDescription('Join an existing story as a writer')
+      .addIntegerOption(option =>
+        option.setName('story_id')
+          .setDescription('Story ID you want to join')
+          .setRequired(true))
   );
 
 async function execute(interaction) {
@@ -50,6 +59,8 @@ async function execute(interaction) {
     await handleListStories(interaction);
   } else if (subcommand === 'write') {
     await handleWrite(interaction);
+  } else if (subcommand === 'join') {
+    await handleJoin(interaction);
   }
 }
 
@@ -57,20 +68,6 @@ async function handleAddStory(interaction) {
   try {
     const guildId = interaction.guild.id;
     
-    // Get all config values for modal labels
-    const lblStoryTitle = await getConfigValue('lblStoryTitle', guildId);
-    const lblQuickMode = await getConfigValue('lblQuickMode', guildId);
-    const lblTurnLength = await getConfigValue('lblTurnLength', guildId);
-    const lblTimeoutReminder = await getConfigValue('lblTimeoutReminder', guildId);
-    const lblHideTurnThreads = await getConfigValue('lblHideTurnThreads', guildId);
-    const txtDelayStoryStart = await getConfigValue('txtDelayStoryStart', guildId);
-    const lblNoHours = await getConfigValue('lblNoHours', guildId);
-    const txtAndOr = await getConfigValue('txtAndOr', guildId);
-    const lblNoWriters = await getConfigValue('lblNoWriters', guildId);
-    const txtStoryCreatorAdd = await getConfigValue('txtStoryCreatorAdd', guildId);
-    const lblYourAO3Name = await getConfigValue('lblYourAO3Name', guildId);
-    const lblKeepYourPrivate = await getConfigValue('lblKeepYourPrivate', guildId);
-
     // Create modal
     const modal = new ModalBuilder()
       .setCustomId('story_add_modal')
@@ -79,7 +76,7 @@ async function handleAddStory(interaction) {
     // Story Title - Required text input
     const storyTitleInput = new TextInputBuilder()
       .setCustomId('story_title')
-      .setLabel(lblStoryTitle)
+      .setLabel(await getConfigValue('lblStoryTitle', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setMaxLength(500);
@@ -87,38 +84,38 @@ async function handleAddStory(interaction) {
     // Quick Mode - Select Menu (converted to text input for modal)
     const quickModeInput = new TextInputBuilder()
       .setCustomId('quick_mode')
-      .setLabel(lblQuickMode)
+      .setLabel(await getConfigValue('lblQuickMode', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setValue('off')
-      .setPlaceholder('Enter: off or on');
+      .setPlaceholder(await getConfigValue('txtQuickModePlaceholder', guildId));
 
     // Turn Length - Required text input with default
     const turnLengthInput = new TextInputBuilder()
       .setCustomId('turn_length')
-      .setLabel(lblTurnLength)
+      .setLabel(await getConfigValue('lblTurnLength', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setValue('24')
-      .setPlaceholder('Enter number of hours');
+      .setPlaceholder(await getConfigValue('txtTurnLengthPlaceholder', guildId));
 
     // Timeout Reminder - Select Menu (converted to text input for modal)
     const timeoutReminderInput = new TextInputBuilder()
       .setCustomId('timeout_reminder')
-      .setLabel(lblTimeoutReminder)
+      .setLabel(await getConfigValue('lblTimeoutReminder', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setValue('50')
-      .setPlaceholder('Enter: 0, 25, 50, or 75');
+      .setPlaceholder(await getConfigValue('txtTimeoutReminderPlaceholder', guildId));
 
     // Create second modal for additional fields
     const hideTurnThreadsInput = new TextInputBuilder()
       .setCustomId('hide_turn_threads')
-      .setLabel(lblHideTurnThreads)
+      .setLabel(await getConfigValue('lblHideTurnThreads', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setValue('off')
-      .setPlaceholder('Enter: off or on');
+      .setPlaceholder(await getConfigValue('txtHideTurnThreadsPlaceholder', guildId));
 
     // Add fields to modal (Discord limits to 5 components per modal)
     const row1 = new ActionRowBuilder().addComponents(storyTitleInput);
@@ -134,7 +131,7 @@ async function handleAddStory(interaction) {
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${guildId}] Error creating story modal:`, error);
     await interaction.reply({
-      content: 'Failed to open story creation form. Please try again.',
+      content: await getConfigValue('txtFormOpenError', guildId),
       ephemeral: true
     });
   }
@@ -146,6 +143,8 @@ async function handleModalSubmit(interaction) {
     await handleAddStoryModal(interaction);
   } else if (interaction.customId.startsWith('story_write_')) {
     await handleWriteModalSubmit(interaction);
+  } else if (interaction.customId.startsWith('story_join_')) {
+    await handleJoinModalSubmit(interaction);
   }
 }
 
@@ -163,6 +162,7 @@ async function handleAddStoryModal(interaction) {
 
     // Get error message template
     const txtMustBeNo = await getConfigValue('txtMustBeNo', guildId);
+    const txtValidationErrors = await getConfigValue('txtValidationErrors', guildId);
 
     // Validate inputs
     const errors = [];
@@ -170,7 +170,7 @@ async function handleAddStoryModal(interaction) {
     // Validate quick mode
     const quickMode = quickModeRaw.toLowerCase();
     if (!['off', 'on'].includes(quickMode)) {
-      errors.push(`Quick Mode must be "off" or "on".`);
+      errors.push(await getConfigValue('txtQuickModeValidation', guildId));
     }
 
     // Validate turn length (must be numeric)
@@ -183,18 +183,18 @@ async function handleAddStoryModal(interaction) {
     // Validate timeout reminder (must be 0, 25, 50, or 75)
     const timeoutReminder = parseInt(timeoutReminderRaw);
     if (![0, 25, 50, 75].includes(timeoutReminder)) {
-      errors.push(`Timeout Reminder must be 0, 25, 50, or 75.`);
+      errors.push(await getConfigValue('txtTimeoutReminderValidation', guildId));
     }
 
     // Validate hide turn threads
     const hideTurnThreads = hideTurnThreadsRaw.toLowerCase();
     if (!['off', 'on'].includes(hideTurnThreads)) {
-      errors.push(`Hide Turn Threads must be "off" or "on".`);
+      errors.push(await getConfigValue('txtHideTurnThreadsValidation', guildId));
     }
 
     if (errors.length > 0) {
       await interaction.reply({
-        content: `**Validation Errors:**\n${errors.join('\n')}`,
+        content: `${txtValidationErrors}\n${errors.join('\n')}`,
         ephemeral: true
       });
       return;
@@ -213,7 +213,7 @@ async function handleAddStoryModal(interaction) {
     const guildId = interaction.guild.id;
     console.error(`${formattedDate()}: [Guild ${guildId}] Error processing story modal:`, error);
     await interaction.reply({
-      content: 'Failed to process form. Please try again.',
+      content: await getConfigValue('txtFormProcessError', guildId),
       ephemeral: true
     });
   }
@@ -224,14 +224,6 @@ async function showSecondModal(interaction, storyData) {
   try {
     const guildId = interaction.guild.id;
     
-    // Get config values for second modal
-    const txtDelayStoryStart = await getConfigValue('txtDelayStoryStart', guildId);
-    const lblNoHours = await getConfigValue('lblNoHours', guildId);
-    const lblNoWriters = await getConfigValue('lblNoWriters', guildId);
-    const txtStoryCreatorAdd = await getConfigValue('txtStoryCreatorAdd', guildId);
-    const lblYourAO3Name = await getConfigValue('lblYourAO3Name', guildId);
-    const lblKeepYourPrivate = await getConfigValue('lblKeepYourPrivate', guildId);
-
     const secondModal = new ModalBuilder()
       .setCustomId(`story_add_modal_2_${JSON.stringify(storyData)}`)
       .setTitle('Story Settings & Writer Info');
@@ -239,35 +231,35 @@ async function showSecondModal(interaction, storyData) {
     // Delay hours input
     const delayHoursInput = new TextInputBuilder()
       .setCustomId('delay_hours')
-      .setLabel(lblNoHours)
+      .setLabel(await getConfigValue('lblNoHours', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(false)
-      .setPlaceholder('Enter number of hours (optional)');
+      .setPlaceholder(await getConfigValue('txtDelayHoursPlaceholder', guildId));
 
     // Delay writers input  
     const delayWritersInput = new TextInputBuilder()
       .setCustomId('delay_writers')
-      .setLabel(lblNoWriters)
+      .setLabel(await getConfigValue('lblNoWriters', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(false)
-      .setPlaceholder('Enter number of writers (optional)');
+      .setPlaceholder(await getConfigValue('txtDelayWritersPlaceholder', guildId));
 
     // AO3 name input
     const ao3NameInput = new TextInputBuilder()
       .setCustomId('ao3_name')
-      .setLabel(lblYourAO3Name)
+      .setLabel(await getConfigValue('lblYourAO3Name', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(false)
-      .setPlaceholder('Your AO3 username (optional)');
+      .setPlaceholder(await getConfigValue('txtAO3NamePlaceholder', guildId));
 
     // Private threads input
     const keepPrivateInput = new TextInputBuilder()
       .setCustomId('keep_private')
-      .setLabel(lblKeepYourPrivate)
+      .setLabel(await getConfigValue('lblKeepYourPrivate', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setValue('no')
-      .setPlaceholder('Enter: yes or no');
+      .setPlaceholder(await getConfigValue('txtKeepPrivatePlaceholder', guildId));
 
     // Add to modal
     const row1 = new ActionRowBuilder().addComponents(delayHoursInput);
@@ -282,7 +274,7 @@ async function showSecondModal(interaction, storyData) {
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${guildId}] Error showing second modal:`, error);
     await interaction.followUp({
-      content: 'Failed to show additional options form.',
+      content: await getConfigValue('txtAdditionalOptionsError', guildId),
       ephemeral: true
     });
   }
@@ -305,6 +297,7 @@ async function handleSecondModalSubmit(interaction) {
 
     // Get error message
     const txtMustBeNo = await getConfigValue('txtMustBeNo', guildId);
+    const txtValidationErrors = await getConfigValue('txtValidationErrors', guildId);
 
     // Validate second modal inputs
     const errors = [];
@@ -326,12 +319,12 @@ async function handleSecondModalSubmit(interaction) {
     // Validate keep private
     const keepPrivate = keepPrivateRaw.toLowerCase();
     if (!['yes', 'no'].includes(keepPrivate)) {
-      errors.push(`Keep Private must be "yes" or "no".`);
+      errors.push(await getConfigValue('txtPrivacyValidation', guildId));
     }
 
     if (errors.length > 0) {
       await interaction.reply({
-        content: `**Validation Errors:**\n${errors.join('\n')}`,
+        content: `${txtValidationErrors}\n${errors.join('\n')}`,
         ephemeral: true
       });
       return;
@@ -365,8 +358,406 @@ async function handleSecondModalSubmit(interaction) {
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${guildId}] Error processing second story modal:`, error);
     await interaction.editReply({
-      content: 'Failed to create story. Please try again.'
+      content: await getConfigValue('txtStoryCreationError', guildId)
     });
+  }
+}
+
+/**
+ * Handle /story join command
+ */
+async function handleJoin(interaction) {
+  try {
+    const guildId = interaction.guild.id;
+    const storyId = interaction.options.getInteger('story_id');
+    
+    // Validate story access and get story info
+    const storyInfo = await validateStoryAccess(storyId, guildId);
+    if (!storyInfo.success) {
+      await interaction.reply({ 
+        content: storyInfo.error, 
+        ephemeral: true 
+      });
+      return;
+    }
+    
+    // Validate join eligibility
+    const joinInfo = await validateJoinEligibility(storyId, guildId, interaction.user.id);
+    if (!joinInfo.success) {
+      await interaction.reply({ 
+        content: joinInfo.error, 
+        ephemeral: true 
+      });
+      return;
+    }
+    
+    // Check if user has existing AO3 name from other stories
+    let existingAO3Name = '';
+    try {
+      const connection = await getDBConnection();
+      try {
+        const [existingWriter] = await connection.execute(`
+          SELECT AO3_name FROM story_writer 
+          WHERE discord_user_id = ? AND AO3_name IS NOT NULL AND AO3_name != ''
+          ORDER BY joined_at DESC LIMIT 1
+        `, [interaction.user.id]);
+        
+        if (existingWriter.length > 0) {
+          existingAO3Name = existingWriter[0].AO3_name;
+        }
+      } finally {
+        connection.release();
+      }
+    } catch (error) {
+      // Continue without pre-filling if lookup fails
+    }
+    
+    // Create modal
+    const modal = new ModalBuilder()
+      .setCustomId(`story_join_${storyId}`)
+      .setTitle(`🎭 Join "${storyInfo.story.title}"`);
+
+    // AO3 name input
+    const ao3NameInput = new TextInputBuilder()
+      .setCustomId('ao3_name')
+      .setLabel(await getConfigValue('lblJoinAO3Name', guildId))
+      .setStyle(TextInputStyle.Short)
+      .setRequired(false)
+      .setPlaceholder(await getConfigValue('txtJoinAO3Placeholder', guildId))
+      .setMaxLength(255);
+      
+    if (existingAO3Name) {
+      ao3NameInput.setValue(existingAO3Name);
+    }
+
+    // Privacy input
+    const privacyInput = new TextInputBuilder()
+      .setCustomId('turn_privacy')
+      .setLabel(await getConfigValue('lblJoinPrivacy', guildId))
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setValue('public')
+      .setPlaceholder(await getConfigValue('txtJoinPrivacyPlaceholder', guildId));
+
+    // Notification preference input
+    const notificationInput = new TextInputBuilder()
+      .setCustomId('notification_prefs')
+      .setLabel(await getConfigValue('lblJoinNotifications', guildId))
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setValue('dm')
+      .setPlaceholder(await getConfigValue('txtJoinNotificationPlaceholder', guildId));
+
+    // Add to modal
+    const row1 = new ActionRowBuilder().addComponents(ao3NameInput);
+    const row2 = new ActionRowBuilder().addComponents(privacyInput);
+    const row3 = new ActionRowBuilder().addComponents(notificationInput);
+
+    modal.addComponents(row1, row2, row3);
+
+    await interaction.showModal(modal);
+
+  } catch (error) {
+    console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in handleJoin:`, error);
+    await interaction.reply({
+      content: await getConfigValue('txtJoinFormFailed', interaction.guild.id),
+      ephemeral: true
+    });
+  }
+}
+
+/**
+ * Handle join modal submission
+ */
+async function handleJoinModalSubmit(interaction) {
+  try {
+    const guildId = interaction.guild.id;
+    const storyId = interaction.customId.split('_')[2];
+    
+    await interaction.deferReply({ ephemeral: true });
+    
+    // Get and validate form values
+    const ao3Name = sanitizeModalInput(interaction.fields.getTextInputValue('ao3_name'), 255);
+    const turnPrivacyRaw = sanitizeModalInput(interaction.fields.getTextInputValue('turn_privacy'), 10);
+    const notificationPrefsRaw = sanitizeModalInput(interaction.fields.getTextInputValue('notification_prefs'), 10);
+    
+    // Get validation error messages
+    const txtValidationErrors = await getConfigValue('txtValidationErrors', guildId);
+    
+    // Validate inputs
+    const errors = [];
+    
+    // Validate turn privacy
+    const turnPrivacy = turnPrivacyRaw.toLowerCase();
+    if (!['public', 'private'].includes(turnPrivacy)) {
+      errors.push(await getConfigValue('txtPrivacyValidation', guildId));
+    }
+    
+    // Validate notification preferences
+    const notificationPrefs = notificationPrefsRaw.toLowerCase();
+    if (!['dm', 'mention'].includes(notificationPrefs)) {
+      errors.push(await getConfigValue('txtNotificationValidation', guildId));
+    }
+    
+    if (errors.length > 0) {
+      await interaction.editReply({
+        content: `${txtValidationErrors}\n${errors.join('\n')}`
+      });
+      return;
+    }
+    
+    // Re-validate join eligibility (in case story changed)
+    const joinInfo = await validateJoinEligibility(storyId, guildId, interaction.user.id);
+    if (!joinInfo.success) {
+      await interaction.editReply({
+        content: joinInfo.error
+      });
+      return;
+    }
+    
+    // Prepare join input for StoryJoin function
+    const joinInput = {
+      ao3Name: ao3Name || null,
+      turnPrivacy: turnPrivacy === 'private' ? 0 : 1,
+      notificationPrefs: notificationPrefs
+    };
+    
+    // Import StoryJoin function and call it
+    const { StoryJoin } = await import('../storybot.js');
+    const connection = await getDBConnection();
+    
+    try {
+      await connection.beginTransaction();
+      
+      const result = await StoryJoin(connection, interaction, joinInput, parseInt(storyId));
+      
+      if (result.success) {
+        await connection.commit();
+        
+        // Get current writer count for success message
+        const [writerCount] = await connection.execute(`
+          SELECT COUNT(*) as count FROM story_writer 
+          WHERE story_id = ? AND sw_status = 1
+        `, [storyId]);
+        
+        const [storyInfo] = await connection.execute(`
+          SELECT title FROM story WHERE story_id = ?
+        `, [storyId]);
+        
+        const txtJoinSuccess = await getConfigValue('txtJoinSuccess', guildId);
+        const successMessage = replaceTemplateVariables(txtJoinSuccess, {
+          story_title: storyInfo[0].title,
+          writer_number: writerCount[0].count
+        });
+        
+        await interaction.editReply({
+          content: `${successMessage}${result.confirmationMessage || ''}`
+        });
+        
+        // Post announcement to story feed channel
+        await postStoryFeedJoinAnnouncement(storyId, interaction, storyInfo[0].title);
+        
+      } else {
+        await connection.rollback();
+        await interaction.editReply({
+          content: result.error
+        });
+      }
+      
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+    
+  } catch (error) {
+    console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in handleJoinModalSubmit:`, error);
+    await interaction.editReply({
+      content: await getConfigValue('txtJoinProcessFailed', interaction.guild.id)
+    });
+  }
+}
+
+/**
+ * Post announcement to story feed channel when someone joins
+ */
+async function postStoryFeedJoinAnnouncement(storyId, interaction, storyTitle) {
+  try {
+    const guildId = interaction.guild.id;
+    const connection = await getDBConnection();
+    
+    try {
+      // Get story feed channel ID from config
+      const feedChannelId = await getConfigValue('cfgStoryFeedChannelId', guildId);
+      if (!feedChannelId) {
+        // No feed channel configured
+        console.log(`${formattedDate()}: [Guild ${guildId}] Story feed channel not configured - skipping join announcement`);
+        return;
+      }
+      
+      // Get current turn info
+      const [turnInfo] = await connection.execute(`
+        SELECT sw.discord_display_name, t.started_at, s.turn_length_hours
+        FROM turn t
+        JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
+        JOIN story s ON sw.story_id = s.story_id
+        WHERE sw.story_id = ? AND t.turn_status = 1
+        ORDER BY t.started_at DESC LIMIT 1
+      `, [storyId]);
+      
+      let currentWriter = 'Unknown';
+      let turnEndDate = 'Unknown';
+      
+      if (turnInfo.length > 0) {
+        const turn = turnInfo[0];
+        currentWriter = turn.discord_display_name;
+        const endTime = new Date(turn.started_at.getTime() + (turn.turn_length_hours * 60 * 60 * 1000));
+        turnEndDate = `<t:${Math.floor(endTime.getTime() / 1000)}:f>`;
+      }
+      
+      // Get announcement message
+      const txtStoryFeedJoinAnnouncement = await getConfigValue('txtStoryFeedJoinAnnouncement', guildId);
+      const joinerName = interaction.member.displayName || interaction.user.displayName || interaction.user.username;
+      
+      const announcement = replaceTemplateVariables(txtStoryFeedJoinAnnouncement, {
+        joiner_name: joinerName,
+        story_title: storyTitle,
+        current_writer: currentWriter,
+        turn_end_date: turnEndDate
+      });
+      
+      // Send to story feed channel
+      const feedChannel = await interaction.guild.channels.fetch(feedChannelId);
+      if (feedChannel) {
+        await feedChannel.send(announcement);
+      }
+      
+    } finally {
+      connection.release();
+    }
+    
+  } catch (error) {
+    console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in postStoryFeedJoinAnnouncement:`, error);
+    // Don't throw - this is a non-critical announcement feature
+  }
+}
+
+/**
+ * Post announcement to story feed channel when a story is created
+ */
+async function postStoryFeedCreationAnnouncement(storyId, interaction, storyTitle, storyStatus, delayHours, delayWriters) {
+  try {
+    const guildId = interaction.guild.id;
+    const connection = await getDBConnection();
+    
+    try {
+      // Get story feed channel ID from config
+      const feedChannelId = await getConfigValue('cfgStoryFeedChannelId', guildId);
+      if (!feedChannelId) {
+        console.log(`${formattedDate()}: [Guild ${guildId}] Story feed channel not configured - skipping creation announcement`);
+        return;
+      }
+      
+      const creatorName = interaction.member.displayName || interaction.user.displayName || interaction.user.username;
+      let announcement;
+      
+      if (storyStatus === 1) {
+        // Story is immediately active
+        const [writerCount] = await connection.execute(`
+          SELECT COUNT(*) as count FROM story_writer WHERE story_id = ? AND sw_status = 1
+        `, [storyId]);
+        
+        const txtStoryFeedCreatedActive = await getConfigValue('txtStoryFeedCreatedActive', guildId);
+        announcement = replaceTemplateVariables(txtStoryFeedCreatedActive, {
+          story_title: storyTitle,
+          creator_name: creatorName,
+          writer_count: writerCount[0].count
+        });
+      } else if (delayHours) {
+        // Story delayed by time
+        const startTime = new Date(Date.now() + (delayHours * 60 * 60 * 1000));
+        const txtStoryFeedCreatedDelayed = await getConfigValue('txtStoryFeedCreatedDelayed', guildId);
+        announcement = replaceTemplateVariables(txtStoryFeedCreatedDelayed, {
+          story_title: storyTitle,
+          creator_name: creatorName,
+          start_time: `<t:${Math.floor(startTime.getTime() / 1000)}:f>`
+        });
+      } else if (delayWriters) {
+        // Story delayed by writer count
+        const txtStoryFeedCreatedPending = await getConfigValue('txtStoryFeedCreatedPending', guildId);
+        announcement = replaceTemplateVariables(txtStoryFeedCreatedPending, {
+          story_title: storyTitle,
+          creator_name: creatorName,
+          writers_needed: delayWriters - 1 // -1 because creator is already added
+        });
+      }
+      
+      if (announcement) {
+        const feedChannel = await interaction.guild.channels.fetch(feedChannelId);
+        if (feedChannel) {
+          await feedChannel.send(announcement);
+        }
+      }
+      
+    } finally {
+      connection.release();
+    }
+    
+  } catch (error) {
+    console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in postStoryFeedCreationAnnouncement:`, error);
+  }
+}
+
+/**
+ * Post announcement to story feed channel when a story becomes active
+ */
+async function postStoryFeedActivationAnnouncement(storyId, interaction, storyTitle) {
+  try {
+    const guildId = interaction.guild.id;
+    const connection = await getDBConnection();
+    
+    try {
+      // Get story feed channel ID from config
+      const feedChannelId = await getConfigValue('cfgStoryFeedChannelId', guildId);
+      if (!feedChannelId) {
+        console.log(`${formattedDate()}: [Guild ${guildId}] Story feed channel not configured - skipping activation announcement`);
+        return;
+      }
+      
+      // Get first writer and turn end time
+      const [turnInfo] = await connection.execute(`
+        SELECT sw.discord_display_name, t.started_at, s.turn_length_hours
+        FROM turn t
+        JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
+        JOIN story s ON sw.story_id = s.story_id
+        WHERE sw.story_id = ? AND t.turn_status = 1
+        ORDER BY t.started_at DESC LIMIT 1
+      `, [storyId]);
+      
+      if (turnInfo.length > 0) {
+        const turn = turnInfo[0];
+        const endTime = new Date(turn.started_at.getTime() + (turn.turn_length_hours * 60 * 60 * 1000));
+        
+        const txtStoryFeedNowActive = await getConfigValue('txtStoryFeedNowActive', guildId);
+        const announcement = replaceTemplateVariables(txtStoryFeedNowActive, {
+          story_title: storyTitle,
+          first_writer: turn.discord_display_name,
+          turn_end_date: `<t:${Math.floor(endTime.getTime() / 1000)}:f>`
+        });
+        
+        const feedChannel = await interaction.guild.channels.fetch(feedChannelId);
+        if (feedChannel) {
+          await feedChannel.send(announcement);
+        }
+      }
+      
+    } finally {
+      connection.release();
+    }
+    
+  } catch (error) {
+    console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in postStoryFeedActivationAnnouncement:`, error);
   }
 }
 
@@ -400,18 +791,15 @@ async function handleWrite(interaction) {
     
     // Check if story is quick mode
     if (!storyInfo.story.quick_mode) {
-      const txtNormalModeWrite = await getConfigValue('txtNormalModeWrite', guildId);
       await interaction.reply({ 
-        content: txtNormalModeWrite, 
+        content: await getConfigValue('txtNormalModeWrite', guildId), 
         ephemeral: true 
       });
       return;
     }
     
-    // Get configurable text
-    const lblWriteEntry = await getConfigValue('lblWriteEntry', guildId);
+    // Get configurable text for warnings (used multiple times)
     const txtWriteWarning = await getConfigValue('txtWriteWarning', guildId);
-    const txtWritePlaceholder = await getConfigValue('txtWritePlaceholder', guildId);
     
     // Create modal
     const modal = new ModalBuilder()
@@ -420,9 +808,9 @@ async function handleWrite(interaction) {
 
     const entryInput = new TextInputBuilder()
       .setCustomId('entry_content')
-      .setLabel(lblWriteEntry)
+      .setLabel(await getConfigValue('lblWriteEntry', guildId))
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder(`⚠️ ${txtWriteWarning}\n\n${txtWritePlaceholder}`)
+      .setPlaceholder(`⚠️ ${txtWriteWarning}\n\n${await getConfigValue('txtWritePlaceholder', guildId)}`)
       .setMaxLength(4000)
       .setMinLength(10)
       .setRequired(true);
@@ -434,9 +822,8 @@ async function handleWrite(interaction) {
 
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in handleWrite:`, error);
-    const txtWriteFormFailed = await getConfigValue('txtWriteFormFailed', interaction.guild.id);
     await interaction.reply({
-      content: txtWriteFormFailed,
+      content: await getConfigValue('txtWriteFormFailed', interaction.guild.id),
       ephemeral: true
     });
   }
@@ -503,18 +890,15 @@ async function handleWriteModalSubmit(interaction) {
     const embed = await createPreviewEmbed(content, guildId, discordTimestamp);
     
     // Create confirmation buttons
-    const btnSubmit = await getConfigValue('btnSubmit', guildId);
-    const btnDiscard = await getConfigValue('btnDiscard', guildId);
-    
     const confirmRow = new ActionRowBuilder()
       .addComponents(
         new ButtonBuilder()
           .setCustomId(`confirm_entry_${entryId}`)
-          .setLabel(btnSubmit)
+          .setLabel(await getConfigValue('btnSubmit', guildId))
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId(`discard_entry_${entryId}`)
-          .setLabel(btnDiscard)
+          .setLabel(await getConfigValue('btnDiscard', guildId))
           .setStyle(ButtonStyle.Danger)
       );
       
@@ -525,20 +909,16 @@ async function handleWriteModalSubmit(interaction) {
     
     // Send DM reminder
     try {
-      const txtDMReminder = await getConfigValue('txtDMReminder', guildId);
-      const txtRecoveryInstructions = await getConfigValue('txtRecoveryInstructions', guildId);
-      
       const user = await interaction.client.users.fetch(interaction.user.id);
-      await user.send(`${txtDMReminder}\n\n${txtRecoveryInstructions}\n\n⏰ Expires: ${discordTimestamp}`);
+      await user.send(`${await getConfigValue('txtDMReminder', guildId)}\n\n${await getConfigValue('txtRecoveryInstructions', guildId)}\n\n⏰ Expires: ${discordTimestamp}`);
     } catch (error) {
       console.log(`${formattedDate()}: [Guild ${guildId}] Could not send DM reminder to user ${interaction.user.id}`);
     }
 
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in handleWriteModalSubmit:`, error);
-    const txtEntryProcessFailed = await getConfigValue('txtEntryProcessFailed', interaction.guild.id);
     await interaction.editReply({
-      content: txtEntryProcessFailed
+      content: await getConfigValue('txtEntryProcessFailed', interaction.guild.id)
     });
   }
 }
@@ -555,20 +935,17 @@ async function validateStoryAccess(storyId, guildId) {
     `, [storyId]);
     
     if (storyInfo.length === 0) {
-      const txtStoryNotFound = await getConfigValue('txtStoryNotFound', guildId);
-      return { success: false, error: txtStoryNotFound };
+      return { success: false, error: await getConfigValue('txtStoryNotFound', guildId) };
     }
     
     const story = storyInfo[0];
     
     if (story.guild_id !== guildId) {
-      const txtStoryWrongGuild = await getConfigValue('txtStoryWrongGuild', guildId);
-      return { success: false, error: txtStoryWrongGuild };
+      return { success: false, error: await getConfigValue('txtStoryWrongGuild', guildId) };
     }
     
     if (story.story_status !== 1) {
-      const txtStoryNotActive = await getConfigValue('txtStoryNotActive', guildId);
-      return { success: false, error: txtStoryNotActive };
+      return { success: false, error: await getConfigValue('txtStoryNotActive', guildId) };
     }
     
     return { success: true, story };
@@ -599,8 +976,7 @@ async function validateActiveWriter(userId, storyId) {
       `, [storyId]);
       
       const guildId = storyInfo[0]?.guild_id;
-      const txtNotYourTurn = await getConfigValue('txtNotYourTurn', guildId);
-      return { success: false, error: txtNotYourTurn };
+      return { success: false, error: await getConfigValue('txtNotYourTurn', guildId) };
     }
     
     return { success: true };
@@ -611,22 +987,75 @@ async function validateActiveWriter(userId, storyId) {
 }
 
 /**
+ * Validate if user can join a story
+ */
+async function validateJoinEligibility(storyId, guildId, userId) {
+  const connection = await getDBConnection();
+  
+  try {
+    // Get story info with writer count
+    const [storyInfo] = await connection.execute(`
+      SELECT s.*, COUNT(sw.story_writer_id) as current_writers
+      FROM story s
+      LEFT JOIN story_writer sw ON s.story_id = sw.story_id AND sw.sw_status = 1
+      WHERE s.story_id = ? AND s.guild_id = ?
+      GROUP BY s.story_id
+    `, [storyId, guildId]);
+    
+    if (storyInfo.length === 0) {
+      return { success: false, error: await getConfigValue('txtStoryNotFound', guildId) };
+    }
+    
+    const story = storyInfo[0];
+    
+    // Check if story is closed
+    if (story.story_status === 3) {
+      return { success: false, error: await getConfigValue('txtJoinStoryClosed', guildId) };
+    }
+    
+    // Check if story allows late joins (if story has started)
+    if (story.story_status === 1 && !story.allow_late_joins) {
+      return { success: false, error: await getConfigValue('txtJoinNotAllowed', guildId) };
+    }
+    
+    // Check if story is at capacity
+    if (story.max_writers && story.current_writers >= story.max_writers) {
+      return { 
+        success: false, 
+        error: replaceTemplateVariables(await getConfigValue('txtJoinStoryFull', guildId), { max_writers: story.max_writers })
+      };
+    }
+    
+    // Check if user already joined
+    const [existingWriter] = await connection.execute(`
+      SELECT story_writer_id FROM story_writer 
+      WHERE story_id = ? AND discord_user_id = ? AND sw_status = 1
+    `, [storyId, userId]);
+    
+    if (existingWriter.length > 0) {
+      return { success: false, error: await getConfigValue('txtAlreadyJoined', guildId) };
+    }
+    
+    return { success: true, story };
+    
+  } finally {
+    connection.release();
+  }
+}
+
+/**
  * Create entry preview embed
  */
 async function createPreviewEmbed(content, guildId, discordTimestamp) {
-  const txtPreviewTitle = await getConfigValue('txtPreviewTitle', guildId);
-  const txtPreviewDescription = await getConfigValue('txtPreviewDescription', guildId);
-  const txtPreviewExpires = await getConfigValue('txtPreviewExpires', guildId);
   const lblYourEntry = await getConfigValue('lblYourEntry', guildId);
   const lblEntryContinued = await getConfigValue('lblEntryContinued', guildId);
-  const lblEntryStats = await getConfigValue('lblEntryStats', guildId);
   const txtEntryStatsTemplate = await getConfigValue('txtEntryStatsTemplate', guildId);
   
   const embed = new EmbedBuilder()
-    .setTitle(txtPreviewTitle)
-    .setDescription(txtPreviewDescription)
+    .setTitle(await getConfigValue('txtPreviewTitle', guildId))
+    .setDescription(await getConfigValue('txtPreviewDescription', guildId))
     .setColor(0xffd700)
-    .setFooter({ text: replaceTemplateVariables(txtPreviewExpires, { timestamp: discordTimestamp }) });
+    .setFooter({ text: replaceTemplateVariables(await getConfigValue('txtPreviewExpires', guildId), { timestamp: discordTimestamp }) });
     
   // Handle long content by splitting into multiple fields
   const maxFieldLength = 1024;
@@ -668,7 +1097,7 @@ async function createPreviewEmbed(content, guildId, discordTimestamp) {
   });
     
   embed.addFields({
-    name: lblEntryStats,
+    name: await getConfigValue('lblEntryStats', guildId),
     value: statsText,
     inline: true
   });
@@ -700,17 +1129,15 @@ async function handleListStories(interaction) {
     }
 
     // Get configurable text for embed
-    const txtStoriesPageTitle = await getConfigValue('txtStoriesPageTitle', guildId);
-    const txtStoriesPageDesc = await getConfigValue('txtStoriesPageDesc', guildId);
     const filterTitle = await getFilterTitle(filter, guildId);
     
     const embed = new EmbedBuilder()
-      .setTitle(replaceTemplateVariables(txtStoriesPageTitle, {
+      .setTitle(replaceTemplateVariables(await getConfigValue('txtStoriesPageTitle', guildId), {
         filter_title: filterTitle,
         page: page,
         total_pages: stories.totalPages
       }))
-      .setDescription(replaceTemplateVariables(txtStoriesPageDesc, {
+      .setDescription(replaceTemplateVariables(await getConfigValue('txtStoriesPageDesc', guildId), {
         showing: stories.data.length,
         total: stories.totalCount
       }))
@@ -744,28 +1171,29 @@ async function handleListStories(interaction) {
       });
     }
 
-    // Create navigation buttons
-    const components = [];
-    
-    // Navigation row
-    const navRow = new ActionRowBuilder();
-    
-    if (stories.totalPages > 1) {
-      navRow.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`story_list_${filter}_${page - 1}`)
-          .setLabel('◀️ Prev')
-          .setStyle(ButtonStyle.Secondary)
-          .setDisabled(page === 1),
-        new ButtonBuilder()
-          .setCustomId(`story_list_${filter}_${page + 1}`)
-          .setLabel('Next ▶️')
-          .setStyle(ButtonStyle.Secondary)
-          .setDisabled(page === stories.totalPages)
-      );
-    }
+  // Create navigation buttons
+  const components = [];
+  
+  // Navigation row
+  const navRow = new ActionRowBuilder();
+  
+  if (stories.totalPages > 1) {
+    const btnPrev = await getConfigValue('btnPrev', guildId);
+    const btnNext = await getConfigValue('btnNext', guildId);
     
     navRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`story_list_${filter}_${page - 1}`)
+        .setLabel(btnPrev)
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(page === 1),
+      new ButtonBuilder()
+        .setCustomId(`story_list_${filter}_${page + 1}`)
+        .setLabel(btnNext)
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(page === stories.totalPages)
+    );
+  }    navRow.addComponents(
       new ButtonBuilder()
         .setCustomId('story_filter')
         .setLabel('🔍 Filter')
@@ -777,15 +1205,24 @@ async function handleListStories(interaction) {
     // Quick join menu if there are joinable stories
     const joinableStories = stories.data.filter(s => s.can_join);
     if (joinableStories.length > 0) {
+      const txtQuickJoinPlaceholder = await getConfigValue('txtQuickJoinPlaceholder', guildId);
+      const txtQuickJoinDesc = await getConfigValue('txtQuickJoinDesc', guildId);
+      const txtModeQuick = await getConfigValue('txtModeQuick', guildId);
+      const txtModeNormal = await getConfigValue('txtModeNormal', guildId);
+      
       const joinRow = new ActionRowBuilder()
         .addComponents(
           new StringSelectMenuBuilder()
             .setCustomId('story_quick_join')
-            .setPlaceholder('Quick join a story...')
+            .setPlaceholder(txtQuickJoinPlaceholder)
             .addOptions(joinableStories.map(s => ({
               label: `${s.title} (#${s.story_id})`,
               value: s.story_id.toString(),
-              description: `${s.writer_count}/${s.max_writers || '∞'} writers • ${s.quick_mode ? 'Quick' : 'Normal'} mode`
+              description: replaceTemplateVariables(txtQuickJoinDesc, {
+                'writer_count': s.writer_count,
+                'max_writers': s.max_writers || '∞',
+                'mode': s.quick_mode ? txtModeQuick : txtModeNormal
+              })
             })))
         );
       components.push(joinRow);
@@ -798,9 +1235,8 @@ async function handleListStories(interaction) {
 
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in handleListStories:`, error);
-    const txtStoryListFailed = await getConfigValue('txtStoryListFailed', interaction.guild.id);
     await interaction.editReply({
-      content: txtStoryListFailed,
+      content: await getConfigValue('txtStoryListFailed', interaction.guild.id),
     });
   }
 }
@@ -879,24 +1315,28 @@ async function handleListNavigation(interaction) {
   const navRow = new ActionRowBuilder();
   
   if (stories.totalPages > 1) {
+    const btnPrev = await getConfigValue('btnPrev', guildId);
+    const btnNext = await getConfigValue('btnNext', guildId);
+    
     navRow.addComponents(
       new ButtonBuilder()
         .setCustomId(`story_list_${filter}_${page - 1}`)
-        .setLabel('◀️ Prev')
+        .setLabel(btnPrev)
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(page === 1),
       new ButtonBuilder()
         .setCustomId(`story_list_${filter}_${page + 1}`)
-        .setLabel('Next ▶️')
+        .setLabel(btnNext)
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(page === stories.totalPages)
     );
   }
   
+  const btnFilter = await getConfigValue('btnFilter', guildId);
   navRow.addComponents(
     new ButtonBuilder()
       .setCustomId('story_filter')
-      .setLabel('🔍 Filter')
+      .setLabel(btnFilter)
       .setStyle(ButtonStyle.Secondary)
   );
 
@@ -923,9 +1363,8 @@ async function handleEntryConfirmation(interaction) {
     
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in handleEntryConfirmation:`, error);
-    const txtActionFailed = await getConfigValue('txtActionFailed', interaction.guild.id);
     await interaction.editReply({
-      content: txtActionFailed,
+      content: await getConfigValue('txtActionFailed', interaction.guild.id),
       components: []
     });
   }
@@ -970,9 +1409,8 @@ async function confirmEntry(entryId, interaction) {
     
     await connection.commit();
     
-    const txtEntrySubmitted = await getConfigValue('txtEntrySubmitted', interaction.guild.id);
     await interaction.editReply({
-      content: txtEntrySubmitted,
+      content: await getConfigValue('txtEntrySubmitted', interaction.guild.id),
       embeds: [],
       components: []
     });
@@ -997,9 +1435,8 @@ async function discardEntry(entryId, interaction) {
       UPDATE story_entry SET entry_status = 'discarded' WHERE story_entry_id = ?
     `, [entryId]);
     
-    const txtEntryDiscarded = await getConfigValue('txtEntryDiscarded', interaction.guild.id);
     await interaction.editReply({
-      content: txtEntryDiscarded,
+      content: await getConfigValue('txtEntryDiscarded', interaction.guild.id),
       embeds: [],
       components: []
     });
@@ -1019,12 +1456,18 @@ async function handleSelectMenuInteraction(interaction) {
   if (interaction.customId === 'story_quick_join') {
     const storyId = interaction.values[0];
     
-    await interaction.deferReply({ ephemeral: true });
+    // Create a synthetic interaction for the join handler
+    const syntheticOptions = {
+      getInteger: (name) => name === 'story_id' ? parseInt(storyId) : null
+    };
     
-    // Here we would call the join story function
-    await interaction.editReply({
-      content: `🎭 **Joining story #${storyId}**\n\n*Join functionality will be implemented next!*`
-    });
+    const syntheticInteraction = {
+      ...interaction,
+      options: syntheticOptions
+    };
+    
+    // Call the join handler
+    await handleJoin(syntheticInteraction);
   }
 }
 
@@ -1208,4 +1651,10 @@ export default {
   handleSecondModalSubmit,
   handleButtonInteraction,
   handleSelectMenuInteraction
+};
+
+export {
+  postStoryFeedCreationAnnouncement,
+  postStoryFeedActivationAnnouncement,
+  postStoryFeedJoinAnnouncement
 };

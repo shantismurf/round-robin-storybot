@@ -114,6 +114,10 @@ export async function CreateStory(interaction, storyInput) {
       throw new Error(writerResult.error);
     }
     
+    // Post story creation announcement to feed channel
+    const { postStoryFeedCreationAnnouncement } = await import('./commands/story.js');
+    await postStoryFeedCreationAnnouncement(storyId, interaction, storyInput.storyTitle, storyStatus, storyInput.delayHours, storyInput.delayWriters);
+    
     // Commit transaction
     await connection.commit();
     
@@ -162,10 +166,13 @@ export async function StoryJoin(connection, interaction, storyInput, storyId) {
     }
     
     // Insert story_writer record
+    const turnPrivacy = storyInput.turnPrivacy !== undefined ? storyInput.turnPrivacy : storyInput.keepPrivate;
+    const notificationPrefs = storyInput.notificationPrefs || 'dm';
+    
     const [writerResult] = await connection.execute(
-      `INSERT INTO story_writer (story_id, discord_user_id, discord_display_name, AO3_name, turn_privacy) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [storyId, userId, displayName, ao3Name, storyInput.keepPrivate]
+      `INSERT INTO story_writer (story_id, discord_user_id, discord_display_name, AO3_name, turn_privacy, notification_prefs) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [storyId, userId, displayName, ao3Name, turnPrivacy, notificationPrefs]
     );
     
     const storyWriterId = writerResult.insertId;
@@ -181,6 +188,13 @@ export async function StoryJoin(connection, interaction, storyInput, storyId) {
       shouldStartTurn = true;
       const txtStoryActive = await getConfigValue('txtStoryActive', guild_id);
       confirmationMessage += `\n${txtStoryActive}`;
+      
+      // Post story activation announcement to feed channel
+      const [storyInfo] = await connection.execute(`SELECT title FROM story WHERE story_id = ?`, [storyId]);
+      if (storyInfo.length > 0) {
+        const { postStoryFeedActivationAnnouncement } = await import('./commands/story.js');
+        await postStoryFeedActivationAnnouncement(storyId, interaction, storyInfo[0].title);
+      }
     } else if (delayResult.writerDelayMessage) {
       confirmationMessage += `\n${delayResult.writerDelayMessage}`;
     } else if (delayResult.hourDelayMessage) {
@@ -188,7 +202,7 @@ export async function StoryJoin(connection, interaction, storyInput, storyId) {
     }
     
     if (shouldStartTurn) {
-      const turnResult = await NextTurn(connection, interaction, storyWriterId);
+      const turnResult = await NextTurn(connection, interaction, storyWriterId, true); // true = first turn announcement
       if (turnResult.dmMessage) {
         confirmationMessage += `\n${turnResult.dmMessage}`;
       }
@@ -351,7 +365,7 @@ export async function PickNextWriter(connection, storyId) {
 /**
  * NextTurn function - creates a new turn for a story
  */
-export async function NextTurn(connection, interaction, storyWriterId) {
+export async function NextTurn(connection, interaction, storyWriterId, isFirstTurn = false) {
   try {
     const guild_id = interaction.guild.id;
     
@@ -414,7 +428,8 @@ export async function NextTurn(connection, interaction, storyWriterId) {
       // Set permissions
       if (writer.turn_privacy) {
         // Private thread - add admin role
-        const adminRole = interaction.guild.roles.cache.find(r => r.name === 'Round Robin Admin');
+        const adminRoleName = await getConfigValue('cfgAdminRoleName', guild_id);
+        const adminRole = interaction.guild.roles.cache.find(r => r.name === adminRoleName);
         if (adminRole) {
           await thread.members.add(interaction.user.id);
           // Add admin users individually (Discord limitation)
@@ -432,7 +447,8 @@ export async function NextTurn(connection, interaction, storyWriterId) {
           ViewChannel: true
         });
         
-        const adminRole = interaction.guild.roles.cache.find(r => r.name === 'Round Robin Admin');
+        const adminRoleName = await getConfigValue('cfgAdminRoleName', guild_id);
+        const adminRole = interaction.guild.roles.cache.find(r => r.name === adminRoleName);
         if (adminRole) {
           await thread.permissionOverwrites.create(adminRole.id, {
             SendMessages: true,
