@@ -80,6 +80,26 @@ async function main() {
             await storyCommand.handleSecondModalSubmit(interaction);
           }
         }
+      } else if (interaction.isButton()) {
+        console.log(`${formattedDate()}: ${interaction.user.username} clicked button ${interaction.customId}`);
+        
+        // Handle story button interactions
+        if (interaction.customId.startsWith('story_')) {
+          const storyCommand = interaction.client.commands.get('story');
+          if (storyCommand && storyCommand.handleButtonInteraction) {
+            await storyCommand.handleButtonInteraction(interaction);
+          }
+        }
+      } else if (interaction.isStringSelectMenu()) {
+        console.log(`${formattedDate()}: ${interaction.user.username} used select menu ${interaction.customId}`);
+        
+        // Handle story select menu interactions
+        if (interaction.customId.startsWith('story_')) {
+          const storyCommand = interaction.client.commands.get('story');
+          if (storyCommand && storyCommand.handleSelectMenuInteraction) {
+            await storyCommand.handleSelectMenuInteraction(interaction);
+          }
+        }
       }
     } catch (error) {
       const guildId = interaction?.guild?.id || 'unknown';

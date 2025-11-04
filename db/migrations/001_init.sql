@@ -23,6 +23,11 @@ CREATE TABLE IF NOT EXISTS story (
   story_turn_privacy TINYINT(1) DEFAULT 1,
   story_delay_hours INT DEFAULT 0,
   story_delay_users INT DEFAULT NULL,
+  story_order_type TINYINT(1) DEFAULT 1, -- 1=random, 2=round-robin, 3=fixed
+  max_writers INT DEFAULT NULL,
+  min_entry_length INT DEFAULT 0,
+  max_entry_length INT DEFAULT 5000,
+  allow_late_joins TINYINT(1) DEFAULT 1,
   FOREIGN KEY (next_writer_id) REFERENCES story_writer(story_writer_id) ON DELETE SET NULL 
 );
 
@@ -37,6 +42,7 @@ CREATE TABLE IF NOT EXISTS story_writer (
   sw_status TINYINT(1) DEFAULT 1,
   joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   left_at TIMESTAMP NULL,
+  notification_prefs VARCHAR(50) DEFAULT 'dm',
   UNIQUE KEY (story_id, discord_user_id)
 );
 
@@ -46,6 +52,7 @@ CREATE TABLE story_entry (
   FOREIGN KEY (turn_id) REFERENCES turn(turn_id) ON DELETE CASCADE,
   content TEXT NOT NULL,
   order_in_turn INT DEFAULT 1,
+  entry_status ENUM('pending', 'confirmed', 'discarded') DEFAULT 'pending',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY unique_turn_order (turn_id, order_in_turn)
 );
@@ -76,4 +83,14 @@ CREATE TABLE IF NOT EXISTS config (
   language_code VARCHAR(10) DEFAULT 'en',
   guild_id BIGINT DEFAULT NULL,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE admin_action_log (
+  log_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  admin_user_id BIGINT NOT NULL,
+  action_type VARCHAR(50) NOT NULL, -- 'kick', 'extend', 'delete', etc.
+  target_story_id BIGINT,
+  target_user_id BIGINT,
+  reason TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
