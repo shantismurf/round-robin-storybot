@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { DB, getConfigValue, formattedDate } from './utilities.js';
-import { ChannelType, PermissionFlagsBits } from 'discord.js';
+import { ChannelType, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 
 /**
  * StoryBot.js contains story engine logic and emits 'publish' events when it
@@ -365,14 +365,14 @@ export async function PickNextWriter(connection, storyId) {
 /**
  * NextTurn function - creates a new turn for a story
  */
-export async function NextTurn(connection, interaction, storyWriterId, isFirstTurn = false) {
+export async function NextTurn(connection, interaction, storyWriterId) {
   try {
     const guild_id = interaction.guild.id;
     
     // Get story and writer info
     const [writerInfo] = await connection.execute(
-      `SELECT sw.story_id, sw.discord_user_id, sw.discord_display_name, sw.turn_privacy,
-              s.quick_mode, s.turn_length_hours, s.story_thread_id 
+      `SELECT sw.story_id, sw.discord_user_id, sw.discord_display_name, sw.turn_privacy, sw.notification_prefs,
+              s.quick_mode, s.turn_length_hours, s.story_thread_id, s.story_turn_privacy, s.title 
        FROM story_writer sw 
        JOIN story s ON sw.story_id = s.story_id 
        WHERE sw.story_writer_id = ?`,
@@ -396,8 +396,13 @@ export async function NextTurn(connection, interaction, storyWriterId, isFirstTu
     let threadId = null;
     let dmMessage = '';
     
-    // Create private thread if normal mode
-    if (!writer.quick_mode) {
+    // Handle quick mode vs normal mode
+    if (writer.quick_mode) {
+      // Quick mode - send notifications and post feed announcement
+      await handleQuickModeNotification(interaction, writer, turnId, guild_id);
+      dmMessage = 'Quick mode notification sent';
+    } else {
+      // Normal mode - create private thread
       const storyFeedChannelId = await getConfigValue('cfgStoryFeedChannelId', guild_id);
       const channel = await interaction.guild.channels.fetch(storyFeedChannelId);
       
@@ -416,17 +421,20 @@ export async function NextTurn(connection, interaction, storyWriterId, isFirstTu
         .replace('[user display name]', writer.discord_display_name)
         .replace('[turnEndTime]', discordTimestamp);
       
+      // Determine privacy: story-level privacy overrides writer preference
+      const isPrivateThread = writer.story_turn_privacy || writer.turn_privacy;
+      
       // Create thread based on privacy setting
       const thread = await channel.threads.create({
         name: threadTitle,
-        type: writer.turn_privacy ? ChannelType.PrivateThread : ChannelType.PublicThread,
+        type: isPrivateThread ? ChannelType.PrivateThread : ChannelType.PublicThread,
         reason: `Turn thread for story ${writer.story_id}`
       });
       
       threadId = thread.id;
       
       // Set permissions
-      if (writer.turn_privacy) {
+      if (isPrivateThread) {
         // Private thread - add admin role
         const adminRoleName = await getConfigValue('cfgAdminRoleName', guild_id);
         const adminRole = interaction.guild.roles.cache.find(r => r.name === adminRoleName);
@@ -463,25 +471,13 @@ export async function NextTurn(connection, interaction, storyWriterId, isFirstTu
         `UPDATE turn SET thread_id = ? WHERE turn_id = ?`,
         [threadId, turnId]
       );
-    }
-    
-    // Send DM or mention
-    const txtDMTurnStart = await getConfigValue('txtDMTurnStart', guild_id);
-    const linkToUse = threadId || writer.story_thread_id;
-    
-    try {
-      // Try to send DM
-      const user = await interaction.client.users.fetch(writer.discord_user_id);
-      await user.send(`${txtDMTurnStart}\nThread: <#${linkToUse}>`);
-      dmMessage = 'DM sent successfully';
-    } catch (dmError) {
-      // DM failed, send mention in channel
-      const txtMentionTurnStart = await getConfigValue('txtMentionTurnStart', guild_id);
-      const storyFeedChannelId = await getConfigValue('cfgStoryFeedChannelId', guild_id);
-      const channel = await interaction.guild.channels.fetch(storyFeedChannelId);
       
-      await channel.send(`<@${writer.discord_user_id}> ${txtMentionTurnStart}\nThread: <#${linkToUse}>`);
-      dmMessage = 'Mention sent in channel';
+      // Post welcome message with buttons
+      await postWelcomeMessage(thread, writer, guild_id);
+      
+      // Send notification to writer
+      await handleWriterNotification(interaction, writer, threadId, guild_id);
+      dmMessage = 'Normal mode thread created and notification sent';
     }
     
     return {
@@ -498,6 +494,87 @@ export async function NextTurn(connection, interaction, storyWriterId, isFirstTu
       error: 'Failed to create turn'
     };
   }
+}
+
+/**
+ * Handle quick mode notification and feed announcement
+ */
+async function handleQuickModeNotification(interaction, writer, turnId, guild_id) {
+  const turnEndTime = turnEndTimeFunction(turnId, writer.turn_length_hours);
+  const discordTimestamp = `<t:${Math.floor(turnEndTime.getTime() / 1000)}:F>`;
+  
+  // Send notification to writer
+  await handleWriterNotification(interaction, writer, writer.story_thread_id, guild_id);
+  
+  // Post feed announcement
+  const txtQuickModeTurnStart = await getConfigValue('txtQuickModeTurnStart', guild_id);
+  const feedMessage = txtQuickModeTurnStart
+    .replace('[story_title]', writer.title)
+    .replace('[current_writer]', writer.discord_display_name)
+    .replace('[turn_end_date]', discordTimestamp);
+  
+  const storyFeedChannelId = await getConfigValue('cfgStoryFeedChannelId', guild_id);
+  const channel = await interaction.guild.channels.fetch(storyFeedChannelId);
+  await channel.send(feedMessage);
+}
+
+/**
+ * Handle writer notification based on their preference
+ */
+async function handleWriterNotification(interaction, writer, linkToThreadId, guild_id) {
+  const linkToUse = linkToThreadId || writer.story_thread_id;
+  
+  // Check notification preference
+  if (writer.notification_prefs === 'mention') {
+    // User prefers mentions - send mention in channel
+    const txtMentionTurnStart = await getConfigValue('txtMentionTurnStart', guild_id);
+    const storyFeedChannelId = await getConfigValue('cfgStoryFeedChannelId', guild_id);
+    const channel = await interaction.guild.channels.fetch(storyFeedChannelId);
+    
+    await channel.send(`<@${writer.discord_user_id}> ${txtMentionTurnStart}\nThread: <#${linkToUse}>`);
+  } else {
+    // Default to DM with fallback to mention
+    const txtDMTurnStart = await getConfigValue('txtDMTurnStart', guild_id);
+    
+    try {
+      // Try to send DM
+      const user = await interaction.client.users.fetch(writer.discord_user_id);
+      await user.send(`${txtDMTurnStart}\nThread: <#${linkToUse}>`);
+    } catch (dmError) {
+      // DM failed, send mention in channel as fallback
+      const txtMentionTurnStart = await getConfigValue('txtMentionTurnStart', guild_id);
+      const storyFeedChannelId = await getConfigValue('cfgStoryFeedChannelId', guild_id);
+      const channel = await interaction.guild.channels.fetch(storyFeedChannelId);
+      
+      await channel.send(`<@${writer.discord_user_id}> ${txtMentionTurnStart}\nThread: <#${linkToUse}>`);
+    }
+  }
+}
+
+/**
+ * Post welcome message with buttons to normal mode thread
+ */
+async function postWelcomeMessage(thread, writer, guild_id) {
+  const txtNormalModeWelcome = await getConfigValue('txtNormalModeWelcome', guild_id);
+  const btnFinalizeEntry = await getConfigValue('btnFinalizeEntry', guild_id);
+  const btnSkipTurn = await getConfigValue('btnSkipTurn', guild_id);
+  
+  const row = new ActionRowBuilder()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId(`finalize_entry_${writer.story_id}`)
+        .setLabel(btnFinalizeEntry)
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`skip_turn_${writer.story_id}`)
+        .setLabel(btnSkipTurn)
+        .setStyle(ButtonStyle.Secondary)
+    );
+  
+  await thread.send({
+    content: txtNormalModeWelcome,
+    components: [row]
+  });
 }
 
 /**

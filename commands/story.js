@@ -1249,6 +1249,10 @@ async function handleButtonInteraction(interaction) {
     await handleListNavigation(interaction);
   } else if (interaction.customId.startsWith('confirm_entry_') || interaction.customId.startsWith('discard_entry_')) {
     await handleEntryConfirmation(interaction);
+  } else if (interaction.customId.startsWith('finalize_entry_')) {
+    await handleFinalizeEntry(interaction);
+  } else if (interaction.customId.startsWith('skip_turn_')) {
+    await handleSkipTurn(interaction);
   }
 }
 
@@ -1633,6 +1637,126 @@ async function getCurrentTurnInfo(story, guildId) {
     return await getConfigValue('txtTurnUnknown', guildId);
   } finally {
     connection.release();
+  }
+}
+
+/**
+ * Handle finalize entry button click
+ */
+async function handleFinalizeEntry(interaction) {
+  const storyId = interaction.customId.split('_')[2];
+  
+  await interaction.deferReply({ ephemeral: true });
+  
+  try {
+    const connection = await getDBConnection();
+    
+    // Verify this is the current writer's turn
+    const [turnInfo] = await connection.execute(
+      `SELECT t.turn_id, t.thread_id, sw.discord_user_id, sw.story_id
+       FROM turn t
+       JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
+       WHERE sw.story_id = ? AND t.turn_status = 1 AND sw.discord_user_id = ?`,
+      [storyId, interaction.user.id]
+    );
+    
+    if (turnInfo.length === 0) {
+      await interaction.editReply({ content: 'You do not have an active turn in this story.' });
+      return;
+    }
+    
+    const turn = turnInfo[0];
+    
+    // Check if there are any messages in the thread (excluding the welcome message)
+    const thread = await interaction.guild.channels.fetch(turn.thread_id);
+    const messages = await thread.messages.fetch({ limit: 50 });
+    
+    // Filter out bot messages and find user content
+    const userMessages = messages.filter(msg => 
+      msg.author.id === interaction.user.id && 
+      !msg.interaction // Exclude command responses
+    );
+    
+    if (userMessages.size === 0) {
+      await interaction.editReply({ content: 'You need to write something in the thread before finalizing your entry.' });
+      return;
+    }
+    
+    // Collect all user messages as the entry content
+    const entryContent = userMessages
+      .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
+      .map(msg => msg.content)
+      .join('\n\n');
+    
+    // Create the story entry
+    await connection.execute(
+      `INSERT INTO story_entry (turn_id, content, created_at) VALUES (?, ?, NOW())`,
+      [turn.turn_id, entryContent]
+    );
+    
+    // Mark turn as completed
+    await connection.execute(
+      `UPDATE turn SET turn_status = 2, completed_at = NOW() WHERE turn_id = ?`,
+      [turn.turn_id]
+    );
+    
+    // Archive the thread (lock it)
+    await thread.setLocked(true);
+    
+    // TODO: Advance to next turn (implement NextTurn call)
+    
+    await interaction.editReply({ content: '✅ Entry finalized successfully! The turn has been completed.' });
+    
+  } catch (error) {
+    console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Finalize entry failed:`, error);
+    await interaction.editReply({ content: 'Failed to finalize entry. Please try again.' });
+  }
+}
+
+/**
+ * Handle skip turn button click
+ */
+async function handleSkipTurn(interaction) {
+  const storyId = interaction.customId.split('_')[2];
+  
+  await interaction.deferReply({ ephemeral: true });
+  
+  try {
+    const connection = await getDBConnection();
+    
+    // Verify this is the current writer's turn
+    const [turnInfo] = await connection.execute(
+      `SELECT t.turn_id, t.thread_id, sw.discord_user_id, sw.story_id
+       FROM turn t
+       JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
+       WHERE sw.story_id = ? AND t.turn_status = 1 AND sw.discord_user_id = ?`,
+      [storyId, interaction.user.id]
+    );
+    
+    if (turnInfo.length === 0) {
+      await interaction.editReply({ content: 'You do not have an active turn in this story.' });
+      return;
+    }
+    
+    const turn = turnInfo[0];
+    
+    // Mark turn as skipped
+    await connection.execute(
+      `UPDATE turn SET turn_status = 3, completed_at = NOW() WHERE turn_id = ?`,
+      [turn.turn_id]
+    );
+    
+    // Archive the thread (lock it)
+    const thread = await interaction.guild.channels.fetch(turn.thread_id);
+    await thread.setLocked(true);
+    
+    // TODO: Advance to next turn (implement NextTurn call)
+    
+    await interaction.editReply({ content: '⏭️ Turn skipped successfully! Moving to the next writer.' });
+    
+  } catch (error) {
+    console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Skip turn failed:`, error);
+    await interaction.editReply({ content: 'Failed to skip turn. Please try again.' });
   }
 }
 

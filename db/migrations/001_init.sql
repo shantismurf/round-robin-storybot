@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS story (
   timeout_reminder_percent INT DEFAULT 50,
   next_writer_id BIGINT NULL,
   story_thread_id BIGINT,
-  story_turn_privacy TINYINT(1) DEFAULT 1,
+  story_turn_privacy TINYINT(1) DEFAULT 0,
   story_delay_hours INT DEFAULT 0,
   story_delay_users INT DEFAULT NULL,
   story_order_type TINYINT(1) DEFAULT 1, -- 1=random, 2=round-robin, 3=fixed
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS story_writer (
   discord_user_id BIGINT NOT NULL,
   discord_display_name VARCHAR(255),
   AO3_name VARCHAR(255),
-  turn_privacy TINYINT(1) DEFAULT 1,
+  turn_privacy TINYINT(1) DEFAULT 0,
   sw_status TINYINT(1) DEFAULT 1,
   joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   left_at TIMESTAMP NULL,
