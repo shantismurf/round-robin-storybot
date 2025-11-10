@@ -1,10 +1,21 @@
 import { Client, GatewayIntentBits, EmbedBuilder, Collection, Events } from 'discord.js';
 import { StoryBot } from './storybot.js';
 import { loadConfig, formattedDate } from './utilities.js';
+import { setupDatabase } from './database-setup.js';
 import fs from 'fs';
 
 async function main() {
   const config = loadConfig();
+  
+  // Setup database before starting bot
+  console.log(`${formattedDate()}: Initializing Round Robin Storybot...`);
+  const dbSetupSuccess = await setupDatabase(config);
+  
+  if (!dbSetupSuccess) {
+    console.error(`${formattedDate()}: Failed to setup database. Exiting...`);
+    process.exit(1);
+  }
+  
   // create Discord client here (index.js owns the client)
   const client = new Client({ intents: [
     GatewayIntentBits.Guilds, 

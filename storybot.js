@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { DB, getConfigValue, formattedDate } from './utilities.js';
-import { ChannelType, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 
 /**
  * StoryBot.js contains story engine logic and emits 'publish' events when it
