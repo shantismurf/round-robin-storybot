@@ -1,6 +1,6 @@
 import { Client, GatewayIntentBits, EmbedBuilder, Collection, Events } from 'discord.js';
 import { StoryBot } from './storybot.js';
-import { loadConfig, formattedDate } from './utilities.js';
+import { loadConfig, formattedDate, getDBConnection, getConfigValue } from './utilities.js';
 import { setupDatabase } from './database-setup.js';
 import fs from 'fs';
 
@@ -33,7 +33,7 @@ async function main() {
         .setDescription(data.description || '')
         .setFooter({ text: data.footer || '' })
       );
-      await channel.send({ botContent: botContent.content || null, embeds, files: botContent.files });
+      await channel.send({ content: botContent.content || null, embeds, files: botContent.files });
     } catch (err) {
       console.error(`${formattedDate()}: Failed to publish botContent:`, err, botContent);
     }
@@ -77,18 +77,19 @@ async function main() {
           await command.execute(interaction);
         }
       } else if (interaction.isModalSubmit()) {
+        const connection = await getDBConnection();
         console.log(`${formattedDate()}: ${interaction.user.username} submitted modal ${interaction.customId}`);
         
         // Handle story modal submissions
         if (interaction.customId === 'story_add_modal') {
           const storyCommand = interaction.client.commands.get('story');
           if (storyCommand && storyCommand.handleModalSubmit) {
-            await storyCommand.handleModalSubmit(interaction);
+            await storyCommand.handleModalSubmit(connection, interaction);
           }
         } else if (interaction.customId.startsWith('story_add_modal_2_')) {
           const storyCommand = interaction.client.commands.get('story');
           if (storyCommand && storyCommand.handleSecondModalSubmit) {
-            await storyCommand.handleSecondModalSubmit(interaction);
+            await storyCommand.handleSecondModalSubmit(connection, interaction);
           }
         }
       } else if (interaction.isButton()) {
@@ -98,7 +99,7 @@ async function main() {
         if (interaction.customId.startsWith('story_')) {
           const storyCommand = interaction.client.commands.get('story');
           if (storyCommand && storyCommand.handleButtonInteraction) {
-            await storyCommand.handleButtonInteraction(interaction);
+            await storyCommand.handleButtonInteraction(connection, interaction);
           }
         }
       } else if (interaction.isStringSelectMenu()) {
@@ -108,7 +109,7 @@ async function main() {
         if (interaction.customId.startsWith('story_')) {
           const storyCommand = interaction.client.commands.get('story');
           if (storyCommand && storyCommand.handleSelectMenuInteraction) {
-            await storyCommand.handleSelectMenuInteraction(interaction);
+            await storyCommand.handleSelectMenuInteraction(connection, interaction);
           }
         }
       }
@@ -118,12 +119,12 @@ async function main() {
       
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
-          content: 'An error occurred while processing your request.',
+          content: await getConfigValue(connection,'errProcessingRequest', guildId),
           ephemeral: true
         }).catch(console.error);
       } else if (interaction.deferred) {
         await interaction.editReply({
-          content: 'An error occurred while processing your request.'
+          content: await getConfigValue(connection,'errProcessingRequest', guildId),
         }).catch(console.error);
       }
     }

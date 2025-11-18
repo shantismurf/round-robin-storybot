@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import { DB, getConfigValue, formattedDate } from './utilities.js';
 import { ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { postStoryFeedCreationAnnouncement, postStoryFeedActivationAnnouncement  } from './commands/story.js';
 
 /**
  * StoryBot.js contains story engine logic and emits 'publish' events when it
@@ -38,8 +39,7 @@ export class StoryBot extends EventEmitter {
 /**
  * CreateStory function with explicit transaction handling
  */
-export async function CreateStory(interaction, storyInput) {
-  const connection = await getDBConnection();
+export async function CreateStory(connection, interaction, storyInput) {
   await connection.beginTransaction();
   
   try {
@@ -77,7 +77,7 @@ export async function CreateStory(interaction, storyInput) {
     }
     
     // Step 3: Get story feed channel and create story thread
-    const storyFeedChannelId = await getConfigValue('cfgStoryFeedChannelId', guild_id);
+    const storyFeedChannelId = await getConfigValue(connection,'cfgStoryFeedChannelId', guild_id);
     const channel = await interaction.guild.channels.fetch(storyFeedChannelId);
     
     if (!channel) {
@@ -85,10 +85,10 @@ export async function CreateStory(interaction, storyInput) {
     }
     
     // Get thread title template and replace variables
-    const threadTitleTemplate = await getConfigValue('txtStoryThreadTitle', guild_id);
+    const threadTitleTemplate = await getConfigValue(connection,'txtStoryThreadTitle', guild_id);
     const statusText = storyStatus === 1 
-      ? await getConfigValue('txtActive', guild_id)
-      : await getConfigValue('txtPaused', guild_id);
+      ? await getConfigValue(connection,'txtActive', guild_id)
+      : await getConfigValue(connection,'txtPaused', guild_id);
     
     const threadTitle = threadTitleTemplate
       .replace('[story_id]', storyId)
@@ -115,8 +115,7 @@ export async function CreateStory(interaction, storyInput) {
     }
     
     // Post story creation announcement to feed channel
-    const { postStoryFeedCreationAnnouncement } = await import('./commands/story.js');
-    await postStoryFeedCreationAnnouncement(storyId, interaction, storyInput.storyTitle, storyStatus, storyInput.delayHours, storyInput.delayWriters);
+    await postStoryFeedCreationAnnouncement(connection, storyId, interaction, storyInput.storyTitle, storyStatus, storyInput.delayHours, storyInput.delayWriters);
     
     // Commit transaction
     await connection.commit();
@@ -131,7 +130,7 @@ export async function CreateStory(interaction, storyInput) {
     await connection.rollback();
     console.error(`${formattedDate()}: [Guild ${guild_id}] CreateStory failed:`, error);
     
-    const txtThreadCreationFailed = await getConfigValue('txtThreadCreationFailed', interaction.guild.id);
+    const txtThreadCreationFailed = await getConfigValue(connection,'txtThreadCreationFailed', interaction.guild.id);
     return {
       success: false,
       error: txtThreadCreationFailed
@@ -158,7 +157,7 @@ export async function StoryJoin(connection, interaction, storyInput, storyId) {
     );
     
     if (existingWriter.length > 0) {
-      const txtAlreadyJoined = await getConfigValue('txtAlreadyJoined', guild_id);
+      const txtAlreadyJoined = await getConfigValue(connection,'txtAlreadyJoined', guild_id);
       return {
         success: false,
         error: txtAlreadyJoined
@@ -186,14 +185,13 @@ export async function StoryJoin(connection, interaction, storyInput, storyId) {
     if (delayResult.madeActive) {
       // Story became active, start turn
       shouldStartTurn = true;
-      const txtStoryActive = await getConfigValue('txtStoryActive', guild_id);
+      const txtStoryActive = await getConfigValue(connection,'txtStoryActive', guild_id);
       confirmationMessage += `\n${txtStoryActive}`;
       
       // Post story activation announcement to feed channel
       const [storyInfo] = await connection.execute(`SELECT title FROM story WHERE story_id = ?`, [storyId]);
       if (storyInfo.length > 0) {
-        const { postStoryFeedActivationAnnouncement } = await import('./commands/story.js');
-        await postStoryFeedActivationAnnouncement(storyId, interaction, storyInfo[0].title);
+        await postStoryFeedActivationAnnouncement(connection, storyId, interaction, storyInfo[0].title);
       }
     } else if (delayResult.writerDelayMessage) {
       confirmationMessage += `\n${delayResult.writerDelayMessage}`;
@@ -216,7 +214,7 @@ export async function StoryJoin(connection, interaction, storyInput, storyId) {
     
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${guild_id}] StoryJoin failed:`, error);
-    const txtStoryJoinFail = await getConfigValue('txtStoryJoinFail', interaction.guild.id);
+    const txtStoryJoinFail = await getConfigValue(connection,'txtStoryJoinFail', interaction.guild.id);
     return {
       success: false,
       error: txtStoryJoinFail
@@ -258,7 +256,7 @@ export async function checkStoryDelay(connection, storyId) {
         shouldActivate = true;
       } else {
         const needed = story.story_delay_users - currentWriters;
-        const txtMoreWritersDelay = await getConfigValue('txtMoreWritersDelay', story.guild_id);
+        const txtMoreWritersDelay = await getConfigValue(connection,'txtMoreWritersDelay', story.guild_id);
         writerDelayMessage = txtMoreWritersDelay.replace('X', needed);
       }
     }
@@ -271,7 +269,7 @@ export async function checkStoryDelay(connection, storyId) {
         shouldActivate = true;
       } else {
         const hoursLeft = Math.ceil((delayEndTime.getTime() - Date.now()) / (1000 * 60 * 60));
-        const txtHoursDelay = await getConfigValue('txtHoursDelay', story.guild_id);
+        const txtHoursDelay = await getConfigValue(connection,'txtHoursDelay', story.guild_id);
         hourDelayMessage = txtHoursDelay.replace('X', hoursLeft);
       }
     }
@@ -323,7 +321,7 @@ export async function PickNextWriter(connection, storyId) {
     `SELECT story_order_type FROM story WHERE story_id = ?`,
     [storyId]
   );
-  const { story_order_type } = storyData[0];
+  const story_order_type = storyData[0];
   
   let orderClause;
   switch (story_order_type) {
@@ -403,7 +401,7 @@ export async function NextTurn(connection, interaction, storyWriterId) {
       dmMessage = 'Quick mode notification sent';
     } else {
       // Normal mode - create private thread
-      const storyFeedChannelId = await getConfigValue('cfgStoryFeedChannelId', guild_id);
+      const storyFeedChannelId = await getConfigValue(connection,'cfgStoryFeedChannelId', guild_id);
       const channel = await interaction.guild.channels.fetch(storyFeedChannelId);
       
       // Get turn number
@@ -414,7 +412,7 @@ export async function NextTurn(connection, interaction, storyWriterId) {
       const discordTimestamp = `<t:${Math.floor(turnEndTime.getTime() / 1000)}:F>`;
       
       // Create thread title
-      const threadTitleTemplate = await getConfigValue('txtTurnThreadTitle', guild_id);
+      const threadTitleTemplate = await getConfigValue(connection,'txtTurnThreadTitle', guild_id);
       const threadTitle = threadTitleTemplate
         .replace('[story_id]', writer.story_id)
         .replace('[storyTurnNumber]', turnNumber)
@@ -434,9 +432,14 @@ export async function NextTurn(connection, interaction, storyWriterId) {
       threadId = thread.id;
       
       // Set permissions
+      // threads cant get permission overwrites TODO:
+      // **Fix:** For public threads, rely on 
+      // parent channel permissions. For private threads, 
+      // use `thread.members.add()` to add specific users. 
+      // Remove the permissionOverwrites code.
       if (isPrivateThread) {
         // Private thread - add admin role
-        const adminRoleName = await getConfigValue('cfgAdminRoleName', guild_id);
+        const adminRoleName = await getConfigValue(connection,'cfgAdminRoleName', guild_id);
         const adminRole = interaction.guild.roles.cache.find(r => r.name === adminRoleName);
         if (adminRole) {
           await thread.members.add(interaction.user.id);
@@ -455,7 +458,7 @@ export async function NextTurn(connection, interaction, storyWriterId) {
           ViewChannel: true
         });
         
-        const adminRoleName = await getConfigValue('cfgAdminRoleName', guild_id);
+        const adminRoleName = await getConfigValue(connection,'cfgAdminRoleName', guild_id);
         const adminRole = interaction.guild.roles.cache.find(r => r.name === adminRoleName);
         if (adminRole) {
           await thread.permissionOverwrites.create(adminRole.id, {
@@ -507,13 +510,13 @@ async function handleQuickModeNotification(interaction, writer, turnId, guild_id
   await handleWriterNotification(interaction, writer, writer.story_thread_id, guild_id);
   
   // Post feed announcement
-  const txtQuickModeTurnStart = await getConfigValue('txtQuickModeTurnStart', guild_id);
+  const txtQuickModeTurnStart = await getConfigValue(connection,'txtQuickModeTurnStart', guild_id);
   const feedMessage = txtQuickModeTurnStart
     .replace('[story_title]', writer.title)
     .replace('[current_writer]', writer.discord_display_name)
     .replace('[turn_end_date]', discordTimestamp);
   
-  const storyFeedChannelId = await getConfigValue('cfgStoryFeedChannelId', guild_id);
+  const storyFeedChannelId = await getConfigValue(connection,'cfgStoryFeedChannelId', guild_id);
   const channel = await interaction.guild.channels.fetch(storyFeedChannelId);
   await channel.send(feedMessage);
 }
@@ -527,14 +530,14 @@ async function handleWriterNotification(interaction, writer, linkToThreadId, gui
   // Check notification preference
   if (writer.notification_prefs === 'mention') {
     // User prefers mentions - send mention in channel
-    const txtMentionTurnStart = await getConfigValue('txtMentionTurnStart', guild_id);
-    const storyFeedChannelId = await getConfigValue('cfgStoryFeedChannelId', guild_id);
+    const txtMentionTurnStart = await getConfigValue(connection,'txtMentionTurnStart', guild_id);
+    const storyFeedChannelId = await getConfigValue(connection,'cfgStoryFeedChannelId', guild_id);
     const channel = await interaction.guild.channels.fetch(storyFeedChannelId);
     
     await channel.send(`<@${writer.discord_user_id}> ${txtMentionTurnStart}\nThread: <#${linkToUse}>`);
   } else {
     // Default to DM with fallback to mention
-    const txtDMTurnStart = await getConfigValue('txtDMTurnStart', guild_id);
+    const txtDMTurnStart = await getConfigValue(connection,'txtDMTurnStart', guild_id);
     
     try {
       // Try to send DM
@@ -542,8 +545,8 @@ async function handleWriterNotification(interaction, writer, linkToThreadId, gui
       await user.send(`${txtDMTurnStart}\nThread: <#${linkToUse}>`);
     } catch (dmError) {
       // DM failed, send mention in channel as fallback
-      const txtMentionTurnStart = await getConfigValue('txtMentionTurnStart', guild_id);
-      const storyFeedChannelId = await getConfigValue('cfgStoryFeedChannelId', guild_id);
+      const txtMentionTurnStart = await getConfigValue(connection,'txtMentionTurnStart', guild_id);
+      const storyFeedChannelId = await getConfigValue(connection,'cfgStoryFeedChannelId', guild_id);
       const channel = await interaction.guild.channels.fetch(storyFeedChannelId);
       
       await channel.send(`<@${writer.discord_user_id}> ${txtMentionTurnStart}\nThread: <#${linkToUse}>`);
@@ -555,9 +558,9 @@ async function handleWriterNotification(interaction, writer, linkToThreadId, gui
  * Post welcome message with buttons to normal mode thread
  */
 async function postWelcomeMessage(thread, writer, guild_id) {
-  const txtNormalModeWelcome = await getConfigValue('txtNormalModeWelcome', guild_id);
-  const btnFinalizeEntry = await getConfigValue('btnFinalizeEntry', guild_id);
-  const btnSkipTurn = await getConfigValue('btnSkipTurn', guild_id);
+  const txtNormalModeWelcome = await getConfigValue(connection,'txtNormalModeWelcome', guild_id);
+  const btnFinalizeEntry = await getConfigValue(connection,'btnFinalizeEntry', guild_id);
+  const btnSkipTurn = await getConfigValue(connection,'btnSkipTurn', guild_id);
   
   const row = new ActionRowBuilder()
     .addComponents(

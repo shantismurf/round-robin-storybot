@@ -24,7 +24,7 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('txtDMTurnStart', '🎭 **Your turn has started!** You can now write your part of the story.', 'en', 1),
 ('txtMentionTurnStart', '🎭 **Your turn has started!** You can now write your part of the story.', 'en', 1),
 ('txtNormalModeWelcome', 'Welcome to your turn thread! Write your story entry here, then use the buttons below to finalize or skip your turn.', 'en', 1),
-('txtQuickModeTurnStart', '🎭 **[story_title]:** [current_writer]\'s turn has started! Please use `/story write [story_id]` to submit your entry. Turn ends [turn_end_date].', 'en', 1),
+('txtQuickModeTurnStart', '🎭 **[story_title]:** The turn of [current_writer] has started! Please use `/story write [story_id]` to submit your entry. Turn ends [turn_end_date].', 'en', 1),
 ('btnFinalizeEntry', '✅ Finalize Entry', 'en', 1),
 ('btnSkipTurn', '⏭️ Skip Turn', 'en', 1),
 ('txtAlreadyJoined', 'You have already joined this story!', 'en', 1),
@@ -69,6 +69,10 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('txtActionFailed', 'Failed to process action. Please try again.', 'en', 1),
 ('txtDMReminder', '📝 **Pending Entry Reminder** - You have an entry waiting for confirmation.', 'en', 1),
 ('txtRecoveryInstructions', 'If you lost the confirmation message, use `/story myturn pending` to recover it.', 'en', 1),
+('txtEmptyEntry','You need to write something in the thread before finalizing your entry.', 'en', 1),
+('txtNoActiveTurn','You do not have an active turn in this story.', 'en', 1),
+('txtEntryFinalized','✅ Entry finalized successfully! The turn has been completed.', 'en', 1),
+('txtFailedtoFinalize', 'Failed to finalize entry. Please try again.', 'en', 1),
 
 -- Story List Text
 ('txtAllStories', 'All Stories', 'en', 1),
@@ -107,7 +111,7 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('txtStoryFeedCreatedDelayed', '📚 **New Story Created:** [story_title] by [creator_name]! Story will start [start_time].', 'en', 1),
 ('txtStoryFeedCreatedActive', '📚 **New Story Created:** [story_title] by [creator_name]! Story is now active with [writer_count] writer(s).', 'en', 1),
 ('txtStoryFeedNowActive', '🎬 **[story_title] is now active!** [first_writer] will start the story. Turn ends [turn_end_date].', 'en', 1),
-('txtStoryFeedTurnStart', '✍️ **[story_title]:** [current_writer]\'s turn has started! Turn ends [turn_end_date].', 'en', 1),
+('txtStoryFeedTurnStart', '✍️ **[story_title]:** The turn of [current_writer] has started! Turn ends [turn_end_date].', 'en', 1),
 ('txtJoinFormFailed', 'Failed to open join form. Please try again.', 'en', 1),
 ('txtJoinProcessFailed', 'Failed to process join request. Please try again.', 'en', 1),
 ('txtValidationErrors', '**Validation Errors:**', 'en', 1),
@@ -141,4 +145,5 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('cfgLanguageCode', 'en', 'en', 1),
 ('cfgEntryTimeoutMinutes', '10', 'en', 1),
 ('cfgStoryFeedChannelId', '1234567890123456789', 'en', 1), -- Replace with actual channel ID
-('cfgAdminRoleName', 'Round Robin Admin', 'en', 1); -- Admin role name for story management
+('cfgAdminRoleName', 'Round Robin Admin', 'en', 1) -- Admin role name for story management
+('errProcessingRequest', 'An error occurred while processing your request.', 'en', 1);

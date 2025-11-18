@@ -27,8 +27,7 @@ CREATE TABLE IF NOT EXISTS story (
   max_writers INT DEFAULT NULL,
   min_entry_length INT DEFAULT 0,
   max_entry_length INT DEFAULT 5000,
-  allow_late_joins TINYINT(1) DEFAULT 1,
-  FOREIGN KEY (next_writer_id) REFERENCES story_writer(story_writer_id) ON DELETE SET NULL 
+  allow_late_joins TINYINT(1) DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS story_writer (
@@ -42,6 +41,7 @@ CREATE TABLE IF NOT EXISTS story_writer (
   sw_status TINYINT(1) DEFAULT 1,
   joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   left_at TIMESTAMP NULL,
+  writer_order INT DEFAULT NULL,
   notification_prefs VARCHAR(50) DEFAULT 'dm',
   UNIQUE KEY (story_id, discord_user_id)
 );

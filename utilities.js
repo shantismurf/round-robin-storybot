@@ -94,9 +94,8 @@ export function sanitizeModalInput(input, maxLength = 1024) {
         .substring(0, maxLength);                 // Flexible length limit
 }
 
-export async function getConfigValue(key, guildID = 1) {
-  try {
-    // Get language code for this guild (system default is 'en')
+export async function getConfigValue(connection,connection, key, guildID = 1) {
+  try { // Get language code for this guild (system default is 'en')
     let languageCode = 'en';
     if (guildID !== 1) {
       const [langRows] = await connection.execute(
@@ -105,7 +104,6 @@ export async function getConfigValue(key, guildID = 1) {
       );
       languageCode = langRows[0]?.config_value || 'en';
     }
-    // Get custom config value for this guild, if present
     let [configRows] = await connection.execute(
       'SELECT config_value FROM config WHERE config_key = ? AND guild_id = ?',
       [key, guildID]
@@ -138,16 +136,16 @@ export async function sendUserMessage(connection, interaction, storyWriterId, cf
   const { discord_user_id, guild_id } = writerInfo[0];
   
   // Get messages from config, use dm key name to get mention key name
-  const dmMessage = await getConfigValue(cfgMessageKey, guild_id);
+  const dmMessage = await getConfigValue(connection,cfgMessageKey, guild_id);
   const mentionKey = cfgMessageKey.replace('txtDM', 'txtMention'); // txtDMTurnStart -> txtMentionTurnStart
-  const mentionMessage = await getConfigValue(mentionKey, guild_id);
+  const mentionMessage = await getConfigValue(connection,mentionKey, guild_id);
   
   try {
     const user = await interaction.client.users.fetch(discord_user_id);
     await user.send(dmMessage);
     return `${formattedDate()}: [Guild ${guild_id}] ` + cfgMessageKey + ' DM sent successfully';
   } catch (dmError) {
-    const storyFeedChannelId = await getConfigValue('cfgStoryFeedChannelId', guild_id);
+    const storyFeedChannelId = await getConfigValue(connection,'cfgStoryFeedChannelId', guild_id);
     const channel = await interaction.guild.channels.fetch(storyFeedChannelId);
     await channel.send(`<@${discord_user_id}> ${mentionMessage}`);
     return `${formattedDate()}: [Guild ${guild_id}] ` + cfgMessageKey + ' Mention sent in channel';
@@ -177,7 +175,7 @@ export function replaceTemplateVariables(template, keyValueMap) {
 export async function createThread(interaction, guildID, keyValueMap) {
   // Set up thread configuration
   const { titleTemplateKey, threadType, reason, targetUserId } = keyValueMap;
-  const storyFeedChannelId = await getConfigValue('cfgStoryFeedChannelId', guildID);
+  const storyFeedChannelId = await getConfigValue(connection,'cfgStoryFeedChannelId', guildID);
   const channel = await interaction.guild.channels.fetch(storyFeedChannelId);
   
   if (!channel) {
@@ -185,7 +183,7 @@ export async function createThread(interaction, guildID, keyValueMap) {
   }
   
   // Get admin role (used for both public and private thread permissions)
-  const adminRoleName = await getConfigValue('cfgAdminRoleName', guildID);
+  const adminRoleName = await getConfigValue(connection,'cfgAdminRoleName', guildID);
   const adminRole = interaction.guild.roles.cache.find(r => r.name === adminRoleName);
   
   if (!adminRole) {
@@ -193,7 +191,7 @@ export async function createThread(interaction, guildID, keyValueMap) {
   }
   
   // Get and build thread title
-  const titleTemplate = await getConfigValue(titleTemplateKey, guildID);
+  const titleTemplate = await getConfigValue(connection,titleTemplateKey, guildID);
   const threadTitle = replaceTemplateVariables(titleTemplate, keyValueMap);
   
   // Create thread

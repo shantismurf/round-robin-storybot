@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, StringSelectMenuBuilder, ComponentType, EmbedBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { getConfigValue, sanitizeModalInput, formattedDate, replaceTemplateVariables } from '../utilities.js';
-import { CreateStory } from '../storybot.js';
+import { CreateStory, PickNextWriter } from '../storybot.js';
 
 const data = new SlashCommandBuilder()
   .setName('story')
@@ -50,21 +50,21 @@ const data = new SlashCommandBuilder()
           .setRequired(true))
   );
 
-async function execute(interaction) {
+async function execute(connection, interaction) {
   const subcommand = interaction.options.getSubcommand();
   
   if (subcommand === 'add') {
-    await handleAddStory(interaction);
+    await handleAddStory(connection, interaction);
   } else if (subcommand === 'list') {
-    await handleListStories(interaction);
+    await handleListStories(connection, interaction);
   } else if (subcommand === 'write') {
-    await handleWrite(interaction);
+    await handleWrite(connection, interaction);
   } else if (subcommand === 'join') {
-    await handleJoin(interaction);
+    await handleJoin(connection, interaction);
   }
 }
 
-async function handleAddStory(interaction) {
+async function handleAddStory(connection, interaction) {
   try {
     const guildId = interaction.guild.id;
     
@@ -76,7 +76,7 @@ async function handleAddStory(interaction) {
     // Story Title - Required text input
     const storyTitleInput = new TextInputBuilder()
       .setCustomId('story_title')
-      .setLabel(await getConfigValue('lblStoryTitle', guildId))
+      .setLabel(await getConfigValue(connection,'lblStoryTitle', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setMaxLength(500);
@@ -84,38 +84,38 @@ async function handleAddStory(interaction) {
     // Quick Mode - Select Menu (converted to text input for modal)
     const quickModeInput = new TextInputBuilder()
       .setCustomId('quick_mode')
-      .setLabel(await getConfigValue('lblQuickMode', guildId))
+      .setLabel(await getConfigValue(connection,'lblQuickMode', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setValue('off')
-      .setPlaceholder(await getConfigValue('txtQuickModePlaceholder', guildId));
+      .setPlaceholder(await getConfigValue(connection,'txtQuickModePlaceholder', guildId));
 
     // Turn Length - Required text input with default
     const turnLengthInput = new TextInputBuilder()
       .setCustomId('turn_length')
-      .setLabel(await getConfigValue('lblTurnLength', guildId))
+      .setLabel(await getConfigValue(connection,'lblTurnLength', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setValue('24')
-      .setPlaceholder(await getConfigValue('txtTurnLengthPlaceholder', guildId));
+      .setPlaceholder(await getConfigValue(connection,'txtTurnLengthPlaceholder', guildId));
 
     // Timeout Reminder - Select Menu (converted to text input for modal)
     const timeoutReminderInput = new TextInputBuilder()
       .setCustomId('timeout_reminder')
-      .setLabel(await getConfigValue('lblTimeoutReminder', guildId))
+      .setLabel(await getConfigValue(connection,'lblTimeoutReminder', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setValue('50')
-      .setPlaceholder(await getConfigValue('txtTimeoutReminderPlaceholder', guildId));
+      .setPlaceholder(await getConfigValue(connection,'txtTimeoutReminderPlaceholder', guildId));
 
     // Create second modal for additional fields
     const hideTurnThreadsInput = new TextInputBuilder()
       .setCustomId('hide_turn_threads')
-      .setLabel(await getConfigValue('lblHideTurnThreads', guildId))
+      .setLabel(await getConfigValue(connection,'lblHideTurnThreads', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setValue('off')
-      .setPlaceholder(await getConfigValue('txtHideTurnThreadsPlaceholder', guildId));
+      .setPlaceholder(await getConfigValue(connection,'txtHideTurnThreadsPlaceholder', guildId));
 
     // Add fields to modal (Discord limits to 5 components per modal)
     const row1 = new ActionRowBuilder().addComponents(storyTitleInput);
@@ -131,25 +131,25 @@ async function handleAddStory(interaction) {
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${guildId}] Error creating story modal:`, error);
     await interaction.reply({
-      content: await getConfigValue('txtFormOpenError', guildId),
+      content: await getConfigValue(connection,'txtFormOpenError', guildId),
       ephemeral: true
     });
   }
 }
 
 // Handle modal submission
-async function handleModalSubmit(interaction) {
+async function handleModalSubmit(connection, interaction) {
   if (interaction.customId === 'story_add_modal') {
-    await handleAddStoryModal(interaction);
+    await handleAddStoryModal(connection, interaction);
   } else if (interaction.customId.startsWith('story_write_')) {
-    await handleWriteModalSubmit(interaction);
+    await handleWriteModalSubmit(connection, interaction);
   } else if (interaction.customId.startsWith('story_join_')) {
-    await handleJoinModalSubmit(interaction);
+    await handleJoinModalSubmit(connection, interaction);
   }
 }
 
 // Handle story add modal (renamed for clarity)
-async function handleAddStoryModal(interaction) {
+async function handleAddStoryModal(connection, interaction) {
   try {
     const guildId = interaction.guild.id;
     
@@ -161,8 +161,8 @@ async function handleAddStoryModal(interaction) {
     const hideTurnThreadsRaw = sanitizeModalInput(interaction.fields.getTextInputValue('hide_turn_threads'), 10);
 
     // Get error message template
-    const txtMustBeNo = await getConfigValue('txtMustBeNo', guildId);
-    const txtValidationErrors = await getConfigValue('txtValidationErrors', guildId);
+    const txtMustBeNo = await getConfigValue(connection,'txtMustBeNo', guildId);
+    const txtValidationErrors = await getConfigValue(connection,'txtValidationErrors', guildId);
 
     // Validate inputs
     const errors = [];
@@ -170,26 +170,26 @@ async function handleAddStoryModal(interaction) {
     // Validate quick mode
     const quickMode = quickModeRaw.toLowerCase();
     if (!['off', 'on'].includes(quickMode)) {
-      errors.push(await getConfigValue('txtQuickModeValidation', guildId));
+      errors.push(await getConfigValue(connection,'txtQuickModeValidation', guildId));
     }
 
     // Validate turn length (must be numeric)
     const turnLength = parseInt(turnLengthRaw);
     if (isNaN(turnLength) || turnLength < 1) {
-      const lblTurnLength = await getConfigValue('lblTurnLength', guildId);
+      const lblTurnLength = await getConfigValue(connection,'lblTurnLength', guildId);
       errors.push(replaceTemplateVariables(txtMustBeNo, { 'Field label text': lblTurnLength }));
     }
 
     // Validate timeout reminder (must be 0, 25, 50, or 75)
     const timeoutReminder = parseInt(timeoutReminderRaw);
     if (![0, 25, 50, 75].includes(timeoutReminder)) {
-      errors.push(await getConfigValue('txtTimeoutReminderValidation', guildId));
+      errors.push(await getConfigValue(connection,'txtTimeoutReminderValidation', guildId));
     }
 
     // Validate hide turn threads
     const hideTurnThreads = hideTurnThreadsRaw.toLowerCase();
     if (!['off', 'on'].includes(hideTurnThreads)) {
-      errors.push(await getConfigValue('txtHideTurnThreadsValidation', guildId));
+      errors.push(await getConfigValue(connection,'txtHideTurnThreadsValidation', guildId));
     }
 
     if (errors.length > 0) {
@@ -201,7 +201,7 @@ async function handleAddStoryModal(interaction) {
     }
 
     // Show second modal for additional fields
-    await showSecondModal(interaction, {
+    await showSecondModal(connection, interaction, {
       storyTitle,
       quickMode: quickMode === 'on' ? 1 : 0,
       turnLength,
@@ -213,14 +213,14 @@ async function handleAddStoryModal(interaction) {
     const guildId = interaction.guild.id;
     console.error(`${formattedDate()}: [Guild ${guildId}] Error processing story modal:`, error);
     await interaction.reply({
-      content: await getConfigValue('txtFormProcessError', guildId),
+      content: await getConfigValue(connection,'txtFormProcessError', guildId),
       ephemeral: true
     });
   }
 }
 
 // Second modal for delay and writer options
-async function showSecondModal(interaction, storyData) {
+async function showSecondModal(connection, interaction, storyData) {
   try {
     const guildId = interaction.guild.id;
     
@@ -231,35 +231,35 @@ async function showSecondModal(interaction, storyData) {
     // Delay hours input
     const delayHoursInput = new TextInputBuilder()
       .setCustomId('delay_hours')
-      .setLabel(await getConfigValue('lblNoHours', guildId))
+      .setLabel(await getConfigValue(connection,'lblNoHours', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(false)
-      .setPlaceholder(await getConfigValue('txtDelayHoursPlaceholder', guildId));
+      .setPlaceholder(await getConfigValue(connection,'txtDelayHoursPlaceholder', guildId));
 
     // Delay writers input  
     const delayWritersInput = new TextInputBuilder()
       .setCustomId('delay_writers')
-      .setLabel(await getConfigValue('lblNoWriters', guildId))
+      .setLabel(await getConfigValue(connection,'lblNoWriters', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(false)
-      .setPlaceholder(await getConfigValue('txtDelayWritersPlaceholder', guildId));
+      .setPlaceholder(await getConfigValue(connection,'txtDelayWritersPlaceholder', guildId));
 
     // AO3 name input
     const ao3NameInput = new TextInputBuilder()
       .setCustomId('ao3_name')
-      .setLabel(await getConfigValue('lblYourAO3Name', guildId))
+      .setLabel(await getConfigValue(connection,'lblYourAO3Name', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(false)
-      .setPlaceholder(await getConfigValue('txtAO3NamePlaceholder', guildId));
+      .setPlaceholder(await getConfigValue(connection,'txtAO3NamePlaceholder', guildId));
 
     // Private threads input
     const keepPrivateInput = new TextInputBuilder()
       .setCustomId('keep_private')
-      .setLabel(await getConfigValue('lblKeepYourPrivate', guildId))
+      .setLabel(await getConfigValue(connection,'lblKeepYourPrivate', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setValue('no')
-      .setPlaceholder(await getConfigValue('txtKeepPrivatePlaceholder', guildId));
+      .setPlaceholder(await getConfigValue(connection,'txtKeepPrivatePlaceholder', guildId));
 
     // Add to modal
     const row1 = new ActionRowBuilder().addComponents(delayHoursInput);
@@ -274,14 +274,14 @@ async function showSecondModal(interaction, storyData) {
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${guildId}] Error showing second modal:`, error);
     await interaction.followUp({
-      content: await getConfigValue('txtAdditionalOptionsError', guildId),
+      content: await getConfigValue(connection,'txtAdditionalOptionsError', guildId),
       ephemeral: true
     });
   }
 }
 
 // Handle second modal submission
-async function handleSecondModalSubmit(interaction) {
+async function handleSecondModalSubmit(connection, interaction) {
   if (!interaction.customId.startsWith('story_add_modal_2_')) return;
 
   try {
@@ -296,8 +296,8 @@ async function handleSecondModalSubmit(interaction) {
     const keepPrivateRaw = sanitizeModalInput(interaction.fields.getTextInputValue('keep_private'), 10);
 
     // Get error message
-    const txtMustBeNo = await getConfigValue('txtMustBeNo', guildId);
-    const txtValidationErrors = await getConfigValue('txtValidationErrors', guildId);
+    const txtMustBeNo = await getConfigValue(connection,'txtMustBeNo', guildId);
+    const txtValidationErrors = await getConfigValue(connection,'txtValidationErrors', guildId);
 
     // Validate second modal inputs
     const errors = [];
@@ -305,21 +305,21 @@ async function handleSecondModalSubmit(interaction) {
     // Validate delay hours
     const delayHours = parseInt(delayHoursRaw) || 0;
     if (delayHoursRaw && (isNaN(delayHours) || delayHours < 0)) {
-      const lblNoHours = await getConfigValue('lblNoHours', guildId);
+      const lblNoHours = await getConfigValue(connection,'lblNoHours', guildId);
       errors.push(replaceTemplateVariables(txtMustBeNo, { 'Field label text': lblNoHours }));
     }
 
     // Validate delay writers
     const delayWriters = parseInt(delayWritersRaw) || 0;
     if (delayWritersRaw && (isNaN(delayWriters) || delayWriters < 0)) {
-      const lblNoWriters = await getConfigValue('lblNoWriters', guildId);
+      const lblNoWriters = await getConfigValue(connection,'lblNoWriters', guildId);
       errors.push(replaceTemplateVariables(txtMustBeNo, { 'Field label text': lblNoWriters }));
     }
 
     // Validate keep private
     const keepPrivate = keepPrivateRaw.toLowerCase();
     if (!['yes', 'no'].includes(keepPrivate)) {
-      errors.push(await getConfigValue('txtPrivacyValidation', guildId));
+      errors.push(await getConfigValue(connection,'txtPrivacyValidation', guildId));
     }
 
     if (errors.length > 0) {
@@ -343,7 +343,7 @@ async function handleSecondModalSubmit(interaction) {
     };
 
     // Pass to CreateStory function
-    const result = await CreateStory(interaction, storyInput);
+    const result = await CreateStory(connection, interaction, storyInput);
 
     if (result.success) {
       await interaction.editReply({
@@ -358,7 +358,7 @@ async function handleSecondModalSubmit(interaction) {
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${guildId}] Error processing second story modal:`, error);
     await interaction.editReply({
-      content: await getConfigValue('txtStoryCreationError', guildId)
+      content: await getConfigValue(connection,'txtStoryCreationError', guildId)
     });
   }
 }
@@ -366,13 +366,13 @@ async function handleSecondModalSubmit(interaction) {
 /**
  * Handle /story join command
  */
-async function handleJoin(interaction) {
+async function handleJoin(connection, interaction) {
   try {
     const guildId = interaction.guild.id;
     const storyId = interaction.options.getInteger('story_id');
     
     // Validate story access and get story info
-    const storyInfo = await validateStoryAccess(storyId, guildId);
+    const storyInfo = await validateStoryAccess(connection, storyId, guildId);
     if (!storyInfo.success) {
       await interaction.reply({ 
         content: storyInfo.error, 
@@ -382,7 +382,7 @@ async function handleJoin(interaction) {
     }
     
     // Validate join eligibility
-    const joinInfo = await validateJoinEligibility(storyId, guildId, interaction.user.id);
+    const joinInfo = await validateJoinEligibility(connection, storyId, guildId, interaction.user.id);
     if (!joinInfo.success) {
       await interaction.reply({ 
         content: joinInfo.error, 
@@ -393,8 +393,6 @@ async function handleJoin(interaction) {
     
     // Check if user has existing AO3 name from other stories
     let existingAO3Name = '';
-    try {
-      const connection = await getDBConnection();
       try {
         const [existingWriter] = await connection.execute(`
           SELECT AO3_name FROM story_writer 
@@ -405,11 +403,8 @@ async function handleJoin(interaction) {
         if (existingWriter.length > 0) {
           existingAO3Name = existingWriter[0].AO3_name;
         }
-      } finally {
-        connection.release();
-      }
-    } catch (error) {
-      // Continue without pre-filling if lookup fails
+      } catch (error) {
+      // Continue if lookup fails
     }
     
     // Create modal
@@ -420,10 +415,10 @@ async function handleJoin(interaction) {
     // AO3 name input
     const ao3NameInput = new TextInputBuilder()
       .setCustomId('ao3_name')
-      .setLabel(await getConfigValue('lblJoinAO3Name', guildId))
+      .setLabel(await getConfigValue(connection,'lblJoinAO3Name', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(false)
-      .setPlaceholder(await getConfigValue('txtJoinAO3Placeholder', guildId))
+      .setPlaceholder(await getConfigValue(connection,'txtJoinAO3Placeholder', guildId))
       .setMaxLength(255);
       
     if (existingAO3Name) {
@@ -433,20 +428,20 @@ async function handleJoin(interaction) {
     // Privacy input
     const privacyInput = new TextInputBuilder()
       .setCustomId('turn_privacy')
-      .setLabel(await getConfigValue('lblJoinPrivacy', guildId))
+      .setLabel(await getConfigValue(connection,'lblJoinPrivacy', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setValue('public')
-      .setPlaceholder(await getConfigValue('txtJoinPrivacyPlaceholder', guildId));
+      .setPlaceholder(await getConfigValue(connection,'txtJoinPrivacyPlaceholder', guildId));
 
     // Notification preference input
     const notificationInput = new TextInputBuilder()
       .setCustomId('notification_prefs')
-      .setLabel(await getConfigValue('lblJoinNotifications', guildId))
+      .setLabel(await getConfigValue(connection,'lblJoinNotifications', guildId))
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setValue('dm')
-      .setPlaceholder(await getConfigValue('txtJoinNotificationPlaceholder', guildId));
+      .setPlaceholder(await getConfigValue(connection,'txtJoinNotificationPlaceholder', guildId));
 
     // Add to modal
     const row1 = new ActionRowBuilder().addComponents(ao3NameInput);
@@ -460,7 +455,7 @@ async function handleJoin(interaction) {
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in handleJoin:`, error);
     await interaction.reply({
-      content: await getConfigValue('txtJoinFormFailed', interaction.guild.id),
+      content: await getConfigValue(connection,'txtJoinFormFailed', interaction.guild.id),
       ephemeral: true
     });
   }
@@ -469,7 +464,7 @@ async function handleJoin(interaction) {
 /**
  * Handle join modal submission
  */
-async function handleJoinModalSubmit(interaction) {
+async function handleJoinModalSubmit(connection, interaction) {
   try {
     const guildId = interaction.guild.id;
     const storyId = interaction.customId.split('_')[2];
@@ -482,7 +477,7 @@ async function handleJoinModalSubmit(interaction) {
     const notificationPrefsRaw = sanitizeModalInput(interaction.fields.getTextInputValue('notification_prefs'), 10);
     
     // Get validation error messages
-    const txtValidationErrors = await getConfigValue('txtValidationErrors', guildId);
+    const txtValidationErrors = await getConfigValue(connection,'txtValidationErrors', guildId);
     
     // Validate inputs
     const errors = [];
@@ -490,13 +485,13 @@ async function handleJoinModalSubmit(interaction) {
     // Validate turn privacy
     const turnPrivacy = turnPrivacyRaw.toLowerCase();
     if (!['public', 'private'].includes(turnPrivacy)) {
-      errors.push(await getConfigValue('txtPrivacyValidation', guildId));
+      errors.push(await getConfigValue(connection,'txtPrivacyValidation', guildId));
     }
     
     // Validate notification preferences
     const notificationPrefs = notificationPrefsRaw.toLowerCase();
     if (!['dm', 'mention'].includes(notificationPrefs)) {
-      errors.push(await getConfigValue('txtNotificationValidation', guildId));
+      errors.push(await getConfigValue(connection,'txtNotificationValidation', guildId));
     }
     
     if (errors.length > 0) {
@@ -507,7 +502,7 @@ async function handleJoinModalSubmit(interaction) {
     }
     
     // Re-validate join eligibility (in case story changed)
-    const joinInfo = await validateJoinEligibility(storyId, guildId, interaction.user.id);
+    const joinInfo = await validateJoinEligibility(connection, storyId, guildId, interaction.user.id);
     if (!joinInfo.success) {
       await interaction.editReply({
         content: joinInfo.error
@@ -524,8 +519,6 @@ async function handleJoinModalSubmit(interaction) {
     
     // Import StoryJoin function and call it
     const { StoryJoin } = await import('../storybot.js');
-    const connection = await getDBConnection();
-    
     try {
       await connection.beginTransaction();
       
@@ -544,7 +537,7 @@ async function handleJoinModalSubmit(interaction) {
           SELECT title FROM story WHERE story_id = ?
         `, [storyId]);
         
-        const txtJoinSuccess = await getConfigValue('txtJoinSuccess', guildId);
+        const txtJoinSuccess = await getConfigValue(connection,'txtJoinSuccess', guildId);
         const successMessage = replaceTemplateVariables(txtJoinSuccess, {
           story_title: storyInfo[0].title,
           writer_number: writerCount[0].count
@@ -555,7 +548,7 @@ async function handleJoinModalSubmit(interaction) {
         });
         
         // Post announcement to story feed channel
-        await postStoryFeedJoinAnnouncement(storyId, interaction, storyInfo[0].title);
+        await postStoryFeedJoinAnnouncement(connection, storyId, interaction, storyInfo[0].title);
         
       } else {
         await connection.rollback();
@@ -567,14 +560,14 @@ async function handleJoinModalSubmit(interaction) {
     } catch (error) {
       await connection.rollback();
       throw error;
-    } finally {
-      connection.release();
+//    } finally {
+//      connection.release();
     }
     
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in handleJoinModalSubmit:`, error);
     await interaction.editReply({
-      content: await getConfigValue('txtJoinProcessFailed', interaction.guild.id)
+      content: await getConfigValue(connection,'txtJoinProcessFailed', interaction.guild.id)
     });
   }
 }
@@ -582,14 +575,11 @@ async function handleJoinModalSubmit(interaction) {
 /**
  * Post announcement to story feed channel when someone joins
  */
-async function postStoryFeedJoinAnnouncement(storyId, interaction, storyTitle) {
-  try {
-    const guildId = interaction.guild.id;
-    const connection = await getDBConnection();
-    
+async function postStoryFeedJoinAnnouncement(connection, storyId, interaction, storyTitle) {
+    const guildId = interaction.guild.id;  
     try {
       // Get story feed channel ID from config
-      const feedChannelId = await getConfigValue('cfgStoryFeedChannelId', guildId);
+      const feedChannelId = await getConfigValue(connection,'cfgStoryFeedChannelId', guildId);
       if (!feedChannelId) {
         // No feed channel configured
         console.log(`${formattedDate()}: [Guild ${guildId}] Story feed channel not configured - skipping join announcement`);
@@ -617,7 +607,7 @@ async function postStoryFeedJoinAnnouncement(storyId, interaction, storyTitle) {
       }
       
       // Get announcement message
-      const txtStoryFeedJoinAnnouncement = await getConfigValue('txtStoryFeedJoinAnnouncement', guildId);
+      const txtStoryFeedJoinAnnouncement = await getConfigValue(connection,'txtStoryFeedJoinAnnouncement', guildId);
       const joinerName = interaction.member.displayName || interaction.user.displayName || interaction.user.username;
       
       const announcement = replaceTemplateVariables(txtStoryFeedJoinAnnouncement, {
@@ -632,11 +622,7 @@ async function postStoryFeedJoinAnnouncement(storyId, interaction, storyTitle) {
       if (feedChannel) {
         await feedChannel.send(announcement);
       }
-      
-    } finally {
-      connection.release();
-    }
-    
+      console.log(`${formattedDate()}: [Guild ${guildId}] Story feed join announcement sent for story ${storyId}`);
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in postStoryFeedJoinAnnouncement:`, error);
     // Don't throw - this is a non-critical announcement feature
@@ -646,14 +632,11 @@ async function postStoryFeedJoinAnnouncement(storyId, interaction, storyTitle) {
 /**
  * Post announcement to story feed channel when a story is created
  */
-async function postStoryFeedCreationAnnouncement(storyId, interaction, storyTitle, storyStatus, delayHours, delayWriters) {
-  try {
+async function postStoryFeedCreationAnnouncement(connection, storyId, interaction, storyTitle, storyStatus, delayHours, delayWriters) {
     const guildId = interaction.guild.id;
-    const connection = await getDBConnection();
-    
     try {
       // Get story feed channel ID from config
-      const feedChannelId = await getConfigValue('cfgStoryFeedChannelId', guildId);
+      const feedChannelId = await getConfigValue(connection,'cfgStoryFeedChannelId', guildId);
       if (!feedChannelId) {
         console.log(`${formattedDate()}: [Guild ${guildId}] Story feed channel not configured - skipping creation announcement`);
         return;
@@ -668,7 +651,7 @@ async function postStoryFeedCreationAnnouncement(storyId, interaction, storyTitl
           SELECT COUNT(*) as count FROM story_writer WHERE story_id = ? AND sw_status = 1
         `, [storyId]);
         
-        const txtStoryFeedCreatedActive = await getConfigValue('txtStoryFeedCreatedActive', guildId);
+        const txtStoryFeedCreatedActive = await getConfigValue(connection,'txtStoryFeedCreatedActive', guildId);
         announcement = replaceTemplateVariables(txtStoryFeedCreatedActive, {
           story_title: storyTitle,
           creator_name: creatorName,
@@ -677,7 +660,7 @@ async function postStoryFeedCreationAnnouncement(storyId, interaction, storyTitl
       } else if (delayHours) {
         // Story delayed by time
         const startTime = new Date(Date.now() + (delayHours * 60 * 60 * 1000));
-        const txtStoryFeedCreatedDelayed = await getConfigValue('txtStoryFeedCreatedDelayed', guildId);
+        const txtStoryFeedCreatedDelayed = await getConfigValue(connection,'txtStoryFeedCreatedDelayed', guildId);
         announcement = replaceTemplateVariables(txtStoryFeedCreatedDelayed, {
           story_title: storyTitle,
           creator_name: creatorName,
@@ -685,7 +668,7 @@ async function postStoryFeedCreationAnnouncement(storyId, interaction, storyTitl
         });
       } else if (delayWriters) {
         // Story delayed by writer count
-        const txtStoryFeedCreatedPending = await getConfigValue('txtStoryFeedCreatedPending', guildId);
+        const txtStoryFeedCreatedPending = await getConfigValue(connection,'txtStoryFeedCreatedPending', guildId);
         announcement = replaceTemplateVariables(txtStoryFeedCreatedPending, {
           story_title: storyTitle,
           creator_name: creatorName,
@@ -700,10 +683,7 @@ async function postStoryFeedCreationAnnouncement(storyId, interaction, storyTitl
         }
       }
       
-    } finally {
-      connection.release();
-    }
-    
+      console.log(`${formattedDate()}: [Guild ${guildId}] Story feed creation announcement sent for story ${storyId}`);
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in postStoryFeedCreationAnnouncement:`, error);
   }
@@ -712,14 +692,11 @@ async function postStoryFeedCreationAnnouncement(storyId, interaction, storyTitl
 /**
  * Post announcement to story feed channel when a story becomes active
  */
-async function postStoryFeedActivationAnnouncement(storyId, interaction, storyTitle) {
-  try {
+async function postStoryFeedActivationAnnouncement(connection, storyId, interaction, storyTitle) {
     const guildId = interaction.guild.id;
-    const connection = await getDBConnection();
-    
     try {
       // Get story feed channel ID from config
-      const feedChannelId = await getConfigValue('cfgStoryFeedChannelId', guildId);
+      const feedChannelId = await getConfigValue(connection,'cfgStoryFeedChannelId', guildId);
       if (!feedChannelId) {
         console.log(`${formattedDate()}: [Guild ${guildId}] Story feed channel not configured - skipping activation announcement`);
         return;
@@ -739,7 +716,7 @@ async function postStoryFeedActivationAnnouncement(storyId, interaction, storyTi
         const turn = turnInfo[0];
         const endTime = new Date(turn.started_at.getTime() + (turn.turn_length_hours * 60 * 60 * 1000));
         
-        const txtStoryFeedNowActive = await getConfigValue('txtStoryFeedNowActive', guildId);
+        const txtStoryFeedNowActive = await getConfigValue(connection,'txtStoryFeedNowActive', guildId);
         const announcement = replaceTemplateVariables(txtStoryFeedNowActive, {
           story_title: storyTitle,
           first_writer: turn.discord_display_name,
@@ -751,11 +728,7 @@ async function postStoryFeedActivationAnnouncement(storyId, interaction, storyTi
           await feedChannel.send(announcement);
         }
       }
-      
-    } finally {
-      connection.release();
-    }
-    
+      console.log(`${formattedDate()}: [Guild ${guildId}] Story feed activation announcement sent for story ${storyId}`);
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in postStoryFeedActivationAnnouncement:`, error);
   }
@@ -770,7 +743,7 @@ async function handleWrite(interaction) {
     const storyId = interaction.options.getInteger('story_id');
     
     // Validate story access and get story info
-    const storyInfo = await validateStoryAccess(storyId, guildId);
+    const storyInfo = await validateStoryAccess(connection, storyId, guildId);
     if (!storyInfo.success) {
       await interaction.reply({ 
         content: storyInfo.error, 
@@ -780,7 +753,7 @@ async function handleWrite(interaction) {
     }
     
     // Validate active writer
-    const writerInfo = await validateActiveWriter(interaction.user.id, storyId);
+    const writerInfo = await validateActiveWriter(connection, interaction.user.id, storyId);
     if (!writerInfo.success) {
       await interaction.reply({ 
         content: writerInfo.error, 
@@ -792,14 +765,14 @@ async function handleWrite(interaction) {
     // Check if story is quick mode
     if (!storyInfo.story.quick_mode) {
       await interaction.reply({ 
-        content: await getConfigValue('txtNormalModeWrite', guildId), 
+        content: await getConfigValue(connection,'txtNormalModeWrite', guildId), 
         ephemeral: true 
       });
       return;
     }
     
     // Get configurable text for warnings (used multiple times)
-    const txtWriteWarning = await getConfigValue('txtWriteWarning', guildId);
+    const txtWriteWarning = await getConfigValue(connection,'txtWriteWarning', guildId);
     
     // Create modal
     const modal = new ModalBuilder()
@@ -808,9 +781,9 @@ async function handleWrite(interaction) {
 
     const entryInput = new TextInputBuilder()
       .setCustomId('entry_content')
-      .setLabel(await getConfigValue('lblWriteEntry', guildId))
+      .setLabel(await getConfigValue(connection,'lblWriteEntry', guildId))
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder(`⚠️ ${txtWriteWarning}\n\n${await getConfigValue('txtWritePlaceholder', guildId)}`)
+      .setPlaceholder(`⚠️ ${txtWriteWarning}\n\n${await getConfigValue(connection,'txtWritePlaceholder', guildId)}`)
       .setMaxLength(4000)
       .setMinLength(10)
       .setRequired(true);
@@ -823,7 +796,7 @@ async function handleWrite(interaction) {
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in handleWrite:`, error);
     await interaction.reply({
-      content: await getConfigValue('txtWriteFormFailed', interaction.guild.id),
+      content: await getConfigValue(connection,'txtWriteFormFailed', interaction.guild.id),
       ephemeral: true
     });
   }
@@ -832,16 +805,13 @@ async function handleWrite(interaction) {
 /**
  * Handle write modal submission
  */
-async function handleWriteModalSubmit(interaction) {
-  try {
+async function handleWriteModalSubmit(connection, interaction) {
     const guildId = interaction.guild.id;
     const storyId = interaction.customId.split('_')[2];
     const content = sanitizeModalInput(interaction.fields.getTextInputValue('entry_content'), 4000);
     
     await interaction.deferReply({ ephemeral: true });
-    
-    // Check for existing pending entry
-    const connection = await getDBConnection();
+    let entryId = null;
     try {
       const [pendingEntry] = await connection.execute(`
         SELECT story_entry_id FROM story_entry se
@@ -857,7 +827,7 @@ async function handleWriteModalSubmit(interaction) {
           UPDATE story_entry SET content = ?, created_at = NOW() 
           WHERE story_entry_id = ?
         `, [content, pendingEntry[0].story_entry_id]);
-        var entryId = pendingEntry[0].story_entry_id;
+        entryId = pendingEntry[0].story_entry_id;
       } else {
         // Create new pending entry
         const [turnInfo] = await connection.execute(`
@@ -875,30 +845,27 @@ async function handleWriteModalSubmit(interaction) {
           VALUES (?, ?, 'pending', 1)
         `, [turnInfo[0].turn_id, content]);
         
-        var entryId = result.insertId;
+        entryId = result.insertId;
       }
-    } finally {
-      connection.release();
-    }
     
     // Get timeout and create embed
-    const timeoutMinutes = parseInt(await getConfigValue('cfgEntryTimeoutMinutes', guildId)) || 10;
+    const timeoutMinutes = parseInt(await getConfigValue(connection,'cfgEntryTimeoutMinutes', guildId)) || 10;
     const expiresAt = new Date(Date.now() + (timeoutMinutes * 60 * 1000));
     const discordTimestamp = `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`;
     
     // Create preview embed
-    const embed = await createPreviewEmbed(content, guildId, discordTimestamp);
+    const embed = await createPreviewEmbed(connection, content, guildId, discordTimestamp);
     
     // Create confirmation buttons
     const confirmRow = new ActionRowBuilder()
       .addComponents(
         new ButtonBuilder()
           .setCustomId(`confirm_entry_${entryId}`)
-          .setLabel(await getConfigValue('btnSubmit', guildId))
+          .setLabel(await getConfigValue(connection,'btnSubmit', guildId))
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId(`discard_entry_${entryId}`)
-          .setLabel(await getConfigValue('btnDiscard', guildId))
+          .setLabel(await getConfigValue(connection,'btnDiscard', guildId))
           .setStyle(ButtonStyle.Danger)
       );
       
@@ -910,7 +877,7 @@ async function handleWriteModalSubmit(interaction) {
     // Send DM reminder
     try {
       const user = await interaction.client.users.fetch(interaction.user.id);
-      await user.send(`${await getConfigValue('txtDMReminder', guildId)}\n\n${await getConfigValue('txtRecoveryInstructions', guildId)}\n\n⏰ Expires: ${discordTimestamp}`);
+      await user.send(`${await getConfigValue(connection,'txtDMReminder', guildId)}\n\n${await getConfigValue(connection,'txtRecoveryInstructions', guildId)}\n\n⏰ Expires: ${discordTimestamp}`);
     } catch (error) {
       console.log(`${formattedDate()}: [Guild ${guildId}] Could not send DM reminder to user ${interaction.user.id}`);
     }
@@ -918,7 +885,7 @@ async function handleWriteModalSubmit(interaction) {
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in handleWriteModalSubmit:`, error);
     await interaction.editReply({
-      content: await getConfigValue('txtEntryProcessFailed', interaction.guild.id)
+      content: await getConfigValue(connection,'txtEntryProcessFailed', interaction.guild.id)
     });
   }
 }
@@ -926,41 +893,36 @@ async function handleWriteModalSubmit(interaction) {
 /**
  * Validate if story exists and belongs to guild
  */
-async function validateStoryAccess(storyId, guildId) {
-  const connection = await getDBConnection();
-  
+async function validateStoryAccess(connection, storyId, guildId) {
   try {
     const [storyInfo] = await connection.execute(`
       SELECT * FROM story WHERE story_id = ?
     `, [storyId]);
     
     if (storyInfo.length === 0) {
-      return { success: false, error: await getConfigValue('txtStoryNotFound', guildId) };
+      return { success: false, error: await getConfigValue(connection,'txtStoryNotFound', guildId) };
     }
     
     const story = storyInfo[0];
     
     if (story.guild_id !== guildId) {
-      return { success: false, error: await getConfigValue('txtStoryWrongGuild', guildId) };
+      return { success: false, error: await getConfigValue(connection,'txtStoryWrongGuild', guildId) };
     }
     
     if (story.story_status !== 1) {
-      return { success: false, error: await getConfigValue('txtStoryNotActive', guildId) };
+      return { success: false, error: await getConfigValue(connection,'txtStoryNotActive', guildId) };
     }
     
     return { success: true, story };
-    
-  } finally {
-    connection.release();
+  } catch (error) {
+    console.error(`${formattedDate()}: [Guild ${guildId}] Error in validateStoryAccess:`, error);
   }
 }
 
 /**
  * Validate if user is the active writer for a story
  */
-async function validateActiveWriter(userId, storyId) {
-  const connection = await getDBConnection();
-  
+async function validateActiveWriter(connection, userId, storyId) {
   try {
     const [writerInfo] = await connection.execute(`
       SELECT sw.discord_user_id as current_writer
@@ -976,22 +938,19 @@ async function validateActiveWriter(userId, storyId) {
       `, [storyId]);
       
       const guildId = storyInfo[0]?.guild_id;
-      return { success: false, error: await getConfigValue('txtNotYourTurn', guildId) };
+      return { success: false, error: await getConfigValue(connection,'txtNotYourTurn', guildId) };
     }
     
     return { success: true };
-    
-  } finally {
-    connection.release();
+  } catch (error) {
+    console.error(`${formattedDate()}: [Guild ${guildId}] Error in validateActiveWriter:`, error);
   }
 }
 
 /**
  * Validate if user can join a story
  */
-async function validateJoinEligibility(storyId, guildId, userId) {
-  const connection = await getDBConnection();
-  
+async function validateJoinEligibility(connection, storyId, guildId, userId) {
   try {
     // Get story info with writer count
     const [storyInfo] = await connection.execute(`
@@ -1003,26 +962,26 @@ async function validateJoinEligibility(storyId, guildId, userId) {
     `, [storyId, guildId]);
     
     if (storyInfo.length === 0) {
-      return { success: false, error: await getConfigValue('txtStoryNotFound', guildId) };
+      return { success: false, error: await getConfigValue(connection,'txtStoryNotFound', guildId) };
     }
     
     const story = storyInfo[0];
     
     // Check if story is closed
     if (story.story_status === 3) {
-      return { success: false, error: await getConfigValue('txtJoinStoryClosed', guildId) };
+      return { success: false, error: await getConfigValue(connection,'txtJoinStoryClosed', guildId) };
     }
     
     // Check if story allows late joins (if story has started)
     if (story.story_status === 1 && !story.allow_late_joins) {
-      return { success: false, error: await getConfigValue('txtJoinNotAllowed', guildId) };
+      return { success: false, error: await getConfigValue(connection,'txtJoinNotAllowed', guildId) };
     }
     
     // Check if story is at capacity
     if (story.max_writers && story.current_writers >= story.max_writers) {
       return { 
         success: false, 
-        error: replaceTemplateVariables(await getConfigValue('txtJoinStoryFull', guildId), { max_writers: story.max_writers })
+        error: replaceTemplateVariables(await getConfigValue(connection,'txtJoinStoryFull', guildId), { max_writers: story.max_writers })
       };
     }
     
@@ -1033,7 +992,7 @@ async function validateJoinEligibility(storyId, guildId, userId) {
     `, [storyId, userId]);
     
     if (existingWriter.length > 0) {
-      return { success: false, error: await getConfigValue('txtAlreadyJoined', guildId) };
+      return { success: false, error: await getConfigValue(connection,'txtAlreadyJoined', guildId) };
     }
     
     return { success: true, story };
@@ -1046,16 +1005,16 @@ async function validateJoinEligibility(storyId, guildId, userId) {
 /**
  * Create entry preview embed
  */
-async function createPreviewEmbed(content, guildId, discordTimestamp) {
-  const lblYourEntry = await getConfigValue('lblYourEntry', guildId);
-  const lblEntryContinued = await getConfigValue('lblEntryContinued', guildId);
-  const txtEntryStatsTemplate = await getConfigValue('txtEntryStatsTemplate', guildId);
+async function createPreviewEmbed(connection, content, guildId, discordTimestamp) {
+  const lblYourEntry = await getConfigValue(connection,'lblYourEntry', guildId);
+  const lblEntryContinued = await getConfigValue(connection,'lblEntryContinued', guildId);
+  const txtEntryStatsTemplate = await getConfigValue(connection,'txtEntryStatsTemplate', guildId);
   
   const embed = new EmbedBuilder()
-    .setTitle(await getConfigValue('txtPreviewTitle', guildId))
-    .setDescription(await getConfigValue('txtPreviewDescription', guildId))
+    .setTitle(await getConfigValue(connection,'txtPreviewTitle', guildId))
+    .setDescription(await getConfigValue(connection,'txtPreviewDescription', guildId))
     .setColor(0xffd700)
-    .setFooter({ text: replaceTemplateVariables(await getConfigValue('txtPreviewExpires', guildId), { timestamp: discordTimestamp }) });
+    .setFooter({ text: replaceTemplateVariables(await getConfigValue(connection,'txtPreviewExpires', guildId), { timestamp: discordTimestamp }) });
     
   // Handle long content by splitting into multiple fields
   const maxFieldLength = 1024;
@@ -1097,7 +1056,7 @@ async function createPreviewEmbed(content, guildId, discordTimestamp) {
   });
     
   embed.addFields({
-    name: await getConfigValue('lblEntryStats', guildId),
+    name: await getConfigValue(connection,'lblEntryStats', guildId),
     value: statsText,
     inline: true
   });
@@ -1108,7 +1067,7 @@ async function createPreviewEmbed(content, guildId, discordTimestamp) {
 /**
  * Handle /story list command
  */
-async function handleListStories(interaction) {
+async function handleListStories(connection, interaction) {
   try {
     const guildId = interaction.guild.id;
     const filter = interaction.options.getString('filter') || 'all';
@@ -1120,7 +1079,7 @@ async function handleListStories(interaction) {
     const stories = await getStoriesPaginated(guildId, filter, page, itemsPerPage, interaction.user.id);
 
     if (stories.data.length === 0) {
-      const txtNoStoriesFound = await getConfigValue('txtNoStoriesFound', guildId);
+      const txtNoStoriesFound = await getConfigValue(connection,'txtNoStoriesFound', guildId);
       const filterTitle = await getFilterTitle(filter, guildId);
       await interaction.editReply({
         content: replaceTemplateVariables(txtNoStoriesFound, { filter_name: filterTitle })
@@ -1132,12 +1091,12 @@ async function handleListStories(interaction) {
     const filterTitle = await getFilterTitle(filter, guildId);
     
     const embed = new EmbedBuilder()
-      .setTitle(replaceTemplateVariables(await getConfigValue('txtStoriesPageTitle', guildId), {
+      .setTitle(replaceTemplateVariables(await getConfigValue(connection,'txtStoriesPageTitle', guildId), {
         filter_title: filterTitle,
         page: page,
         total_pages: stories.totalPages
       }))
-      .setDescription(replaceTemplateVariables(await getConfigValue('txtStoriesPageDesc', guildId), {
+      .setDescription(replaceTemplateVariables(await getConfigValue(connection,'txtStoriesPageDesc', guildId), {
         showing: stories.data.length,
         total: stories.totalCount
       }))
@@ -1148,19 +1107,19 @@ async function handleListStories(interaction) {
     for (const story of stories.data) {
       const statusIcon = getStatusIcon(story.story_status);
       const joinStatus = story.can_join 
-        ? await getConfigValue('txtCanJoin', guildId)
-        : await getConfigValue('txtCannotJoin', guildId);
+        ? await getConfigValue(connection,'txtCanJoin', guildId)
+        : await getConfigValue(connection,'txtCannotJoin', guildId);
       const currentTurn = await getCurrentTurnInfo(story, guildId);
       
       // Get configurable labels
-      const lblStoryStatus = await getConfigValue('lblStoryStatus', guildId);
-      const lblStoryTurn = await getConfigValue('lblStoryTurn', guildId);
-      const lblStoryWriters = await getConfigValue('lblStoryWriters', guildId);
-      const lblStoryMode = await getConfigValue('lblStoryMode', guildId);
-      const lblStoryCreator = await getConfigValue('lblStoryCreator', guildId);
+      const lblStoryStatus = await getConfigValue(connection,'lblStoryStatus', guildId);
+      const lblStoryTurn = await getConfigValue(connection,'lblStoryTurn', guildId);
+      const lblStoryWriters = await getConfigValue(connection,'lblStoryWriters', guildId);
+      const lblStoryMode = await getConfigValue(connection,'lblStoryMode', guildId);
+      const lblStoryCreator = await getConfigValue(connection,'lblStoryCreator', guildId);
       const modeText = story.quick_mode 
-        ? await getConfigValue('txtModeQuick', guildId)
-        : await getConfigValue('txtModeNormal', guildId);
+        ? await getConfigValue(connection,'txtModeQuick', guildId)
+        : await getConfigValue(connection,'txtModeNormal', guildId);
       
       embed.addFields({
         name: `${statusIcon} "${story.title}" (#${story.story_id})`,
@@ -1178,8 +1137,8 @@ async function handleListStories(interaction) {
   const navRow = new ActionRowBuilder();
   
   if (stories.totalPages > 1) {
-    const btnPrev = await getConfigValue('btnPrev', guildId);
-    const btnNext = await getConfigValue('btnNext', guildId);
+    const btnPrev = await getConfigValue(connection,'btnPrev', guildId);
+    const btnNext = await getConfigValue(connection,'btnNext', guildId);
     
     navRow.addComponents(
       new ButtonBuilder()
@@ -1205,10 +1164,10 @@ async function handleListStories(interaction) {
     // Quick join menu if there are joinable stories
     const joinableStories = stories.data.filter(s => s.can_join);
     if (joinableStories.length > 0) {
-      const txtQuickJoinPlaceholder = await getConfigValue('txtQuickJoinPlaceholder', guildId);
-      const txtQuickJoinDesc = await getConfigValue('txtQuickJoinDesc', guildId);
-      const txtModeQuick = await getConfigValue('txtModeQuick', guildId);
-      const txtModeNormal = await getConfigValue('txtModeNormal', guildId);
+      const txtQuickJoinPlaceholder = await getConfigValue(connection,'txtQuickJoinPlaceholder', guildId);
+      const txtQuickJoinDesc = await getConfigValue(connection,'txtQuickJoinDesc', guildId);
+      const txtModeQuick = await getConfigValue(connection,'txtModeQuick', guildId);
+      const txtModeNormal = await getConfigValue(connection,'txtModeNormal', guildId);
       
       const joinRow = new ActionRowBuilder()
         .addComponents(
@@ -1236,7 +1195,7 @@ async function handleListStories(interaction) {
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in handleListStories:`, error);
     await interaction.editReply({
-      content: await getConfigValue('txtStoryListFailed', interaction.guild.id),
+      content: await getConfigValue(connection,'txtStoryListFailed', interaction.guild.id),
     });
   }
 }
@@ -1244,22 +1203,22 @@ async function handleListStories(interaction) {
 /**
  * Handle button interactions for story list
  */
-async function handleButtonInteraction(interaction) {
+async function handleButtonInteraction(connection, interaction) {
   if (interaction.customId.startsWith('story_list_')) {
-    await handleListNavigation(interaction);
+    await handleListNavigationconnection, (interaction);
   } else if (interaction.customId.startsWith('confirm_entry_') || interaction.customId.startsWith('discard_entry_')) {
-    await handleEntryConfirmation(interaction);
+    await handleEntryConfirmation(connection, interaction);
   } else if (interaction.customId.startsWith('finalize_entry_')) {
-    await handleFinalizeEntry(interaction);
+    await handleFinalizeEntry(connection, interaction);
   } else if (interaction.customId.startsWith('skip_turn_')) {
-    await handleSkipTurn(interaction);
+    await handleSkipTurn(connection, interaction);
   }
 }
 
 /**
  * Handle list navigation buttons
  */
-async function handleListNavigation(interaction) {
+async function handleListNavigation(connection, interaction) {
   const [, , filter, pageStr] = interaction.customId.split('_');
   const page = parseInt(pageStr);
   
@@ -1272,8 +1231,8 @@ async function handleListNavigation(interaction) {
   const stories = await getStoriesPaginated(guildId, filter, page, itemsPerPage, interaction.user.id);
   
   // Get configurable text for embed
-  const txtStoriesPageTitle = await getConfigValue('txtStoriesPageTitle', guildId);
-  const txtStoriesPageDesc = await getConfigValue('txtStoriesPageDesc', guildId);
+  const txtStoriesPageTitle = await getConfigValue(connection,'txtStoriesPageTitle', guildId);
+  const txtStoriesPageDesc = await getConfigValue(connection,'txtStoriesPageDesc', guildId);
   const filterTitle = await getFilterTitle(filter, guildId);
   
   const embed = new EmbedBuilder()
@@ -1292,19 +1251,19 @@ async function handleListNavigation(interaction) {
   for (const story of stories.data) {
     const statusIcon = getStatusIcon(story.story_status);
     const joinStatus = story.can_join 
-      ? await getConfigValue('txtCanJoin', guildId)
-      : await getConfigValue('txtCannotJoin', guildId);
+      ? await getConfigValue(connection,'txtCanJoin', guildId)
+      : await getConfigValue(connection,'txtCannotJoin', guildId);
     const currentTurn = await getCurrentTurnInfo(story, guildId);
     
     // Get configurable labels
-    const lblStoryStatus = await getConfigValue('lblStoryStatus', guildId);
-    const lblStoryTurn = await getConfigValue('lblStoryTurn', guildId);
-    const lblStoryWriters = await getConfigValue('lblStoryWriters', guildId);
-    const lblStoryMode = await getConfigValue('lblStoryMode', guildId);
-    const lblStoryCreator = await getConfigValue('lblStoryCreator', guildId);
+    const lblStoryStatus = await getConfigValue(connection,'lblStoryStatus', guildId);
+    const lblStoryTurn = await getConfigValue(connection,'lblStoryTurn', guildId);
+    const lblStoryWriters = await getConfigValue(connection,'lblStoryWriters', guildId);
+    const lblStoryMode = await getConfigValue(connection,'lblStoryMode', guildId);
+    const lblStoryCreator = await getConfigValue(connection,'lblStoryCreator', guildId);
     const modeText = story.quick_mode 
-      ? await getConfigValue('txtModeQuick', guildId)
-      : await getConfigValue('txtModeNormal', guildId);
+      ? await getConfigValue(connection,'txtModeQuick', guildId)
+      : await getConfigValue(connection,'txtModeNormal', guildId);
     
     embed.addFields({
       name: `${statusIcon} "${story.title}" (#${story.story_id})`,
@@ -1319,8 +1278,8 @@ async function handleListNavigation(interaction) {
   const navRow = new ActionRowBuilder();
   
   if (stories.totalPages > 1) {
-    const btnPrev = await getConfigValue('btnPrev', guildId);
-    const btnNext = await getConfigValue('btnNext', guildId);
+    const btnPrev = await getConfigValue(connection,'btnPrev', guildId);
+    const btnNext = await getConfigValue(connection,'btnNext', guildId);
     
     navRow.addComponents(
       new ButtonBuilder()
@@ -1336,7 +1295,7 @@ async function handleListNavigation(interaction) {
     );
   }
   
-  const btnFilter = await getConfigValue('btnFilter', guildId);
+  const btnFilter = await getConfigValue(connection,'btnFilter', guildId);
   navRow.addComponents(
     new ButtonBuilder()
       .setCustomId('story_filter')
@@ -1368,7 +1327,7 @@ async function handleEntryConfirmation(interaction) {
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Error in handleEntryConfirmation:`, error);
     await interaction.editReply({
-      content: await getConfigValue('txtActionFailed', interaction.guild.id),
+      content: await getConfigValue(connection,'txtActionFailed', interaction.guild.id),
       components: []
     });
   }
@@ -1408,13 +1367,14 @@ async function confirmEntry(entryId, interaction) {
       UPDATE turn SET turn_status = 0, ended_at = NOW() WHERE turn_id = ?
     `, [turn_id]);
     
-    // Advance to next writer (this will be implemented in storybot.js)
-    // await NextTurn(connection, interaction, nextWriterId);
+    // Advance to next writer
+    const nextWriterId = await PickNextWriter(connection, story_id);
+    await NextTurn(connection, interaction, nextWriterId);
     
     await connection.commit();
     
     await interaction.editReply({
-      content: await getConfigValue('txtEntrySubmitted', interaction.guild.id),
+      content: await getConfigValue(connection,'txtEntrySubmitted', interaction.guild.id),
       embeds: [],
       components: []
     });
@@ -1440,7 +1400,7 @@ async function discardEntry(entryId, interaction) {
     `, [entryId]);
     
     await interaction.editReply({
-      content: await getConfigValue('txtEntryDiscarded', interaction.guild.id),
+      content: await getConfigValue(connection,'txtEntryDiscarded', interaction.guild.id),
       embeds: [],
       components: []
     });
@@ -1570,7 +1530,7 @@ async function getFilterTitle(filter, guildId) {
   };
   
   const configKey = configKeys[filter] || 'txtAllStories';
-  return await getConfigValue(configKey, guildId);
+  return await getConfigValue(connection,configKey, guildId);
 }
 
 function getStatusIcon(status) {
@@ -1591,14 +1551,14 @@ async function getStatusText(status, guildId) {
   
   const configKey = configKeys[status];
   if (configKey) {
-    return await getConfigValue(configKey, guildId);
+    return await getConfigValue(connection,configKey, guildId);
   }
   return 'Unknown';
 }
 
 async function getCurrentTurnInfo(story, guildId) {
-  if (story.story_status === 2) return await getConfigValue('txtPaused', guildId);
-  if (story.story_status === 3) return await getConfigValue('txtClosed', guildId);
+  if (story.story_status === 2) return await getConfigValue(connection,'txtPaused', guildId);
+  if (story.story_status === 3) return await getConfigValue(connection,'txtClosed', guildId);
   
   // For active stories, get current turn info
   const connection = await getDBConnection();
@@ -1614,7 +1574,7 @@ async function getCurrentTurnInfo(story, guildId) {
     `, [story.story_id]);
     
     if (turnInfo.length === 0) {
-      return await getConfigValue('txtTurnWaiting', guildId);
+      return await getConfigValue(connection,'txtTurnWaiting', guildId);
     }
     
     const turn = turnInfo[0];
@@ -1622,19 +1582,19 @@ async function getCurrentTurnInfo(story, guildId) {
     const timeLeft = endTime.getTime() - Date.now();
     
     if (timeLeft <= 0) {
-      const txtTurnOverdue = await getConfigValue('txtTurnOverdue', guildId);
+      const txtTurnOverdue = await getConfigValue(connection,'txtTurnOverdue', guildId);
       return replaceTemplateVariables(txtTurnOverdue, { writer_name: turn.discord_display_name });
     }
     
     const hoursLeft = Math.ceil(timeLeft / (1000 * 60 * 60));
-    const txtTurnTimeLeft = await getConfigValue('txtTurnTimeLeft', guildId);
+    const txtTurnTimeLeft = await getConfigValue(connection,'txtTurnTimeLeft', guildId);
     return replaceTemplateVariables(txtTurnTimeLeft, {
       writer_name: turn.discord_display_name,
       hours: hoursLeft
     });
     
   } catch (error) {
-    return await getConfigValue('txtTurnUnknown', guildId);
+    return await getConfigValue(connection,'txtTurnUnknown', guildId);
   } finally {
     connection.release();
   }
@@ -1643,14 +1603,12 @@ async function getCurrentTurnInfo(story, guildId) {
 /**
  * Handle finalize entry button click
  */
-async function handleFinalizeEntry(interaction) {
+async function handleFinalizeEntry(connection,interaction) {
   const storyId = interaction.customId.split('_')[2];
   
   await interaction.deferReply({ ephemeral: true });
   
   try {
-    const connection = await getDBConnection();
-    
     // Verify this is the current writer's turn
     const [turnInfo] = await connection.execute(
       `SELECT t.turn_id, t.thread_id, sw.discord_user_id, sw.story_id
@@ -1661,7 +1619,8 @@ async function handleFinalizeEntry(interaction) {
     );
     
     if (turnInfo.length === 0) {
-      await interaction.editReply({ content: 'You do not have an active turn in this story.' });
+      const txtNoActiveTurn = await getConfigValue(connection,'txtNoActiveTurn', interaction.guild.id);
+      await interaction.editReply({ content: txtNoActiveTurn });
       return;
     }
     
@@ -1678,7 +1637,8 @@ async function handleFinalizeEntry(interaction) {
     );
     
     if (userMessages.size === 0) {
-      await interaction.editReply({ content: 'You need to write something in the thread before finalizing your entry.' });
+      const txtEmptyEntry = await getConfigValue(connection,'txtEmptyEntry', interaction.guild.id);
+      await interaction.editReply({ content: txtEmptyEntry });
       return;
     }
     
@@ -1703,27 +1663,29 @@ async function handleFinalizeEntry(interaction) {
     // Archive the thread (lock it)
     await thread.setLocked(true);
     
-    // TODO: Advance to next turn (implement NextTurn call)
-    
-    await interaction.editReply({ content: '✅ Entry finalized successfully! The turn has been completed.' });
+    // Advance to next writer
+    const nextWriterId = await PickNextWriter(connection, story_id);
+    await NextTurn(connection, interaction, nextWriterId);  
+
+    const txtEntryFinalized = await getConfigValue(connection,'txtEntryFinalized', interaction.guild.id);
+    await interaction.editReply({ content: txtEntryFinalized });
     
   } catch (error) {
     console.error(`${formattedDate()}: [Guild ${interaction.guild.id}] Finalize entry failed:`, error);
-    await interaction.editReply({ content: 'Failed to finalize entry. Please try again.' });
+    const txtFailedtoFinalize = await getConfigValue(connection,'txtEntryFinalized', interaction.guild.id);
+    await interaction.editReply({ content: txtFailedtoFinalize });
   }
 }
 
 /**
  * Handle skip turn button click
  */
-async function handleSkipTurn(interaction) {
+async function handleSkipTurn(connection, interaction) {
   const storyId = interaction.customId.split('_')[2];
   
   await interaction.deferReply({ ephemeral: true });
   
   try {
-    const connection = await getDBConnection();
-    
     // Verify this is the current writer's turn
     const [turnInfo] = await connection.execute(
       `SELECT t.turn_id, t.thread_id, sw.discord_user_id, sw.story_id
@@ -1750,7 +1712,9 @@ async function handleSkipTurn(interaction) {
     const thread = await interaction.guild.channels.fetch(turn.thread_id);
     await thread.setLocked(true);
     
-    // TODO: Advance to next turn (implement NextTurn call)
+    // Advance to next writer
+    const nextWriterId = await PickNextWriter(connection, storyId);
+    await NextTurn(connection, interaction, nextWriterId);
     
     await interaction.editReply({ content: '⏭️ Turn skipped successfully! Moving to the next writer.' });
     
