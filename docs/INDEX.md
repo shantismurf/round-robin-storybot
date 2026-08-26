@@ -26,7 +26,8 @@ Every file has a `Status` / `Created` / `Last Updated` (/ `Implemented`) header.
 | [PLAN-story-privacy.md](plans/PLAN-story-privacy.md) | Pending | Writer-only (private) stories, create-only toggle |
 | [PLAN-hub-sharing.md](plans/PLAN-hub-sharing.md) | Partially Implemented — needs review | Hub server story mirroring, consent, broadcast system |
 | [hub-brainstorming.md](plans/hub-brainstorming.md) | — (companion notes) | Open questions/decisions feeding into PLAN-hub-sharing.md |
-| [PLAN-panel-rework-and-ground-rules.md](plans/PLAN-panel-rework-and-ground-rules.md) | Pending | Add/Manage panel Settings/Metadata split, Move Manage Users onto the panel, Ground Rules feature, Warnings checkbox conversion |
+| [PLAN-panel-rework-and-ground-rules.md](plans/PLAN-panel-rework-and-ground-rules.md) | Partially Implemented (Parts 1/1b/1c/3 shipped 2026-08-21/22, v3.5.0; Ground Rules/Part 2 still pending) | Add/Manage panel Settings/Metadata split, Move Manage Users onto the panel, Ground Rules feature, Warnings checkbox conversion |
+| [PLAN-mention-display-text.md](plans/PLAN-mention-display-text.md) | Pending | Resolve `@user`/`#channel`/`@role` mentions in story entries to plain display text at write time — never a functional link or raw ID, anywhere they're shown |
 | [PLAN-dm-support.md](plans/PLAN-dm-support.md) | Pending | Full DM-based story participation |
 | [PLAN-series-system.md](plans/PLAN-series-system.md) | Idea | Group stories into a series with chapters |
 | [PLAN-reactions-kudos.md](plans/PLAN-reactions-kudos.md) | Idea | Reaction-based kudos reposted to the story feed |
