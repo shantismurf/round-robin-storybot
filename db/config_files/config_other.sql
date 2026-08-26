@@ -14,4 +14,12 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 -- button (story/manage.js, commands/_storyadminSetup.js) shows this only when something is
 -- actually staged, via [save_label] substituted to that panel's own Save button label.
 ('lblUnsavedChangesTitle', '⚠️ Unsaved Changes', 'en', 1),
-('txtUnsavedChangesBody', 'You have changes that haven''t been saved yet. Click **[save_label]** below to keep them.', 'en', 1);
+('txtUnsavedChangesBody', 'You have changes that haven''t been saved yet. Click **[save_label]** below to keep them.', 'en', 1),
+-- Mention-resolution placeholders (docs/plans/PLAN-mention-display-text.md) — shown inline in a
+-- story entry's actual saved content whenever a @user/#channel/@role mention can't be resolved
+-- to a real name at write time (deleted, left the server, cache miss, or hidden by Discord's
+-- channel-obfuscation change). This IS what readers see from then on, everywhere the entry is
+-- shown — not a rare-path error message.
+('txtExportPlaceholderUser', '@unknown', 'en', 1),
+('txtExportPlaceholderChannel', '#unknown', 'en', 1),
+('txtExportPlaceholderRole', '@unknown', 'en', 1);

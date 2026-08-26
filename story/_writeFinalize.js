@@ -3,6 +3,7 @@ import { getConfigValue, log, replaceTemplateVariables, checkIsAdmin } from '../
 import { PickNextWriter, NextTurn, deleteThreadAndAnnouncement, endTurnGuarded } from './_turn.js';
 import { getActiveThreadId } from '../storybot.js';
 import { buildEntryPages, buildEntryEmbed, postThreadEntry } from './_entryRenderer.js';
+import { resolveMentionsToPlainText } from './_entryMarkup.js';
 import { pendingPreviewData } from './_state.js';
 import { TURN_STATUS, ENTRY_STATUS } from '../constants.js';
 
@@ -92,10 +93,26 @@ export async function handleFinalizeEntry(connection, interaction) {
       return;
     }
 
+    // Resolve mentions to plain display text once, here — see
+    // docs/plans/PLAN-mention-display-text.md. Stored per-message-id on the preview session
+    // below and reused as-is by doFinalizeEntry, rather than re-resolved against a second,
+    // independent read of these same raw thread messages: the writer approves exactly the text
+    // that gets saved, with no risk of the two builds resolving a mention differently (e.g. a
+    // member leaving the server in the gap between opening the preview and clicking Confirm).
+    const placeholderCfg = await getConfigValue(connection, [
+      'txtExportPlaceholderUser', 'txtExportPlaceholderChannel', 'txtExportPlaceholderRole'
+    ], guildId);
+    const resolvedMessages = new Map();
+    for (const msg of userMessages.values()) {
+      if (msg.content?.trim()) {
+        resolvedMessages.set(msg.id, await resolveMentionsToPlainText(msg.content.trim(), interaction.guild, placeholderCfg));
+      }
+    }
+
     const previewParts = [];
     let previewImageCount = 0;
     for (const msg of userMessages.values()) {
-      const msgText = msg.content?.trim();
+      const msgText = resolvedMessages.get(msg.id);
       const imageAtts = [...msg.attachments.values()].filter(a => a.contentType?.startsWith('image/'));
       if (imageAtts.length === 0) {
         if (msgText) previewParts.push(msgText);
@@ -139,6 +156,8 @@ export async function handleFinalizeEntry(connection, interaction) {
       writerId: String(writerId),
       title: txtFinalizeConfirm,
       lblEntryFooter,
+      // message id -> resolved text, consumed by doFinalizeEntry instead of re-resolving.
+      resolvedMessages,
     });
 
     log(`handleFinalizeEntry: showing preview page 1/${pages.length} to user ${interaction.user.username} for writer ${writerId}`, { show: true, guildName: interaction?.guild?.name });
@@ -236,10 +255,35 @@ export async function doFinalizeEntry(connection, interaction, storyId, writerId
       : null;
     log(`doFinalizeEntry: media channel ${mediaChannel ? mediaChannel.id : 'not configured'}`, { show: false, guildName: interaction?.guild?.name });
 
+    // This function still re-fetches and re-loops the raw thread messages independently of
+    // handleFinalizeEntry's preview build above — that duplication is real and pre-dates this
+    // change, driven by two things that are genuinely different per build, not incidental:
+    // (1) the preview strips markdown (# headers -> bold, -# subtext -> italic) for its own
+    // display, which the stored entry must NOT have; (2) this build actually uploads each image
+    // to the media channel and swaps in a real link, where the preview only shows a "📎 filename"
+    // placeholder — image forwarding has to happen exactly once, on confirm, not during preview
+    // paging. Mention resolution doesn't have either reason to be redone, though, so unlike
+    // markdown-stripping and image-forwarding, it's resolved once in the preview and reused here
+    // — see docs/plans/PLAN-mention-display-text.md. Falls back to resolving fresh only if the
+    // preview session is somehow gone by the time Confirm is clicked (shouldn't happen on any
+    // real path: both callers of doFinalizeEntry fetch this same session first), so a missing
+    // session never blocks the write, just loses the "resolve once" guarantee for that one entry.
+    const session = pendingPreviewData.get(interaction.user.id);
+    const placeholderCfg = session
+      ? null
+      : await getConfigValue(connection, [
+          'txtExportPlaceholderUser', 'txtExportPlaceholderChannel', 'txtExportPlaceholderRole'
+        ], interaction.guild.id);
+    if (!session) {
+      log(`doFinalizeEntry: no preview session found for user ${interaction.user.id} — resolving mentions fresh instead of reusing the preview's resolution`, { show: true, guildName: interaction?.guild?.name });
+    }
+
     const entryParts = [];
     let imagesForwarded = 0;
     for (const msg of userMessages.values()) {
-      const msgText = msg.content?.trim() || null;
+      const msgText = session
+        ? session.resolvedMessages.get(msg.id)
+        : (msg.content?.trim() ? await resolveMentionsToPlainText(msg.content.trim(), interaction.guild, placeholderCfg) : null);
       const imageAtts = [...msg.attachments.values()].filter(a => a.contentType?.startsWith('image/'));
       if (imageAtts.length === 0) {
         if (msgText) entryParts.push(msgText);

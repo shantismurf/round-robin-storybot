@@ -2,7 +2,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'disc
 import { getConfigValue, log, replaceTemplateVariables } from '../utilities.js';
 import { marked } from 'marked';
 import { ratingCodes, ratingLabelKey, formatWarnings, warningOptions, dynamicOptions } from './_metadata.js';
-import { applyEntryMarkup, isSceneBreakLine } from './_entryMarkup.js';
+import { applyEntryMarkup, isSceneBreakLine, resolveMentionsToPlainText } from './_entryMarkup.js';
 import { getActiveThreadId } from '../storybot.js';
 import { STORY_STATUS, WRITER_STATUS, ENTRY_STATUS, STORY_MODE } from '../constants.js';
 import { collectImageUrls, refreshAttachmentUrls, buildImageStore, buildImageDataBlock, emojiUrl } from './_exportImages.js';
@@ -23,7 +23,9 @@ function embedOrPlaceholder(imageStore, url, attrs) {
 // imageStore is optional — a { images, placeholderText } built by buildImageStore(); without
 // it, images/emoji always render as placeholders (no CDN links are ever emitted — they expire
 // within ~24h and are worthless in a saved export)
-export async function discordMarkdownToHtml(text, guild = null, dividerText = null, imageStore = null) {
+// cfg is optional — supplies txtExportPlaceholderUser/Channel/Role for any mention that can't be
+// resolved (only matters for legacy pre-resolution rows; see the mention-resolution comment below)
+export async function discordMarkdownToHtml(text, guild = null, dividerText = null, imageStore = null, cfg = {}) {
   // Custom emoji <:name:id> → embedded image (static)
   text = text.replace(/<:([^:>]+):(\d+)>/g, (_, name, id) =>
     embedOrPlaceholder(imageStore, emojiUrl(id, false), `height="20" alt=":${name}:" style="vertical-align:middle"`)
@@ -36,33 +38,21 @@ export async function discordMarkdownToHtml(text, guild = null, dividerText = nu
   // Discord timestamps <t:unix:format> → [timestamp]
   text = text.replace(/<t:\d+(?::[A-Za-z])?>/g, '[timestamp]');
 
-  // Resolve mentions
-  if (guild) {
-    // Batch-fetch all mentioned users first (avoid duplicate requests)
-    const userIds = [...new Set([...text.matchAll(/<@!?(\d+)>/g)].map(m => m[1]))];
-    const memberMap = new Map();
-    for (const userId of userIds) {
-      try {
-        const member = await guild.members.fetch(userId);
-        memberMap.set(userId, member.displayName);
-      } catch {
-        memberMap.set(userId, userId);
-      }
-    }
-    text = text.replace(/<@!?(\d+)>/g, (_, id) => `@${memberMap.get(id) ?? id}`);
-    text = text.replace(/<#(\d+)>/g, (_, id) => {
-      const ch = guild.channels.cache.get(id);
-      return ch ? `#${ch.name}` : `#${id}`;
-    });
-    text = text.replace(/<@&(\d+)>/g, (_, id) => {
-      const role = guild.roles.cache.get(id);
-      return role ? `@${role.name}` : `@${id}`;
-    });
-  } else {
-    text = text.replace(/<@!?(\d+)>/g, '@[user]');
-    text = text.replace(/<#(\d+)>/g, '#[channel]');
-    text = text.replace(/<@&(\d+)>/g, '@[role]');
-  }
+  // Resolve mentions to plain display text — see docs/plans/PLAN-mention-display-text.md. New
+  // entries (written after that plan shipped) are already plain text by the time they reach
+  // here; this call is a no-op for them (no <@id>-shaped token left to match) and exists purely
+  // as backward compatibility for older story_entry rows that still hold raw Discord tokens from
+  // before write-time resolution existed. No backfill migration — see that doc's "No backfill
+  // migration" section for why not.
+  //
+  // guild is always present on every real call site (export.js's own 3 callers, both above,
+  // always pass interaction.guild from a live guild interaction — this bot has no DM-context
+  // commands). Only test/export.test.js passes guild=null, and none of those calls contain a
+  // mention token, so resolveMentionsToPlainText's own guild=null branch (which falls back to
+  // cfg's placeholder strings) never actually executes in production; kept only because the
+  // helper is shared with write-time call sites where guild=null is not similarly guaranteed
+  // absent.
+  text = await resolveMentionsToPlainText(text, guild, cfg);
 
   // Pre-process Discord blockquote syntax and -# subtext before marked sees it
   const lines = text.split('\n');
@@ -192,6 +182,7 @@ export async function generateStoryExport(connection, storyId, guildId, guild = 
     'txtExportLblStarted', 'txtExportLblWriters', 'txtExportLblExported',
     'txtExportNoteBody', 'txtExportStatsLine', 'txtExportImageUnavailable',
     'cfgExportImageMaxBytes', 'cfgExportImageTotalBytes', 'cfgExportImageResizeWidth',
+    'txtExportPlaceholderUser', 'txtExportPlaceholderChannel', 'txtExportPlaceholderRole',
     ...dynamicOptions,
   ], guildId);
 
@@ -232,11 +223,11 @@ export async function generateStoryExport(connection, storyId, guildId, guild = 
         : `<div class="turn-label">Turn ${entry.turn_number}${story.show_authors ? ` — ${writerName}` : ''}</div>`;
       entriesHtml += `<div class="turn">${turnHeader}`;
     }
-    entriesHtml += await discordMarkdownToHtml(entry.content, guild, story.scene_break_divider, imageStore);
+    entriesHtml += await discordMarkdownToHtml(entry.content, guild, story.scene_break_divider, imageStore, cfg);
   }
   if (currentTurn !== null) entriesHtml += `</div>`;
 
-  const summaryHtml = story.summary ? await discordMarkdownToHtml(story.summary, guild, story.scene_break_divider, imageStore) : '';
+  const summaryHtml = story.summary ? await discordMarkdownToHtml(story.summary, guild, story.scene_break_divider, imageStore, cfg) : '';
 
   const ratingLabel = cfg[ratingLabelKey(story.rating)] ?? story.rating;
   const warningsText = story.warnings

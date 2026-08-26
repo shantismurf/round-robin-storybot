@@ -1,8 +1,8 @@
 # Story Entry Mentions: Always Display Text, Never Functional
 
-Status: Pending
+Status: Implemented 2026-08-26
 Created: 2026-08-17
-Last Updated: 2026-08-17
+Last Updated: 2026-08-26
 
 ---
 

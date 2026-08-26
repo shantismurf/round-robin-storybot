@@ -3,6 +3,7 @@ import { getConfigValue, log, replaceTemplateVariables, resolveStoryId, validate
 import { PickNextWriter, NextTurn, endTurnGuarded } from './_turn.js';
 import { getActiveThreadId } from '../storybot.js';
 import { buildEntryPages, buildEntryEmbed, postThreadEntry } from './_entryRenderer.js';
+import { resolveMentionsToPlainText } from './_entryMarkup.js';
 import { TURN_STATUS, ENTRY_STATUS, STORY_MODE } from '../constants.js';
 
 export const pendingReminderTimeouts = new Map();
@@ -71,12 +72,20 @@ export async function handleWriteModalSubmit(connection, interaction) {
   log(`handleWriteModalSubmit entry user=${interaction.user.username} customId=${interaction.customId}`, { show: false, guildName: interaction?.guild?.name });
   const guildId = interaction.guild.id;
   const storyId = interaction.customId.split('_')[2];
-  const content = interaction.fields.getTextInputValue('entry_content')
+  const rawContent = interaction.fields.getTextInputValue('entry_content')
     .replace(/[​-‍﻿]/g, '')
     .trim()
     .substring(0, 4000);
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  // Resolve mentions to plain display text once, here, at the only point quick-mode content is
+  // ever captured — see docs/plans/PLAN-mention-display-text.md. This is what gets stored, shown
+  // in the confirm preview, posted to the thread, and exported; there is no later re-resolution.
+  const placeholderCfg = await getConfigValue(connection, [
+    'txtExportPlaceholderUser', 'txtExportPlaceholderChannel', 'txtExportPlaceholderRole'
+  ], guildId);
+  const content = await resolveMentionsToPlainText(rawContent, interaction.guild, placeholderCfg);
   let entryId = null;
   try {
     const [turnInfo] = await connection.execute(`
