@@ -146,7 +146,7 @@ function buildManageMessage(cfg, state, activeTurn = null) {
   // remember to save" education and doesn't need repeating on every single render here too.
   if (isManageDirty(state)) {
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent(
-      `**${cfg.lblManageUnsavedChangesTitle}**\n${replaceTemplateVariables(cfg.txtManageUnsavedChangesBody, { save_label: cfg.btnSaveSettings })}`
+      `**${cfg.lblUnsavedChangesTitle}**\n${replaceTemplateVariables(cfg.txtUnsavedChangesBody, { save_label: cfg.btnSaveSettings })}`
     ));
   }
   container.addActionRowComponents(new ActionRowBuilder().addComponents(

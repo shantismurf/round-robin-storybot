@@ -7,6 +7,7 @@
 - **Commit plan docs before ending a session:** Any implementation plan drafted during a chat session (design decisions, file/function lists, build order) must be committed to `docs/plans/` — with a Status/Created/Last Updated header — before the session is considered done. A plan that exists only in an uploaded or local chat file is not discoverable by a future session and will get lost.
 - **Reuse before you write:** Check for existing logic before implementing. Extract reusable code to shared helpers and modules. Search for existing config values that can be repurposed before creating new keys. Keep files under 500 lines.
 - **No hard-coded text:** All user-facing text must be displayed for and approved by the user unless they provided the exact text already.
+- **No AskUserQuestion popups:** Never use the AskUserQuestion tool in this repo. It covers too much of the interface and forces a decision before the user has had a chance to read preceding findings. Ask clarifying questions in plain response text instead, and wait for a normal reply.
 
 ## System Information
 - **Host:** Managed via restricted pterodactyl interface on bot-hosting.net. No manual console access, no local/staging execution — any change, including debug logging, must be pushed to main and the bot restarted before it can be tested. Runs Node.js v24.18.0 (as of 2026-07-24); the host keeps this current with new Node releases, so don't assume this stays pinned. See `docs/reference/HOSTING.md` for the container's startup script and known deploy quirks.

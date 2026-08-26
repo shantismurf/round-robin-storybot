@@ -4,6 +4,23 @@ import { cancelPendingRoundupJobs, scheduleNextRoundup } from '../story/roundup.
 
 export const pendingSetupData = new Map();
 
+// Dirty-state detection for the unsaved-changes warning below — same pattern as
+// story/manage.js's STAGED_FIELDS/isManageDirty (see that file's comment for the full design
+// rationale). Every field a setup modal or toggle button stages before Save is listed here;
+// handleSetup() snapshots them into state.originalFields at panel open (when current ===
+// original for all of them by construction), and buildSetupPanel() diffs current state against
+// that snapshot on every render.
+export const STAGED_FIELDS = [
+  'feedChannelId', 'mediaChannelId', 'adminRoleName',
+  'restrictedFeedChannelId', 'restrictedMediaChannelId',
+  'roundupChannelId', 'roundupDay', 'roundupHour', 'changelogEnabled',
+];
+
+export function isSetupDirty(state) {
+  if (!state.originalFields) return false;
+  return STAGED_FIELDS.some((key) => state[key] !== state.originalFields[key]);
+}
+
 export function buildSetupPanel(state, cfg) {
   log(`storyadmin setup: buildSetupPanel started`, { show: false, guildName: 'system' });
   const fieldVal = (id) => id ? `<#${id}>` : `\`${cfg.txtNotSet}\``;
@@ -23,9 +40,19 @@ export function buildSetupPanel(state, cfg) {
       { name: cfg.txtSetupModalTitleRoundupDay,     value: desc('txtSetupEmbedDescRoundupDay')      + strVal(state.roundupDay),                        inline: true  },
       { name: cfg.txtSetupModalTitleRoundupHour,    value: desc('txtSetupEmbedDescRoundupHour')     + strVal(state.roundupHour),                       inline: true  },
       { name: cfg.lblSetupChangelog,                value: desc('txtSetupEmbedDescChangelog')       + (state.changelogEnabled ? cfg.txtOn : cfg.txtOff), inline: false },
-    )
-    .setDescription(cfg.txtSetupModalSaveWarning)
-    .setFooter({ text: cfg.txtSetupModalSaveWarning });
+    );
+
+  // Dirty-state-only warning — same pattern/reasoning as story/manage.js's Part 1c indicator
+  // (see isSetupDirty above and that file's comment). Previously an always-on
+  // txtSetupModalSaveWarning description+footer; replaced 2026-08-26 after a real incident where
+  // an admin missed it, tried /story add before saving, and uninstalled shortly after. Still
+  // fires the moment any field is first touched, so the "this panel stages, remember to save"
+  // education isn't lost — it just stops nagging once there's nothing unsaved.
+  if (isSetupDirty(state)) {
+    embed
+      .setDescription(`**${cfg.lblUnsavedChangesTitle}**\n${replaceTemplateVariables(cfg.txtUnsavedChangesBody, { save_label: cfg.btnSetupSave })}`)
+      .setFooter({ text: cfg.lblUnsavedChangesTitle });
+  }
 
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('storyadmin_setup_channels').setLabel(cfg.btnSetupChannels).setStyle(ButtonStyle.Primary),
@@ -62,7 +89,7 @@ export async function handleSetup(connection, interaction) {
     'txtSetupModalTitleFeed', 'txtSetupModalTitleMedia', 'txtSetupModalTitleRole',
     'txtSetupModalTitleRestrictedFeed', 'txtSetupModalTitleRestrictedMedia',
     'txtSetupModalTitleRoundupChannel', 'txtSetupModalTitleRoundupDay', 'txtSetupModalTitleRoundupHour',
-    'txtSetupModalSaveWarning',
+    'lblUnsavedChangesTitle', 'txtUnsavedChangesBody',
     'txtSetupEmbedDescFeed', 'txtSetupEmbedDescMedia', 'txtSetupEmbedDescAdminRole',
     'txtSetupEmbedDescRestrictedFeed', 'txtSetupEmbedDescRestrictedMedia',
     'txtSetupEmbedDescRoundupChannel', 'txtSetupEmbedDescRoundupDay', 'txtSetupEmbedDescRoundupHour',
@@ -106,6 +133,9 @@ export async function handleSetup(connection, interaction) {
     originalInteraction: interaction,
     cfg,
   };
+  // Snapshot for isSetupDirty — current === original for every STAGED_FIELDS entry right now,
+  // by construction, since state was just built from the DB above.
+  state.originalFields = Object.fromEntries(STAGED_FIELDS.map((key) => [key, state[key]]));
 
   pendingSetupData.set(interaction.user.id, state);
   log(`handleSetup: opening panel for ${interaction.user.tag} in guild ${guildId}`, { show: false, guildName: interaction.guild.name });
@@ -474,6 +504,12 @@ export async function handleSetupSave(connection, interaction) {
         ManageThreads: true
       }).catch(() => {});
       threadPermissionNote = ` *(Manage Threads granted on feed channel)*`;
+    } else {
+      // adminRoleName is free text, matched by exact string (checkIsAdmin does the same) — a
+      // typo or case mismatch silently fails to grant anything, with no error shown to the
+      // admin. Not fixed here (that's a separate field-type change), but logged so a future
+      // "admin role isn't working" report is traceable instead of a guess.
+      log(`handleSetupSave: adminRoleName "${state.adminRoleName}" did not match any role in guild ${guildId}`, { show: true, guildName: interaction.guild.name });
     }
   }
 
@@ -517,6 +553,13 @@ export async function handleSetupSave(connection, interaction) {
         permWarnings.push(`⚠️ Bot is missing permissions on <#${state.mediaChannelId}>: **${missingMedia.join(', ')}**`);
       }
     }
+  }
+
+  // Logged so a future "setup finished but something still looked broken" report can check what
+  // the admin actually saw, instead of guessing from downstream behavior (e.g. an uninstall).
+  // The reply content itself isn't captured anywhere else.
+  if (permWarnings.length) {
+    log(`handleSetupSave: guild ${guildId} saved with permission warnings: ${permWarnings.map(w => w.replace(/\*\*|⚠️ /g, '')).join(' | ')}`, { show: true, guildName: interaction.guild.name });
   }
 
   const feedPermsOk = !permWarnings.some(w => w.includes(`<#${state.feedChannelId}>`));

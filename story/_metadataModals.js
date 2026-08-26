@@ -47,7 +47,7 @@ export async function getMetaCfg(connection, guildId) {
     'txtMetaMainRelationshipPlaceholder', 'txtMetaSceneBreakDividerPlaceholder',
     'btnAddTitleAndSummary', 'btnAddStoryInfo', 'btnAddSettings', 'btnAddMetadata', 'btnAddTags', 'btnAddMySettings',
     'btnSaveSettings', 'btnCreateStory', 'btnPanelTabSettings', 'btnPanelTabMetadata', 'txtStoryManagementLabel',
-    'lblManageUnsavedChangesTitle', 'txtManageUnsavedChangesBody',
+    'lblUnsavedChangesTitle', 'txtUnsavedChangesBody',
     'optWarnAllClear',
     ...ratingCodes.map(ratingLabelKey),
     ...dynamicOptions,

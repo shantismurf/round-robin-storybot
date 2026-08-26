@@ -55,6 +55,25 @@ Not in git (`.gitignore`). It lives directly in the container's files on
 the host and is not touched by `git pull`. A local backup copy is kept
 outside the repo in case it needs to be re-uploaded.
 
+## Bot invite/install link
+
+Canonical link is the one listed on [top.gg](https://top.gg) — verified 2026-08-26 to carry the
+correct scopes (`bot`, `applications.commands`) and all ten permissions
+`commands/_storyadminSetup.js`'s `feedRequired` list checks for on the story feed channel: View
+Channel, Send Messages, Embed Links, Attach Files, Read Message History, Manage Messages, Pin
+Messages, Create Public Threads, Create Private Threads, Manage Threads.
+
+It also grants **Manage Roles**, which nothing in the codebase currently uses — setup only edits
+channel-level permission overwrites, never role permissions directly. Kept intentionally: the
+original intent was for the setup panel to optionally handle admin-role creation/configuration
+itself, which would need it. Not yet built.
+
+A link freshly regenerated from the Developer Portal's OAuth2 URL Generator is **not guaranteed
+to match** — one generated 2026-08-26 while checking this was missing Attach Files. If top.gg's
+link is ever lost or needs replacing, regenerate from the Portal and diff the resulting
+permissions integer against the list above (or recheck each box by hand) before treating it as a
+drop-in replacement, rather than assuming a fresh generation is automatically correct.
+
 ## Database
 
 Provided by bot-hosting.net, on the same network as the bot container
