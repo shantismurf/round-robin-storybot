@@ -1,11 +1,11 @@
 # Plan: Add/Manage Panel Rework + Ground Rules + Warnings Checkbox Conversion
 
-Status: Pending
+Status: Partially Implemented — Parts 1, 1b, 1c, and 3 shipped (see their own ✅/Status markers
+below). Part 2 (Ground Rules) is designed but not started; see its build-order list for where to
+pick it up.
 Created: 2026-07-26 (drafted in an earlier Claude Code chat session; committed to the repo on this date)
-Last Updated: 2026-08-22 (Part 1c shipped — ported over from a separate, never-merged branch
-where it had been designed/approved 2026-08-10 but never coded; see Part 1c's own note)
-
-Design finalized in chat, implementation not started.
+Last Updated: 2026-08-26 (Part 1c follow-up: Pause/Resume and Close/Open Joins made immediate,
+matching Close/Reopen — see Part 1c's own note)
 
 ---
 
@@ -365,7 +365,8 @@ Turns in the persistent row set, unaffected by which tab (Settings/Metadata) is 
 
 ## Part 1c — Unsaved-changes indicator on `/story manage`
 
-**Status: Shipped 2026-08-22.**
+**Status: Shipped 2026-08-22, revised 2026-08-26 (Pause/Resume and Close/Open Joins made
+immediate — see "Found during build" below).**
 
 Originally designed and approved 2026-08-10 on a separate, never-merged branch
 (`claude/todo-panel-rework-review-t4leg9`) that had independently rebuilt overlapping Part 1/1b/3
@@ -387,10 +388,10 @@ already carries the obvious expectation that nothing exists until the final Crea
 clicked, so a matching warning there would be redundant. (Decided 2026-08-10.)
 
 **Mechanism — dirty-state detection (as built):** `story/manage.js` lists every state field a
-manage-panel modal or toggle button stages before Save in a flat `STAGED_FIELDS` array (title,
-summary, storyMode, orderType, showAuthors, storyTurnPrivacy, sceneBreakDivider, turnLength,
-timeoutReminder, maxWriters, dynamic, rating, warnings, mainPairing, otherRelationships,
-characters, tags, allowJoins, targetStatus). `handleManage()` snapshots those fields into
+manage-panel modal stages before Save in a flat `STAGED_FIELDS` array (title, summary, storyMode,
+orderType, showAuthors, storyTurnPrivacy, sceneBreakDivider, turnLength, timeoutReminder,
+maxWriters, dynamic, rating, warnings, mainPairing, otherRelationships, characters, tags —
+`allowJoins`/`targetStatus` are deliberately excluded, see below). `handleManage()` snapshots those fields into
 `state.originalFields` right after `state` is built (current === original for all of them at that
 point by construction). `isManageDirty(state)` diffs current values against that snapshot on every
 `buildManageMessage()` render — array fields (just `warnings`) are compared order-independently,
@@ -432,22 +433,51 @@ Settings" hard-coded into the body text, so it can't drift from `btnSaveSettings
   `txtManageSaveWarning` for the two new keys (shared with `/story add`, which doesn't use them)
 - `db/config_files/config_story.sql` — removed `txtManageSaveWarning`, added
   `lblManageUnsavedChangesTitle`/`txtManageUnsavedChangesBody`
-- `test/manage_isManageDirty.test.js` — new, 7 tests covering clean/dirty scalar and array cases,
-  array-reorder-is-not-dirty, an untracked field (tab switch) not tripping it, and the
-  not-yet-snapshotted guard
+- `test/manage_isManageDirty.test.js` — new, 9 tests (see below for the final set)
 
-### Found and fixed during build: reopen falsely tripped the new warning
-`handleReopenStory` (`story/_managePauseResume.js`) already correctly sets `state.targetStatus`/
-`state.originalStatus` to `ACTIVE` after an immediate, already-committed reopen — that part was
-fine before this feature and needed no fix. What the dirty check got wrong on its own first pass:
-it compares against a separate snapshot, `state.originalFields`, taken once at panel-open time —
-and `story_manage_reopen`'s handler didn't know that snapshot existed, so
-`originalFields.targetStatus` stayed at its pre-reopen `CLOSED` value while `state.targetStatus`
-jumped to `ACTIVE`. Result: the panel would falsely show "⚠️ Unsaved Changes" immediately after a
-reopen, for a change that was never staged (reopen writes straight to the DB, no Save needed).
-Fixed by syncing `state.originalFields.targetStatus = state.targetStatus` in that same handler,
-right after `handleReopenStory` returns. Covered by a regression test in
-`test/manage_isManageDirty.test.js`.
+### Found during build, then designed out rather than patched: Pause/Resume and Close/Open Joins
+`handleReopenStory` (`story/_managePauseResume.js`) already correctly sets `state.targetStatus` to
+`ACTIVE` after an immediate, already-committed reopen — that part was fine before this feature and
+needed no fix. What the dirty check got wrong on its own first pass: it compares against a separate
+snapshot, `state.originalFields`, taken once at panel-open time — and `story_manage_reopen`'s
+handler didn't know that snapshot existed, so `originalFields.targetStatus` stayed at its
+pre-reopen `CLOSED` value while `state.targetStatus` jumped to `ACTIVE`. Result: the panel would
+falsely show "⚠️ Unsaved Changes" immediately after a reopen, for a change that was never staged
+(reopen writes straight to the DB, no Save needed).
+
+The first fix (2026-08-22) patched this locally — syncing `state.originalFields.targetStatus` right
+after `handleReopenStory` returns. Talking it through afterward (2026-08-26) surfaced the actual
+root cause: `targetStatus` (Pause/Resume) was staged behind Save at all, while `story_manage_close_open`/`story_manage_reopen` —
+sitting in the *same button row*, under the same "🚦 Change Story Status" heading — already applied
+immediately. That's a real user-facing inconsistency, not just an internal bug: two buttons in a
+row read as "do it now," a third silently deferred to a Save click the user might never make — and
+for Pause specifically, an un-saved pause is worse than an un-saved text edit, since writers never
+get notified and the turn thread never locks, while the admin believes it already happened.
+
+Rather than keep patching `originalFields` sync points as new immediate actions turned up,
+Pause/Resume was made immediate too, matching Close/Reopen:
+- `story/_managePauseResume.js` — new `handleTogglePauseResume()`, mirroring `handleReopenStory`'s
+  shape (defers, writes `story_status` immediately, calls `applyPauseActions`/`applyResumeActions`,
+  refreshes the status message, updates `state.targetStatus`). `applyPauseActions`/
+  `applyResumeActions` themselves are unchanged — only *when* they're called moved.
+- `story/manage.js` — `story_manage_toggle_pauseresume` now calls `handleTogglePauseResume()`
+  directly instead of just flipping `state.targetStatus` and waiting for Save; `handleManageSave`
+  no longer writes `story_status` at all; `targetStatus` and `state.originalStatus` (now unused)
+  dropped from `STAGED_FIELDS`/`state` entirely, rather than tracked-and-synced.
+
+Once `targetStatus` was off the staged path, `allowJoins` (Close/Open Joins — the third button in
+that same row) got the same treatment before it could develop the identical bug: it has no
+side-effect cascade like Pause/Resume, so `story_manage_toggle_latejoins` just writes
+`allow_joins` and refreshes the status message directly, inline, rather than needing its own
+handler file. `handleManageSave`'s batched `UPDATE` no longer touches `allow_joins` either, and
+`allowJoins` is dropped from `STAGED_FIELDS`.
+
+Net effect: all four buttons in the "Change Story Status" row (Close/Open Joins, Pause/Resume,
+Close, Reopen) are now consistently immediate, and `STAGED_FIELDS` only lists fields that
+genuinely wait for Save (the four modals' fields) — closing off this entire bug class rather than
+chasing individual instances of it. Covered by two regression tests in
+`test/manage_isManageDirty.test.js` (one per field) asserting both that mutating the field never
+reads as dirty, and that it's absent from `STAGED_FIELDS`.
 
 ---
 

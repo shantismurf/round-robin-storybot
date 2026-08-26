@@ -7,7 +7,7 @@ import { getMetaCfg, buildStoryPanel, buildMetadataModal, buildTagsModal, buildS
 import { buildTurnActionsPanel, handleTurnActionButton, handleTurnActionConfirm, handleTurnActionCancel, handleTurnActionSelectMenu, handleTurnActionModal } from './_manageTurnActions.js';
 import { handleManageEntriesButton, handleManageEntriesSelectMenu } from './_manageEntries.js';
 import { buildTagReviewPanel, handleReviewTags, handleTagReviewButton } from './tags.js';
-import { applyPauseActions, applyResumeActions, handleReopenStory } from './_managePauseResume.js';
+import { handleTogglePauseResume, handleReopenStory } from './_managePauseResume.js';
 import { openManageUserPanel } from './_manageUser.js';
 import { handleManageCloseConfirm } from './_manageClose.js';
 import { STORY_STATUS, TURN_STATUS, STORY_MODE, WRITER_STATUS } from '../constants.js';
@@ -19,14 +19,24 @@ const pendingManageData = new Map();
 // Save Settings is listed here; handleManage() snapshots them into state.originalFields at panel
 // open (when current === original for all of them by construction), and buildManageMessage()
 // diffs current state against that snapshot on every render. Deliberately a flat list diffed
-// generically rather than a matching originalX field per entry (the originalStatus/originalRating
-// pattern this plan's design note started from) — one list to keep in sync with the staging call
-// sites below, instead of two.
+// generically rather than a matching originalX field per entry (the originalRating pattern this
+// plan's design note started from) — one list to keep in sync with the staging call sites below,
+// instead of two.
+//
+// targetStatus (Pause/Resume) and allowJoins (Close/Open Joins) are deliberately NOT here: unlike
+// every other field on this list, both apply immediately when toggled (see
+// story_manage_toggle_pauseresume/story_manage_toggle_latejoins below), same as Close and Reopen
+// — not staged behind Save Settings. All four buttons share one row under "Change Story Status",
+// so they read to the user as one set of do-it-now controls, not a batch of edits to preview and
+// commit together. targetStatus was tracked here originally, which produced a real bug (a false
+// "unsaved changes" warning right after Reopen, since Reopen's immediate DB write desynced from
+// this snapshot) — removed 2026-08-22 by making Pause/Resume immediate too, instead of patching
+// the tracking; allowJoins was made immediate for the same reason before it could develop the same
+// bug (2026-08-26). See docs/plans/PLAN-panel-rework-and-ground-rules.md's Part 1c note.
 const STAGED_FIELDS = [
   'title', 'summary', 'storyMode', 'orderType', 'showAuthors', 'storyTurnPrivacy',
   'sceneBreakDivider', 'turnLength', 'timeoutReminder', 'maxWriters',
   'dynamic', 'rating', 'warnings', 'mainPairing', 'otherRelationships', 'characters', 'tags',
-  'allowJoins', 'targetStatus',
 ];
 
 function isManageDirty(state) {
@@ -253,7 +263,6 @@ async function handleManage(connection, interaction, alreadyDeferred = false) {
       summary: story.summary ?? '',
       sceneBreakDivider: story.scene_break_divider ?? '',
       tags: story.tags ?? '',
-      originalStatus: story.story_status,
       targetStatus: story.story_status,
       originalInteraction: interaction,
       rating: story.rating ?? 'NR',
@@ -312,9 +321,19 @@ async function handleManageButton(connection, interaction) {
       await interaction.showModal(buildStoryInfoModal(state.cfg, state, 'story_manage'));
 
     } else if (customId === 'story_manage_toggle_latejoins') {
-      state.allowJoins = state.allowJoins ? 0 : 1;
-      await interaction.deferUpdate();
-      await state.originalInteraction.editReply(buildManageMessage(state.cfg, state, state.activeTurn));
+      // Immediate, not staged — see STAGED_FIELDS's comment above. A simple flag with no side-effect
+      // cascade (unlike Pause/Resume), so no dedicated handler file: just the write plus the same
+      // status-message refresh Pause/Resume/Reopen already do.
+      try {
+        await interaction.deferUpdate();
+        state.allowJoins = state.allowJoins ? 0 : 1;
+        await connection.execute(`UPDATE story SET allow_joins = ? WHERE story_id = ?`, [state.allowJoins, state.storyId]);
+        updateStoryStatusMessage(connection, interaction.guild, state.storyId).catch(() => {});
+        await state.originalInteraction.editReply(buildManageMessage(state.cfg, state, state.activeTurn));
+      } catch (err) {
+        log(`handleManageButton failed toggling allowJoins for storyId=${state.storyId}: ${err?.stack ?? err}`, { show: true, guildName: interaction?.guild?.name });
+        await interaction.followUp({ content: await getConfigValue(connection, 'errProcessingRequest', interaction.guild.id), flags: MessageFlags.Ephemeral });
+      }
 
     } else if (customId === 'story_manage_close_open') {
       // Own customIds (story_manage_close_confirm/story_manage_close_cancel), NOT the
@@ -354,13 +373,6 @@ async function handleManageButton(connection, interaction) {
     } else if (customId === 'story_manage_reopen') {
       try {
         const { reopenMsg } = await handleReopenStory(connection, interaction, state);
-        // handleReopenStory sets state.targetStatus/originalStatus to ACTIVE for an immediate,
-        // already-committed DB write — but the Part 1c dirty check compares against
-        // state.originalFields, a separate snapshot taken at panel-open time. Without this,
-        // targetStatus would diverge from originalFields.targetStatus (still the pre-reopen
-        // CLOSED value) and the panel would show a false "Unsaved Changes" warning for a change
-        // that was never staged in the first place.
-        state.originalFields.targetStatus = state.targetStatus;
         pendingManageData.set(userId, state);
         await state.originalInteraction.editReply(buildManageMessage(state.cfg, state, null));
         await interaction.followUp({ content: reopenMsg, flags: MessageFlags.Ephemeral });
@@ -369,9 +381,20 @@ async function handleManageButton(connection, interaction) {
       }
 
     } else if (customId === 'story_manage_toggle_pauseresume') {
-      state.targetStatus = state.targetStatus === STORY_STATUS.ACTIVE ? STORY_STATUS.PAUSED : STORY_STATUS.ACTIVE;
-      await interaction.deferUpdate();
-      await state.originalInteraction.editReply(buildManageMessage(state.cfg, state, state.activeTurn));
+      // Immediate, not staged — matches Close/Reopen rather than the rest of this panel's
+      // edit-then-Save fields. Decided 2026-08-22: the toggle button used to only flip
+      // state.targetStatus and defer the real UPDATE + applyPauseActions/applyResumeActions to
+      // handleManageSave, same as every other field here — but that meant a Pause could silently
+      // never take effect (writers never notified, thread never locked) if the panel timed out or
+      // was dismissed before Save was clicked, for a toggle that's operationally meaningful the
+      // moment it's clicked. handleTogglePauseResume mirrors handleReopenStory's shape.
+      try {
+        await handleTogglePauseResume(connection, interaction, state);
+        pendingManageData.set(userId, state);
+        await state.originalInteraction.editReply(buildManageMessage(state.cfg, state, state.activeTurn));
+      } catch (err) {
+        await interaction.followUp({ content: await getConfigValue(connection, 'errProcessingRequest', interaction.guild.id), flags: MessageFlags.Ephemeral });
+      }
 
     } else if (customId === 'story_manage_open_titlesummary') {
       const cfg = state.cfg;
@@ -538,17 +561,20 @@ async function handleManageSave(connection, interaction, state) {
     const warningsStr = Array.isArray(state.warnings) ? state.warnings.join(', ') : (state.warnings || null);
     log(`handleManageSave: storyId=${state.storyId} title=${state.title} mode=${state.storyMode} rating=${state.rating} originalRating=${state.originalRating}`, { show: false, guildName: state.guildName });
 
+    // allow_joins is deliberately not written here — Close/Open Joins applies immediately from
+    // its toggle button (story_manage_toggle_latejoins), same as Pause/Resume/Close/Reopen, not
+    // staged behind this Save. See STAGED_FIELDS's comment above for why.
     await connection.execute(
       `UPDATE story SET
          title = ?, mode = ?, turn_length_hours = ?, reminder_timing = ?, max_writers = ?,
-         allow_joins = ?, show_authors = ?, story_order_type = ?, story_turn_privacy = ?,
+         show_authors = ?, story_order_type = ?, story_turn_privacy = ?,
          rating = ?, warnings = ?, main_pairing = ?, other_relationships = ?,
          characters = ?, dynamic = ?, tags = ?, summary = ?, scene_break_divider = ?
        WHERE story_id = ?`,
       [
         state.title,
         state.storyMode, state.turnLength, state.timeoutReminder, state.maxWriters ?? null,
-        state.allowJoins, state.showAuthors, state.orderType, state.storyTurnPrivacy,
+        state.showAuthors, state.orderType, state.storyTurnPrivacy,
         state.rating, warningsStr || null,
         state.mainPairing || null, state.otherRelationships || null,
         state.characters || null, state.dynamic || null, state.tags || null,
@@ -558,15 +584,9 @@ async function handleManageSave(connection, interaction, state) {
     );
     log(`handleManageSave: story fields written for storyId=${state.storyId}`, { show: true, guildName: state.guildName });
 
-    if (state.targetStatus !== state.originalStatus) {
-      await connection.execute(`UPDATE story SET story_status = ? WHERE story_id = ?`, [state.targetStatus, state.storyId]);
-
-      if (state.targetStatus === STORY_STATUS.PAUSED) {
-        await applyPauseActions(connection, interaction, state);
-      } else if (state.targetStatus === STORY_STATUS.ACTIVE) {
-        await applyResumeActions(connection, interaction, state);
-      }
-    }
+    // story_status is deliberately not written here — Pause/Resume applies immediately from the
+    // toggle button (story_manage_toggle_pauseresume → handleTogglePauseResume), same as Close and
+    // Reopen, not staged behind this Save. See STAGED_FIELDS's comment above for why.
 
     // Skip migration only when moving INTO restricted with no restricted channel configured
     // (policy: story stays in the main feed, rating is informational-only). Moving back OUT
@@ -726,8 +746,6 @@ export {
   handleManageButton,
   handleTagReviewButton,
   handleManageSave,
-  applyPauseActions,
-  applyResumeActions,
   handleManageModalSubmit,
   handleTurnActionConfirm,
   handleTurnActionCancel,

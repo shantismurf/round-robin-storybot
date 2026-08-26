@@ -26,8 +26,8 @@ describe('isManageDirty', () => {
     assert.equal(isManageDirty(state), true);
   });
 
-  test('reports dirty when a toggle-button-staged field changed', () => {
-    const state = makeState({ allowJoins: 0 });
+  test('reports dirty when a radio-group-staged field changed', () => {
+    const state = makeState({ showAuthors: 0 });
     assert.equal(isManageDirty(state), true);
   });
 
@@ -58,21 +58,28 @@ describe('isManageDirty', () => {
     assert.equal(isManageDirty(state), false);
   });
 
-  test('reopen (an immediate, already-committed action) does not read as dirty once its originalFields entry is synced', () => {
-    // Regression for the bug found 2026-08-22: handleReopenStory sets state.targetStatus and
-    // state.originalStatus to ACTIVE directly (an immediate DB write, not a staged Save), but
-    // originally left state.originalFields.targetStatus at its pre-reopen CLOSED snapshot —
-    // which made isManageDirty falsely report unsaved changes right after reopening. The
-    // story_manage_reopen handler now syncs originalFields.targetStatus alongside targetStatus;
-    // this test locks that in.
+  test('targetStatus (Pause/Resume/Reopen) is never tracked, since it applies immediately rather than being staged', () => {
+    // Locks in the 2026-08-22 fix: targetStatus was originally in STAGED_FIELDS, which produced a
+    // real bug — Reopen writes state.targetStatus directly (an immediate, already-committed DB
+    // write, not a staged Save), which desynced it from the originalFields snapshot and made
+    // isManageDirty falsely report unsaved changes right after reopening. Rather than patch that
+    // one call site, Pause/Resume was made immediate too (matching Close/Reopen) and targetStatus
+    // was dropped from STAGED_FIELDS entirely — so no mutation of it, from any source, should ever
+    // register as dirty.
     const state = makeState({ targetStatus: 'closed' });
-    state.originalFields.targetStatus = 'closed';
-
-    // Simulate handleReopenStory's writes plus the fix's sync.
-    state.originalStatus = 'active';
-    state.targetStatus = 'active';
-    state.originalFields.targetStatus = state.targetStatus;
-
+    state.targetStatus = 'active'; // simulates Reopen, or a Pause/Resume toggle, mutating it directly
     assert.equal(isManageDirty(state), false);
+    assert.equal(STAGED_FIELDS.includes('targetStatus'), false);
+  });
+
+  test('allowJoins (Close/Open Joins) is never tracked, since it applies immediately rather than being staged', () => {
+    // 2026-08-26: allowJoins shares one button row with targetStatus (Pause/Resume/Close/Reopen)
+    // under "Change Story Status" — made immediate for the same reason before it could develop the
+    // same false-positive bug targetStatus did, and to stop the row itself from being inconsistent
+    // (some buttons instant, one silently deferred).
+    const state = makeState({ allowJoins: 1 });
+    state.allowJoins = 0; // simulates the toggle button mutating it directly
+    assert.equal(isManageDirty(state), false);
+    assert.equal(STAGED_FIELDS.includes('allowJoins'), false);
   });
 });
