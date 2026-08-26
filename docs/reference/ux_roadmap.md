@@ -42,15 +42,22 @@ For system architecture and routing, see `system_roadmap.md`.
   → story_manage_open_settings → modal: turn length, reminder, max writers
   → story_manage_open_metadata → modal: dynamic, rating, warnings (select menus)
   → story_manage_open_tags → modal: main pairing, other rels, characters, tags, scene break
-  → story_manage_toggle_pauseresume → toggles pause/resume state (staged until save)
-  → story_manage_save → writes all staged fields + barrier check + pause/resume actions
+  → story_manage_toggle_latejoins → Close/Open Joins, applies immediately (not staged)
+  → story_manage_toggle_pauseresume → Pause/Resume, applies immediately (not staged — changed
+    2026-08-26; previously staged until save)
+  → story_manage_save → writes all staged fields + barrier check (no longer touches
+    story_status/allow_joins — both apply immediately from their own toggle buttons above)
+  → ⚠️ Unsaved Changes indicator (Part 1c) → shown on the panel, above Save Settings, only when a
+    staged field (the four modals above) differs from what was loaded from the DB — Pause/Resume,
+    Close/Open Joins, Close, and Reopen never trigger it, since none of them are staged
   → story_manage_entries_open → Manage Entries panel: flat, paginated picker of every entry in
     the story (all writers, includes deleted — story_manage_entries_list_select_<storyId>) →
     picking an entry opens it directly in the Story Edit session (below) with manageMode: full
     paging/history, plus admin-only Delete/Restore buttons and a "← Back to List" button
   → story_manage_turns_open → Manage Turns panel
   → story_manage_review_tags (when pending tags > 0) → Manage Tags panel (approve/reject queue)
-  → story_manage_close_open → reuses /story close confirm/cancel flow (story_close_confirm_*/story_close_cancel_*)
+  → story_manage_close_open → reuses /story close confirm/cancel flow (story_close_confirm_*/story_close_cancel_*),
+    applies immediately once confirmed
   → story_manage_reopen (when closed) → immediate reopen, no confirmation
 
 Tag Submission Thread Post (in story thread)

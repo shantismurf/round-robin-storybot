@@ -203,6 +203,30 @@ export async function applyResumeActions(connection, interaction, state) {
   }
 }
 
+// Mirrors handleReopenStory's shape below: an immediate, self-contained status transition
+// triggered straight from its manage-panel button, not staged behind Save Settings. Decided
+// 2026-08-22 — see story/manage.js's STAGED_FIELDS comment for why Pause/Resume moved off the
+// staged path (matching Close/Reopen, which were already immediate).
+export async function handleTogglePauseResume(connection, interaction, state) {
+  const newStatus = state.targetStatus === STORY_STATUS.ACTIVE ? STORY_STATUS.PAUSED : STORY_STATUS.ACTIVE;
+  log(`handleTogglePauseResume entry storyId=${state.storyId} ${state.targetStatus}→${newStatus} user=${interaction.user.username}`, { show: true, guildName: interaction?.guild?.name });
+  await interaction.deferUpdate();
+
+  await connection.execute(`UPDATE story SET story_status = ? WHERE story_id = ?`, [newStatus, state.storyId]);
+
+  if (newStatus === STORY_STATUS.PAUSED) {
+    await applyPauseActions(connection, interaction, state);
+  } else {
+    await applyResumeActions(connection, interaction, state);
+  }
+
+  updateStoryStatusMessage(connection, interaction.guild, state.storyId).catch(() => {});
+
+  state.targetStatus = newStatus;
+
+  log(`handleTogglePauseResume: story ${state.storyId} status set to ${newStatus}`, { show: true, guildName: interaction?.guild?.name });
+}
+
 export async function handleReopenStory(connection, interaction, state) {
   log(`handleReopenStory entry storyId=${state.storyId} user=${interaction.user.username}`, { show: true, guildName: interaction?.guild?.name });
   await interaction.deferUpdate();
@@ -255,7 +279,6 @@ export async function handleReopenStory(connection, interaction, state) {
       { story_title: state.title, join_status: joinStatus }
     );
 
-    state.originalStatus = STORY_STATUS.ACTIVE;
     state.targetStatus = STORY_STATUS.ACTIVE;
 
     log(`handleReopenStory: story ${state.storyId} reopened successfully`, { show: true, guildName: interaction?.guild?.name });
