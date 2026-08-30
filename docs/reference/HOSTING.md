@@ -76,12 +76,82 @@ drop-in replacement, rather than assuming a fresh generation is automatically co
 
 ## Database
 
-Provided by bot-hosting.net, on the same network as the bot container
-(host may be Cloudflare-fronted, unconfirmed). Credentials are viewable in
-the same Pterodactyl interface as the bot — only copy-to-clipboard or
-password-cycle are available, no other access.
+**As of 2026-08-30, self-hosted on a separate Hetzner Cloud VM** — no longer the
+bot-hosting.net-provided DB used previously. Moved specifically because
+bot-hosting.net does not offer InnoDB/infrastructure-level encryption at
+rest and had no path to enable it, which Discord's privileged-intent
+application data-handling questions required an honest answer on. The
+bot *application* itself still runs on bot-hosting.net, unchanged — only
+the database moved.
 
-### Known quirk: DB outage from disk-full crash, no uptime visibility
+- **Host**: Hetzner Cloud VM (CX22: 2 vCPU / 4GB RAM / 40GB disk, Ubuntu,
+  ~$6.49/mo), IP `95.217.14.153`, server name `storybot`.
+- **Encryption at rest**: MariaDB's `file_key_management` plugin,
+  configured in `/etc/mysql/mariadb.conf.d/60-encryption.cnf`, key file at
+  `/etc/mysql/encryption/keyfile.txt` (600 perms, `mysql:mysql` owner —
+  **not backed up anywhere else**; losing this file makes all data
+  unrecoverable, see the backup gap below). `innodb_encrypt_tables =
+  FORCE` and `innodb_encrypt_log = ON` are set globally, so every InnoDB
+  table is encrypted automatically — no per-table `ENCRYPTED=YES` needed
+  anywhere in schema/migrations.
+- **Network access**: MariaDB's `bind-address` is `0.0.0.0` (listens on
+  all interfaces), but `ufw` only allows inbound port 3306 from
+  bot-hosting.net's outbound IP (`65.21.16.214` — see stability caveat
+  below). SSH (root, key-only auth) is the only other open port.
+- **App connection user**: `storybot`@`65.21.16.214` — IP-restricted at
+  the MySQL grant level too, not just the firewall; not root. Credentials
+  live in `config.json` on bot-hosting.net (not in git), same convention
+  as before.
+- **SSH access**: key-based only (the instance's initial bootstrap state
+  was password-only, emailed on creation; replaced with a key before any
+  real configuration). Root user — no separate sudo/non-root account set
+  up yet.
+- **Backups**: **none configured yet.** Hetzner's backup service was
+  skipped at creation to avoid the extra cost, and no scripted
+  mysqldump-to-somewhere-else exists either. This is a real, currently
+  unaddressed gap — a corrupted disk or a lost encryption keyfile means
+  real, unrecoverable data loss today. Worth fixing soon; not yet done as
+  of this writing.
+
+### Known caveat: bot-hosting.net's outbound IP isn't confirmed stable
+
+The firewall/grant restriction above uses `65.21.16.214`, resolved by a
+one-time DNS lookup of `prem-eu2.bot-hosting.net` (the Pterodactyl panel's
+own hostname) on 2026-08-30 — bot-hosting.net has not confirmed this IP
+is fixed for the life of the account, and hosting providers sometimes
+migrate accounts between nodes for maintenance/rebalancing. If that ever
+happens, the bot loses its database connection outright (should surface
+clearly via the DB-unreachable retry logging in `index.js`/`job-runner.js`,
+not silently). Accepted as a short-term risk rather than solved properly
+(e.g. a persistent VPN/tunnel) since a full bot migration off
+bot-hosting.net entirely is already on the roadmap (see `TODO.md`) — if
+that happens, this whole caveat becomes moot. If the DB connection ever
+fails unexpectedly with no other explanation, re-resolve
+`prem-eu2.bot-hosting.net` and compare against the current `ufw`/grant
+rule first.
+
+### Migration notes (2026-08-30)
+
+- Full schema + data copied in one shot, run directly on the Hetzner box:
+  `mysqldump --skip-ssl -h us.mysql.db.bot-hosting.net -P 3306 -u
+  <old_user> -p'<old_password>' s388541_ficfeed_test_tracker | mysql
+  storybot`. The `--skip-ssl` flag was required — MariaDB 11.8's client
+  tools require SSL by default, and the old bot-hosting.net DB host
+  doesn't support it, otherwise failing with `TLS/SSL error: SSL is
+  required, but the server does not support it`.
+- The old bot-hosting.net-provided database
+  (`s388541_ficfeed_test_tracker` on `us.mysql.db.bot-hosting.net`) is no
+  longer used by the bot as of this cutover, but has **not been
+  deleted** — it still holds a full, now-increasingly-stale copy of
+  everything up to the migration moment. Decommission it once the new
+  setup has proven stable for a while.
+
+### Known quirk (legacy bot-hosting.net DB, kept for reference): DB outage from disk-full crash, no uptime visibility
+
+This entire incident predates the 2026-08-30 migration above and describes
+the old bot-hosting.net-provided database, not the current Hetzner one —
+kept here because the failure-mode understanding and recovery steps are
+still generically useful if anything similar ever recurs.
 
 Confirmed 2026-08-13 (host support): the legacy DB node's disk filled up,
 which crashed MariaDB and left it down for hours. Timeline from the
