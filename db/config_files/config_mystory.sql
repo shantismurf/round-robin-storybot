@@ -1,6 +1,7 @@
 -- Context: config_mystory
 INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
-('lblYourPenName', 'Your Pen Name', 'en', 1),
+('lblYourPenName', '🖊️ Your Pen Name 🖊️', 'en', 1),
+('txtYourPenNameDesc', 'Displayed on story info, and turns (if enabled)', 'en', 1),
 ('txtMyStoryNone', '🤷 You''re not currently a writer in any active stories. Use /story join to get started!', 'en', 1),
 ('txtMyTurnQuick', '🎯 **Your turn!** Use `/story write [story_id]`', 'en', 1),
 ('txtMyTurnNormal', '🎯 **Your turn!**', 'en', 1),

@@ -37,16 +37,18 @@ export async function getMetaCfg(connection, guildId) {
     'lblStoryTitle', 'lblModeToggle', 'lblWriterOrder', 'lblTurnPrivacy', 'lblShowAuthors',
     'lblTurnLength', 'lblTimeoutReminder', 'lblTimeoutReminderSlow',
     'lblMaxWriters', 'lblDelayStart', 'txtDelayHint',
-    'lblPrivateToggle', 'lblJoinPrivacySelect', 'lblJoinNotifSelect',
+    'lblPrivateToggle',
     'lblJoinNotifications', 'lblJoinPrivacy',
     'lblMyNotifications', 'lblYourPenName',
+    'txtYourPenNameDesc', 'txtJoinPrivacyDesc', 'txtJoinNotificationsDesc',
     'txtNotifDM', 'txtNotifMention',
     'lblMetaRating', 'lblMetadataAddon', 'lblMetaWarnings', 'lblMetaDynamic',
     'lblMetaMainRelationship', 'lblMetaOtherRelationships',
     'lblMetaCharacters', 'lblMetaTags', 'lblMetaSummary', 'lblMetaSceneBreakDivider',
     'txtMetaMainRelationshipPlaceholder', 'txtMetaSceneBreakDividerPlaceholder',
+    'txtSceneBreakDividerDesc', 'txtRatingDesc', 'txtTimeoutReminderDesc', 'txtTimeoutReminderSlowDesc', 'txtMaxWritersDesc',
     'btnAddTitleAndSummary', 'btnAddStoryInfo', 'btnAddSettings', 'btnAddMetadata', 'btnAddTags', 'btnAddMySettings',
-    'btnSaveSettings', 'btnCreateStory', 'btnPanelTabSettings', 'btnPanelTabMetadata', 'txtStoryManagementLabel',
+    'btnSaveSettings', 'btnCreateStory', 'btnPanelTabSettings', 'btnPanelTabMetadata', 'txtPanelTabHelper', 'txtStoryManagementLabel',
     'lblUnsavedChangesTitle', 'txtUnsavedChangesBody',
     'optWarnAllClear',
     ...ratingCodes.map(ratingLabelKey),
@@ -120,6 +122,7 @@ export function buildStoryPanel(cfg, state, title, { isManage = false, activeGro
   // header is tab-independent), so the buttons need to read as "pick a view" before that view's
   // label, not as an action tucked under a static title. Active tab styled Success, inactive
   // Secondary, so "you are here" is unambiguous even without the header's help.
+  container.addTextDisplayComponents(new TextDisplayBuilder().setContent(cfg.txtPanelTabHelper));
   container.addActionRowComponents(new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`${ns}_tab_settings`).setLabel(cfg.btnPanelTabSettings)
       .setStyle(activeGroup === 'settings' ? ButtonStyle.Success : ButtonStyle.Secondary),
@@ -153,10 +156,8 @@ export function buildStoryPanel(cfg, state, title, { isManage = false, activeGro
       `${orderEmoji} **${trimTrailingEmoji(cfg.lblWriterOrder)}:** ${orderLabel}\n-# ${orderDesc}`,
       `**${trimTrailingEmoji(cfg.lblShowAuthors)}:** ${state.showAuthors ? cfg.txtOn : cfg.txtOff}\n-# ${state.showAuthors ? cfg.txtShowAuthorsOnDesc : cfg.txtShowAuthorsOffDesc}`,
       `**${trimTrailingEmoji(cfg.lblTurnPrivacy)}:** ${state.storyTurnPrivacy ? cfg.txtPrivate : cfg.txtPublic}\n-# ${state.storyTurnPrivacy ? cfg.txtTurnPrivacyPrivateDesc : cfg.txtTurnPrivacyPublicDesc}`,
-      // No description text exists for these two, so they stay single-line rather than
-      // inventing filler under them.
-      `**${trimTrailingEmoji(cfg.lblMetaSceneBreakDivider)}:** ${sceneBreakDisplay}`,
-      `**${trimTrailingEmoji(cfg.lblMetaRating)}${cfg.lblMetadataAddon}:** ${ratingLabel}`,
+      `**${trimTrailingEmoji(cfg.lblMetaSceneBreakDivider)}:** ${sceneBreakDisplay}\n-# ${cfg.txtSceneBreakDividerDesc}`,
+      `**${trimTrailingEmoji(cfg.lblMetaRating)}${cfg.lblMetadataAddon}:** ${ratingLabel}\n-# ${cfg.txtRatingDesc}`,
     ];
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent(infoLines.join('\n')));
     container.addActionRowComponents(new ActionRowBuilder().addComponents(
@@ -171,9 +172,9 @@ export function buildStoryPanel(cfg, state, title, { isManage = false, activeGro
     const settingsLines = [
       cfg.txtStoryAddSectionBreakSettings,
       `**${trimTrailingEmoji(cfg.lblTurnLength)}:** ${turnLengthDisplay}`,
-      `**${isSlowMode ? trimTrailingEmoji(cfg.lblTimeoutReminderSlow) : trimTrailingEmoji(cfg.lblTimeoutReminder)}:** ${timeoutDisplay}`,
+      `**${isSlowMode ? trimTrailingEmoji(cfg.lblTimeoutReminderSlow) : trimTrailingEmoji(cfg.lblTimeoutReminder)}:** ${timeoutDisplay}\n-# ${isSlowMode ? cfg.txtTimeoutReminderSlowDesc : cfg.txtTimeoutReminderDesc}`,
       ...(!isManage ? [`**${trimTrailingEmoji(cfg.lblDelayStart)}:** ${delayHours} ${cfg.txtHoursLC} / ${delayWriters} ${cfg.txtWritersLC}\n-# ${cfg.txtDelayHint}`] : []),
-      `**${trimTrailingEmoji(cfg.lblMaxWriters)}:** ${maxWritersDisplay}`,
+      `**${trimTrailingEmoji(cfg.lblMaxWriters)}:** ${maxWritersDisplay}\n-# ${cfg.txtMaxWritersDesc}`,
     ];
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent(settingsLines.join('\n')));
     container.addActionRowComponents(new ActionRowBuilder().addComponents(
@@ -184,9 +185,9 @@ export function buildStoryPanel(cfg, state, title, { isManage = false, activeGro
       container.addSeparatorComponents(new SeparatorBuilder());
       container.addTextDisplayComponents(new TextDisplayBuilder().setContent(
         `${cfg.txtStoryAddSectionBreakJoin}\n` +
-        `**${trimTrailingEmoji(cfg.lblYourPenName)}:** ${state.penName || state.displayName || cfg.txtNotSet}\n\n` +
-        `**${trimTrailingEmoji(cfg.lblJoinPrivacy)}:** ${state.keepPrivate ? cfg.txtPrivate : cfg.txtPublic}\n\n` +
-        `**${trimTrailingEmoji(cfg.lblJoinNotifications)}:** ${state.notifications ? (cfg.txtNotifDM || cfg.txtOn) : (cfg.txtNotifMention || cfg.txtOff)}`
+        `**${trimTrailingEmoji(cfg.lblYourPenName)}:** ${state.penName || state.displayName || cfg.txtNotSet}\n-# ${cfg.txtYourPenNameDesc}\n` +
+        `**${trimTrailingEmoji(cfg.lblJoinPrivacy)}:** ${state.keepPrivate ? cfg.txtPrivate : cfg.txtPublic}\n-# ${cfg.txtJoinPrivacyDesc}\n` +
+        `**${trimTrailingEmoji(cfg.lblJoinNotifications)}:** ${state.notifications ? (cfg.txtNotifDM || cfg.txtOn) : (cfg.txtNotifMention || cfg.txtOff)}\n-# ${cfg.txtJoinNotificationsDesc}`
       ));
       container.addActionRowComponents(new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`${ns}_open_mysettings`).setLabel(cfg.btnAddMySettings).setStyle(ButtonStyle.Primary)
