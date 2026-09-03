@@ -184,9 +184,9 @@ export function buildStoryPanel(cfg, state, title, { isManage = false, activeGro
       container.addSeparatorComponents(new SeparatorBuilder());
       container.addTextDisplayComponents(new TextDisplayBuilder().setContent(
         `${cfg.txtStoryAddSectionBreakJoin}\n` +
-        `**${cfg.lblYourPenName}:** ${state.penName || state.displayName || cfg.txtNotSet}\n\n` +
-        `**${cfg.lblJoinPrivacy}:** ${state.keepPrivate ? cfg.txtPrivate : cfg.txtPublic}\n\n` +
-        `**${cfg.lblJoinNotifications}:** ${state.notifications ? (cfg.txtNotifDM || cfg.txtOn) : (cfg.txtNotifMention || cfg.txtOff)}`
+        `**${trimTrailingEmoji(cfg.lblYourPenName)}:** ${state.penName || state.displayName || cfg.txtNotSet}\n\n` +
+        `**${trimTrailingEmoji(cfg.lblJoinPrivacy)}:** ${state.keepPrivate ? cfg.txtPrivate : cfg.txtPublic}\n\n` +
+        `**${trimTrailingEmoji(cfg.lblJoinNotifications)}:** ${state.notifications ? (cfg.txtNotifDM || cfg.txtOn) : (cfg.txtNotifMention || cfg.txtOff)}`
       ));
       container.addActionRowComponents(new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`${ns}_open_mysettings`).setLabel(cfg.btnAddMySettings).setStyle(ButtonStyle.Primary)
