@@ -4,7 +4,9 @@ Status: Partially Implemented — Parts 1, 1b, 1c, and 3 shipped (see their own 
 below). Part 2 (Ground Rules) is designed but not started; see its build-order list for where to
 pick it up.
 Created: 2026-07-26 (drafted in an earlier Claude Code chat session; committed to the repo on this date)
-Last Updated: 2026-08-26 (Part 1c follow-up: Pause/Resume and Close/Open Joins made immediate,
+Last Updated: 2026-09-03 (Part 2 follow-up: added an open note on reassessing the Settings/
+Metadata tab split once this part's real component cost is known — see Part 2's own note.
+Previously 2026-08-26: Part 1c follow-up, Pause/Resume and Close/Open Joins made immediate,
 matching Close/Reopen — see Part 1c's own note)
 
 ---
@@ -482,6 +484,20 @@ reads as dirty, and that it's absent from `STAGED_FIELDS`.
 ---
 
 ## Part 2 — Ground Rules
+
+### Open follow-up — reassess the Settings/Metadata tab split once this part ships (added 2026-09-03)
+
+Raised during an unrelated field-fix pass on `/story add`'s panel: Settings and Metadata are
+visibly uneven in length, and splitting "Story Info" (Title/Summary + the Info cluster) out into
+its own third tab was floated as a fix. Deliberately **not decided here** — the actual case for it
+depends on real numbers this part hasn't produced yet, so capturing the context now rather than
+either committing to a 3-tab redesign prematurely or losing the thread:
+
+- **Today (`/story add`), estimated with this doc's own pre-implementation weighting** (`TextDisplay`+`ActionRow`+`Separator` per cluster, not code-verified): Settings tab ≈ 27 components (header + Title/Summary + Info cluster + Settings cluster + Join Settings cluster) vs. Metadata tab ≈ 16 (header + Metadata cluster + Tags cluster) — a real ~1.7x imbalance.
+- Splitting Title/Summary + the Info cluster into their own "Story Info" tab would roughly rebalance this to **17 / 17 / 16** — but that's before Ground Rules exists. Once this part ships, it adds to the **Metadata** tab specifically (see placement note below), while Settings' weight is untouched by it — so the imbalance either closes on its own or gets worse, depending on how much this part actually costs. **Get this part's real, code-verified component count first, then revisit the split with actual numbers** rather than the estimate above.
+- **Ground Rules belongs on the Metadata tab under any split**, not Story Info — per this doc's own placement rule ("display location should follow the edit button it's paired with"), Ground Rules is edited via the same `buildMetadataModal()` as Dynamic/Warnings/Rating, unrelated to Story Info's modal. So this part's build is the natural point to also get a real component count for the split question, not a separate follow-up effort.
+- Two ideas to weigh once the split is actually assessed: a **field-completion summary** (which tabs still have unset/default fields worth a look — more useful than a bare "unsaved changes" flag once fields are spread across more tabs; note Part 1c's `isManageDirty` dirty-check is Manage-only and `/story add` has no equivalent today, so this would need its own design, not a reuse) and **duplicating the tab-button row at the bottom of the panel**, not just the top.
+- **Mobile scroll-jump note:** switching tabs edits the whole message, and on mobile this can scroll the view back to the top, away from where the user was reading/interacting. No bot-side control over Discord's client-side scroll position on a message edit — not fixable in code. Shorter tabs and bottom tab buttons (both above) would mitigate the severity without eliminating it.
 
 ### Concept
 Per-story, zero-to-many tags directing writer *tone/intent* — not overlapping with existing

@@ -410,7 +410,7 @@ export async function handleAddStoryButton(connection, interaction) {
           )
           .addLabelComponents(
             new LabelBuilder()
-              .setLabel(cfg.lblJoinPrivacySelect)
+              .setLabel(cfg.lblJoinPrivacy)
               .setStringSelectMenuComponent(
                 new StringSelectMenuBuilder()
                   .setCustomId('story_add_mysettings_privacy')
@@ -423,7 +423,7 @@ export async function handleAddStoryButton(connection, interaction) {
                   ])
               ),
             new LabelBuilder()
-              .setLabel(cfg.lblJoinNotifSelect)
+              .setLabel(cfg.lblJoinNotifications)
               .setStringSelectMenuComponent(
                 new StringSelectMenuBuilder()
                   .setCustomId('story_add_mysettings_notifications')

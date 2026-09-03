@@ -74,7 +74,7 @@ export async function validateJoinEligibility(connection, storyId, guildId, user
 export async function buildJoinEmbed(connection, state) {
   const { storyId, guildId, storyTitle, privacy, notificationPrefs, penName, displayName } = state;
   const cfg = await getConfigValue(connection, [
-    'txtJoinEmbedDesc', 'lblJoinPrivacySelect', 'lblJoinNotifSelect',
+    'txtJoinEmbedDesc', 'lblJoinPrivacy', 'lblJoinNotifications',
     'lblJoinPenName', 'txtJoinPenNameNotSet', 'btnJoinSetPenName', 'btnJoinConfirm', 'btnCancel'
   ], guildId);
 
@@ -82,8 +82,8 @@ export async function buildJoinEmbed(connection, state) {
     .setTitle(`🎭 Join "${storyTitle}"`)
     .setDescription(cfg.txtJoinEmbedDesc)
     .addFields(
-      { name: trimTrailingEmoji(cfg.lblJoinPrivacySelect), value: privacy === 'private' ? '🔒 Private' : '🌐 Public', inline: true },
-      { name: trimTrailingEmoji(cfg.lblJoinNotifSelect), value: notificationPrefs === 'dm' ? '💬 DM' : '📢 Mention in channel', inline: true },
+      { name: trimTrailingEmoji(cfg.lblJoinPrivacy), value: privacy === 'private' ? '🔒 Private' : '🌐 Public', inline: true },
+      { name: trimTrailingEmoji(cfg.lblJoinNotifications), value: notificationPrefs === 'dm' ? '💬 DM' : '📢 Mention in channel', inline: true },
       { name: trimTrailingEmoji(cfg.lblJoinPenName), value: penName || (displayName ? `${displayName} (Discord display name)` : cfg.txtJoinPenNameNotSet), inline: false }
     );
 
