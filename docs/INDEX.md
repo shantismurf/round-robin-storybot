@@ -86,7 +86,7 @@ Every file has a `Status` / `Created` / `Last Updated` (/ `Implemented`) header.
 | [ux_roadmap.md](reference/ux_roadmap.md) | Application workflows and interface structure |
 | [discordjs_reference.md](reference/discordjs_reference.md) | Verified discord.js API notes — check before trusting training data |
 | [autocomplete-sort-filter-reference.md](reference/autocomplete-sort-filter-reference.md) | Filter/sort rules per `/story` autocomplete subcommand |
-| [HOSTING.md](reference/HOSTING.md) | Production hosting (Pterodactyl) access/deploy reference |
+| [HOSTING.md](reference/HOSTING.md) | Production hosting (Hetzner + Coolify): deploy, config, database, backups |
 | [PRIVACY_POLICY.md](reference/PRIVACY_POLICY.md) | User-facing Privacy Policy & ToS (canonical source is `privacy-policy.js`) |
 
 ---

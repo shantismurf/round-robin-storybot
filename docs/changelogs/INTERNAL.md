@@ -24,6 +24,17 @@ the thing you will search for later is the old name.
 
 ---
 
+## Unreleased
+
+### Changed
+- **Hosting moved to Hetzner + Coolify (2026-10-12).** The bot process moved off bot-hosting.net
+  onto the Hetzner VM that already ran the database, and now runs as a Nixpacks-built Coolify
+  application with full root access. `config.json` lives in Coolify persistent storage, and
+  `db.host` is now `10.0.1.1`. Docs only, no code change: `docs/reference/HOSTING.md` rewritten
+  (bot-hosting.net details moved to a Legacy section), plus the Host/Startup bullets in
+  `CLAUDE.md`, the PR template's post-merge checklist, and `docs/INDEX.md`. The
+  bot-hosting.net slot is stopped, not deleted.
+
 ## 3.9.0 — 2026-10-12
 
 Provenance: written alongside the work.

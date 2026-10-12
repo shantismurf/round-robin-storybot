@@ -10,8 +10,8 @@
 - **No AskUserQuestion popups:** Never use the AskUserQuestion tool in this repo. It covers too much of the interface and forces a decision before the user has had a chance to read preceding findings. Ask clarifying questions in plain response text instead, and wait for a normal reply.
 
 ## System Information
-- **Host:** Managed via restricted pterodactyl interface on bot-hosting.net. No manual console access, no local/staging execution — any change, including debug logging, must be pushed to main and the bot restarted before it can be tested. Runs Node.js v24.18.0 (as of 2026-07-24); the host keeps this current with new Node releases, so don't assume this stays pinned. See `docs/reference/HOSTING.md` for the container's startup script and known deploy quirks.
-- **Startup:** Pulls main branch -> runs index.js -> fires deploy.js:
+- **Host:** A Hetzner Cloud VM running Coolify (since 2026-10-12), with the bot and its MariaDB on the same box and full root access. There is no staging bot yet, so a change still has to be pushed to main and deployed from Coolify before it can be tested live. Runs Node.js v24.18.0 (as of 2026-07-24); the host keeps this current with new Node releases, so don't assume this stays pinned. See `docs/reference/HOSTING.md` for the deploy flow, config, database and known quirks.
+- **Startup:** Coolify builds main (Nixpacks) -> runs index.js -> fires deploy.js:
   - database_setup: schema checks and migrations.
   - sync_config: aggregates `db/config_files/*.sql` and syncs to DB.
   - deploy_commands: registers slash commands (instant in test_mode).

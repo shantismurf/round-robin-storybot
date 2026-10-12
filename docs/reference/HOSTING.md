@@ -1,59 +1,79 @@
-# Production Hosting — bot-hosting.net (Pterodactyl)
+# Production Hosting — Hetzner Cloud + Coolify
 
-## Access
+**As of 2026-10-12**, the bot process and its MariaDB database both run on one Hetzner Cloud
+VM. The bot runs as a Coolify application on that VM, and there is full root access to the box.
 
-- No shell/console access — the Pterodactyl panel's Console tab only shows
-  the container's stdout, it does not accept commands.
-- No local/staging environment. Every change ships by pushing to `main`
-  and restarting the bot from the panel.
-- **Restart** (re-runs the startup command below against the existing
-  container filesystem) is the normal deploy action, used every time.
-  **Reinstall** (wipes and reprovisions the container) takes several
-  minutes and is only used if something is broken badly enough to need it.
-- A git push does **not** trigger a restart by itself — the panel restart
-  has to be triggered manually after pushing.
+Before that, the bot ran on bot-hosting.net (a Pterodactyl panel with no shell, no way to run
+scripts, and no staging), and from 2026-08-30 only the database lived on this VM. The
+bot-hosting.net history is kept at the bottom of this file because the incident notes are still
+useful. The CX22 sizing below was chosen for the DB alone, so check memory and disk headroom
+if the bot starts misbehaving under load.
 
-## Startup command
+## Server
 
-Runs on every restart:
+- **Host**: Hetzner Cloud VM (CX22: 2 vCPU / 4GB RAM / 40GB disk, Ubuntu), IP
+  `95.217.14.153`, server name `storybot`.
+- **SSH**: root, key-only auth. No separate sudo/non-root account set up yet.
+- **Coolify**: runs on the same VM and manages the bot's container (deploys, restarts, logs).
 
-```bash
-if [[ -d .git ]] && [[ ${AUTO_UPDATE} == "1" ]]; then git pull; fi;
-if [[ ! -z ${NODE_PACKAGES} ]]; then /usr/local/bin/npm install ${NODE_PACKAGES}; fi;
-if [[ ! -z ${UNNODE_PACKAGES} ]]; then /usr/local/bin/npm uninstall ${UNNODE_PACKAGES}; fi;
-if [ -f /home/container/package.json ]; then /usr/local/bin/npm install; fi;
-if [[ ! -z "${START_BASH_FILE}" ]]; then
-  bash ${START_BASH_FILE};
-else
-  /usr/local/bin/node /home/container/${BOT_JS_FILE};
-fi;
-```
+## Deploying
 
-In order: pull `main` into the persistent `/home/container` directory (not
-a fresh clone), run `npm install`, then run `node index.js`
-(`START_BASH_FILE` is unset for this project). `index.js` first waits for
-the DB to be reachable (see quirk below), then fires `deploy.js` — schema
-migrations, config sync, command registration, hub post sync — before
-connecting to Discord; see `CLAUDE.md`'s **Startup** bullet.
-
-## Fixed quirk: package-lock.json
-
-`npm install` (step 3, running every restart in the same persistent
-directory) could rewrite `package-lock.json` on its own, even with no
-`package.json` change, leaving it locally modified. The next restart's
-`git pull` would then refuse to overwrite that local change and abort with
-`error: Your local changes to the following files would be overwritten by
-merge: package-lock.json`.
-
-Fixed by removing `package-lock.json` from git tracking (`.gitignore`) —
-`npm install` now regenerates it locally every restart with nothing for
-`git pull` to conflict with.
+- The bot is a Coolify application built with **Nixpacks** from this repo's `main` branch. The
+  repo has no Dockerfile. Nixpacks detects Node and runs `npm install`, then the `start` script
+  in `package.json` (`node index.js`).
+- **Deploys are manual right now.** Push to `main`, then deploy from the Coolify dashboard.
+  Coolify can auto-deploy on every push to `main` (through its GitHub integration or a
+  webhook). That's wanted but not switched on yet.
+- On startup, `index.js` waits for the DB to answer (`waitForDatabase()`), then runs
+  `deploy.js`: schema migrations, config sync, command registration, hub post sync. After that
+  it connects to Discord. See `CLAUDE.md`'s **Startup** bullet.
+- **Logs**: the bot's stdout/stderr shows up in the application's Logs view in Coolify. The
+  `#logs` channel on the hub server still gets the `show: true` problem lines (see the Logging
+  Rules in `CLAUDE.md`).
 
 ## config.json
 
-Not in git (`.gitignore`). It lives directly in the container's files on
-the host and is not touched by `git pull`. A local backup copy is kept
-outside the repo in case it needs to be re-uploaded.
+Not in git (`.gitignore`). It is copied into the Coolify application's **persistent storage**,
+so redeploys don't touch it. The format is the same as before. The only value that changed in
+the move is `db.host`, now `10.0.1.1`, which is the address the bot's container uses to reach
+MariaDB on the VM. The code reads only `config.json`, not environment variables.
+
+## Running scripts by hand
+
+This used to be impossible. Now the helper scripts in `helper/` can run inside the bot's
+container (Coolify's terminal, or `docker exec` over SSH), for example
+`node helper/broadcast.js` for a broadcast dry run. **Be careful:** they read the same
+`config.json` as the running bot, so they use the production token and production database.
+There is no staging bot yet.
+
+## package-lock.json
+
+Still untracked (`.gitignore`). That was a workaround for the old host, where `npm install`
+in a persistent directory rewrote the lock file and the next `git pull` refused to run.
+Nixpacks builds each deploy fresh, so that conflict can't happen here. Tracking the lock file
+again would make builds reproducible, but that hasn't been decided yet.
+
+## Database
+
+MariaDB runs directly on the VM (not as a Coolify-managed database). It was set up on
+2026-08-30, when only the DB moved here. The bot moved on 2026-10-12. The DB setup didn't
+change in that move except that the bot now connects from the same machine.
+
+- **Encryption at rest**: MariaDB's `file_key_management` plugin, configured in
+  `/etc/mysql/mariadb.conf.d/60-encryption.cnf`, key file at
+  `/etc/mysql/encryption/keyfile.txt` (600 perms, `mysql:mysql` owner). **The key file is not
+  backed up anywhere else.** If it's lost, all the data is unrecoverable. `innodb_encrypt_tables =
+  FORCE` and `innodb_encrypt_log = ON` are set globally, so every InnoDB table is encrypted
+  automatically and no per-table `ENCRYPTED=YES` is needed anywhere in schema/migrations.
+- **Connection**: the bot connects to `10.0.1.1` from its container. The `storybot` app user
+  is not root. Its credentials live in `config.json` (see above).
+- **Network access**: *to confirm.* Before the move, `ufw` allowed inbound 3306 only from
+  bot-hosting.net's outbound IP (`65.21.16.214`), and the MySQL grant was
+  `storybot`@`65.21.16.214`. Both had to change for a local connection. Record the current
+  `ufw` rule and grant host here, and whether 3306 is still open to the internet at all.
+- **Backups**: **none yet.** They're planned but not set up. A corrupted disk or a lost key
+  file means real, unrecoverable data loss today. Any backup plan has to cover the key file as
+  well as the dumps, and keep them in separate places.
 
 ## Bot invite/install link
 
@@ -74,61 +94,20 @@ link is ever lost or needs replacing, regenerate from the Portal and diff the re
 permissions integer against the list above (or recheck each box by hand) before treating it as a
 drop-in replacement, rather than assuming a fresh generation is automatically correct.
 
-## Database
+---
 
-**As of 2026-08-30, self-hosted on a separate Hetzner Cloud VM** — no longer the
-bot-hosting.net-provided DB used previously. Moved specifically because
-bot-hosting.net does not offer InnoDB/infrastructure-level encryption at
-rest and had no path to enable it, which Discord's privileged-intent
-application data-handling questions required an honest answer on. The
-bot *application* itself still runs on bot-hosting.net, unchanged — only
-the database moved.
+# Legacy: bot-hosting.net (Pterodactyl), until 2026-10-12
 
-- **Host**: Hetzner Cloud VM (CX22: 2 vCPU / 4GB RAM / 40GB disk, Ubuntu,
-  ~$6.49/mo), IP `95.217.14.153`, server name `storybot`.
-- **Encryption at rest**: MariaDB's `file_key_management` plugin,
-  configured in `/etc/mysql/mariadb.conf.d/60-encryption.cnf`, key file at
-  `/etc/mysql/encryption/keyfile.txt` (600 perms, `mysql:mysql` owner —
-  **not backed up anywhere else**; losing this file makes all data
-  unrecoverable, see the backup gap below). `innodb_encrypt_tables =
-  FORCE` and `innodb_encrypt_log = ON` are set globally, so every InnoDB
-  table is encrypted automatically — no per-table `ENCRYPTED=YES` needed
-  anywhere in schema/migrations.
-- **Network access**: MariaDB's `bind-address` is `0.0.0.0` (listens on
-  all interfaces), but `ufw` only allows inbound port 3306 from
-  bot-hosting.net's outbound IP (`65.21.16.214` — see stability caveat
-  below). SSH (root, key-only auth) is the only other open port.
-- **App connection user**: `storybot`@`65.21.16.214` — IP-restricted at
-  the MySQL grant level too, not just the firewall; not root. Credentials
-  live in `config.json` on bot-hosting.net (not in git), same convention
-  as before.
-- **SSH access**: key-based only (the instance's initial bootstrap state
-  was password-only, emailed on creation; replaced with a key before any
-  real configuration). Root user — no separate sudo/non-root account set
-  up yet.
-- **Backups**: **none configured yet.** Hetzner's backup service was
-  skipped at creation to avoid the extra cost, and no scripted
-  mysqldump-to-somewhere-else exists either. This is a real, currently
-  unaddressed gap — a corrupted disk or a lost encryption keyfile means
-  real, unrecoverable data loss today. Worth fixing soon; not yet done as
-  of this writing.
+The bot-hosting.net slot is **stopped but not deleted** as of 2026-10-12. Delete it once the
+Coolify setup has proven stable. Back then:
 
-### Known caveat: bot-hosting.net's outbound IP isn't confirmed stable
-
-The firewall/grant restriction above uses `65.21.16.214`, resolved by a
-one-time DNS lookup of `prem-eu2.bot-hosting.net` (the Pterodactyl panel's
-own hostname) on 2026-08-30 — bot-hosting.net has not confirmed this IP
-is fixed for the life of the account, and hosting providers sometimes
-migrate accounts between nodes for maintenance/rebalancing. If that ever
-happens, the bot loses its database connection outright (should surface
-clearly via the DB-unreachable retry logging in `index.js`/`job-runner.js`,
-not silently). Accepted as a short-term risk rather than solved properly
-(e.g. a persistent VPN/tunnel) since a full bot migration off
-bot-hosting.net entirely is already on the roadmap (see `TODO.md`) — if
-that happens, this whole caveat becomes moot. If the DB connection ever
-fails unexpectedly with no other explanation, re-resolve
-`prem-eu2.bot-hosting.net` and compare against the current `ufw`/grant
-rule first.
+- There was no shell. The panel's Console tab showed stdout only, and every change, including
+  debug logging, shipped by pushing to `main` and restarting from the panel.
+- The startup command `git pull`ed into a persistent `/home/container` directory, ran
+  `npm install`, then `node index.js`. That is where the `package-lock.json` conflict above
+  came from.
+- The DB firewall rule depended on bot-hosting.net's outbound IP, which was never confirmed
+  stable. Running both on one VM makes that caveat moot.
 
 ### Migration notes (2026-08-30)
 
