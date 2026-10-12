@@ -345,7 +345,7 @@ export async function doFinalizeEntry(connection, interaction, storyId, writerId
       );
       const nextWriterId = await PickNextWriter(txn, storyId);
       nextTurnResult = nextWriterId
-        ? await NextTurn(txn, interaction, nextWriterId)
+        ? await NextTurn(txn, interaction, nextWriterId, { deferAnnouncement: true })
         : { success: false, error: 'No eligible next writer' };
       await txn.commit();
       log(`doFinalizeEntry: DB transaction committed — entry inserted, turn ${turn.turn_id} ended, next writer ${nextWriterId}`, { show: true, guildName: interaction?.guild?.name });
@@ -387,6 +387,9 @@ export async function doFinalizeEntry(connection, interaction, storyId, writerId
     } catch (embedError) {
       log(`doFinalizeEntry: failed to post entry to story thread: ${embedError}`, { show: true, guildName: interaction?.guild?.name });
     }
+
+    // Next turn's announcement goes after the last page of this entry (NextTurn deferred it)
+    if (nextTurnResult?.announce) await nextTurnResult.announce(connection);
 
     pendingPreviewData.delete(interaction.user.id);
     await interaction.editReply({ content: await getConfigValue(connection, 'txtEntryFinalized', interaction.guild.id), components: [] });

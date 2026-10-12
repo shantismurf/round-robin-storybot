@@ -139,6 +139,14 @@ export async function CreateStory(connection, interaction, storyInput) {
 
     await logGuildEvent(connection, guild_id, 'story_created');
 
+    // The creator is the story's first writer — add them to the story thread the same way
+    // handleJoinConfirm adds joiners
+    storyThread.members.add(interaction.user.id)
+      .then(() => log(`CreateStory: added creator ${interaction.user.username} to story thread ${storyThread.id} for story ${storyId}`, { show: false, guildName: interaction?.guild?.name }))
+      .catch(error =>
+        log(`CreateStory: failed to add creator ${interaction.user.username} to story thread ${storyThread.id} for story ${storyId}: ${error?.stack ?? error}`, { show: true, guildName: interaction?.guild?.name })
+      );
+
     // Post story creation announcement after commit so writer count is visible
     await postStoryFeedCreationAnnouncement(connection, storyId, interaction);
 

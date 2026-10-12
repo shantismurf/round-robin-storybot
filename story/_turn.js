@@ -143,7 +143,7 @@ export async function PickNextWriter(connection, storyId) {
  * Cancels any pending jobs for the current active turn, inserts a turn record,
  * schedules timeout/reminder jobs, creates a thread (normal mode), and posts notifications.
  */
-export async function NextTurn(connection, interaction, storyWriterId) {
+export async function NextTurn(connection, interaction, storyWriterId, { deferAnnouncement = false } = {}) {
   log(`NextTurn: entry storyWriterId=${storyWriterId}`, { show: false, guildName: interaction?.guild?.name });
   const guild_id = interaction.guild.id;
   try {
@@ -262,11 +262,13 @@ export async function NextTurn(connection, interaction, storyWriterId) {
       dmMessage = `${isSlowMode ? 'Slow' : 'Normal'} mode thread created and notification sent`;
     }
 
-    // Update status embed then post activity log — order matters in the story thread
-    updateStoryStatusMessage(connection, interaction.guild, writer.story_id)
+    // Update status embed then post the turn-start line — order matters in the story thread.
+    // Takes its own connection: a caller that runs NextTurn inside a transaction has released
+    // that connection by the time a deferred announcement runs.
+    const announce = (conn) => updateStoryStatusMessage(conn, interaction.guild, writer.story_id)
       .then(async () => {
         const cfgKey = isSlowMode ? 'txtStoryThreadTurnStartSlow' : 'txtStoryThreadTurnStart';
-        const template = await getConfigValue(connection, cfgKey, guild_id);
+        const template = await getConfigValue(conn, cfgKey, guild_id);
         let msg = template
           .replace('[turn_number]', turnNumber)
           .replace('[writer_name]', writer.discord_display_name);
@@ -276,15 +278,24 @@ export async function NextTurn(connection, interaction, storyWriterId) {
             .replace('[turn_end_full]', `<t:${unixTs}:F>`)
             .replace('[turn_end_relative]', `<t:${unixTs}:R>`);
         }
-        return postStoryThreadActivity(connection, interaction.guild, writer.story_id, msg);
+        return postStoryThreadActivity(conn, interaction.guild, writer.story_id, msg);
       })
       .catch(err => log(`NextTurn: status/activity post failed for story ${writer.story_id}: ${err?.stack ?? err}`, { show: true, guildName: interaction?.guild?.name }));
+
+    // Deferred: the caller posts the finished entry to the story thread first, then runs
+    // announce(), so the turn-start line can't land between the entry's pages.
+    if (deferAnnouncement) {
+      log(`NextTurn: announcement deferred to caller for story ${writer.story_id} turn ${turnId}`, { show: false, guildName: interaction?.guild?.name });
+    } else {
+      announce(connection);
+    }
 
     return {
       success: true,
       turnId,
       threadId,
-      dmMessage
+      dmMessage,
+      announce: deferAnnouncement ? announce : null
     };
 
   } catch (error) {
