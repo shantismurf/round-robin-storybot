@@ -24,6 +24,43 @@ the thing you will search for later is the old name.
 
 ---
 
+## 3.9.0 — 2026-10-12
+
+Provenance: written alongside the work.
+
+MINOR. Images in entries stop going dark. Discord's attachment links have been signed and
+expiring (about 24 hours) since late 2023, and entries store the media-channel link, so every
+place an image was shown from that stored link broke a day after posting. The image itself is
+safe in the media channel; only the link goes stale. Also a placement fix for the Manage
+Entries delete/restore message. LeeAnn approved 3.9.0 on 2026-10-12.
+
+### Changed
+- **Thread posts now show images inline.** `postThreadEntry` used to put the whole entry in
+  text embeds, so an image appeared only as a caption link, never as a picture, and the link
+  expired a day later. It now splits the entry at each image (`splitAtImages`) and posts each
+  one as its own message with the file re-uploaded (`attachment://`), so the picture sits where
+  the writer placed it and belongs to that message, which Discord keeps working. The caption
+  shows as the embed text unless it is just the file name. Stored links are refreshed before
+  the upload, so this also works for edit reposts and skips of old entries. If an upload
+  fails, the link is posted as text instead, so no piece of the entry is lost.
+- **`/story read` shows each image on the page its text is on.** `buildEntryPages` attached
+  every image in an entry to the entry's first page, so in a long entry a picture showed up
+  before the text it went with. Each page now carries the images linked in its own text.
+
+### Fixed
+- **`/story read` images no longer break after a day.** The read view passed stored links
+  straight to `setImage()`. It now swaps them for freshly signed ones via the new
+  `withFreshAttachmentUrls` helper in `_exportImages.js`, which wraps the
+  `refreshAttachmentUrls` call export already used. Display copy only: the edit session still
+  gets the stored content.
+- **Manage Entries delete/restore confirmation now appears where you're looking.** The success
+  message was set as the panel message's text, which Discord renders above the embed, so the
+  only visible change was the button state. It is now a separate ephemeral message below the
+  panel. Delete still has no confirmation step by design: it is a soft delete, undone with
+  Restore Entry, and the message says so.
+
+---
+
 ## 3.8.5 — 2026-10-12
 
 Provenance: written alongside the work.

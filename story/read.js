@@ -5,6 +5,7 @@ import { isRestricted, ratingBadgeKey } from './_metadata.js';
 import { pendingReadData, lastReadPage, pendingEditData } from './_state.js';
 import { buildEditMessage } from './edit.js';
 import { buildEntryEmbed, buildEntryPages } from './_entryRenderer.js';
+import { withFreshAttachmentUrls } from './_exportImages.js';
 import { WRITER_STATUS, ENTRY_STATUS } from '../constants.js';
 
 export { pendingReadData, lastReadPage };
@@ -297,7 +298,11 @@ if (isConfigured) {
     ]);
 
     const wordCount = entries.reduce((total, e) => total + e.content.trim().split(/\s+/).length, 0);
-    const pages = buildPages(entries, story.show_authors, editInfoMap, hasAnyEditSet, story.scene_break_divider);
+    // Stored image links are signed and expire ~24h after issue — show fresh ones. Display copy
+    // only: contentMap above keeps the stored content for the edit session.
+    const freshContent = await withFreshAttachmentUrls(interaction.client?.rest, entries.map(e => e.content), { guildName: interaction.guild?.name });
+    const displayEntries = entries.map((e, i) => ({ ...e, content: freshContent[i] }));
+    const pages = buildPages(displayEntries, story.show_authors, editInfoMap, hasAnyEditSet, story.scene_break_divider);
 
     const savedPage = lastReadPage.get(`${interaction.user.id}_${storyId}`) ?? 0;
     const startPage = Math.min(savedPage, pages.length - 1);

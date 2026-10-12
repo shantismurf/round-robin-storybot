@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildEntryPages } from '../story/_entryRenderer.js';
+import { buildEntryPages, splitAtImages } from '../story/_entryRenderer.js';
 
 describe('buildEntryPages', () => {
   test('returns a single page numbered 1/1 for short content', () => {
@@ -66,15 +66,32 @@ describe('buildEntryPages', () => {
     assert.doesNotMatch(pages[0].content, /\[\[break\]\]/);
   });
 
-  test('extracts image URLs only onto the first chunk', () => {
+  test('puts each image on the page whose text contains it', () => {
     const url = 'https://cdn.discordapp.com/attachments/123/456/image.png';
-    const content = 'a'.repeat(3000) + `\n\n![img](${url})\n\n` + 'b'.repeat(3000);
+    const content = 'a'.repeat(3000) + '\n\n' + 'b'.repeat(3000) + `\n\n[img](${url})`;
     const pages = buildEntryPages(content, {
       turnNumber: 1, writerName: 'Alice', showAuthors: true, storyEntryId: 100,
     });
-    assert.ok(pages[0].imageUrls.length > 0 || pages.some(p => p.imageUrls.includes(url)));
-    // Only the first chunk should ever carry image URLs per the implementation.
-    const nonFirstWithImages = pages.slice(1).filter(p => p.imageUrls.length > 0);
-    assert.equal(nonFirstWithImages.length, 0);
+    assert.ok(pages.length > 1);
+    assert.deepEqual(pages[0].imageUrls, []);
+    assert.deepEqual(pages[pages.length - 1].imageUrls, [url]);
+  });
+});
+
+describe('splitAtImages', () => {
+  test('splits content into ordered text and image segments', () => {
+    const u1 = 'https://cdn.discordapp.com/attachments/1/2/cat.png?ex=1&is=2&hm=3';
+    const u2 = 'https://cdn.discordapp.com/attachments/1/3/dog.png';
+    const segs = splitAtImages(`Before.\n\n[a cat](${u1})\n${u2}\n\nAfter.`);
+    assert.deepEqual(segs.map(s => s.type), ['text', 'image', 'image', 'text']);
+    assert.equal(segs[1].url, u1);
+    assert.equal(segs[1].caption, 'a cat');
+    assert.equal(segs[2].url, u2);
+    assert.equal(segs[2].caption, null);
+    assert.equal(segs[3].text, 'After.');
+  });
+
+  test('returns one text segment when there are no images', () => {
+    assert.deepEqual(splitAtImages('Just words.'), [{ type: 'text', text: 'Just words.' }]);
   });
 });

@@ -6,12 +6,13 @@
  *   buildEntryEmbed()  — renders one page into { embeds, components }
  *
  * Non-interactive display (permanent thread/channel posts):
- *   postThreadEntry()  — sends one message per chunk to a channel, safe for any entry length
+ *   postThreadEntry()  — sends one message per chunk (and per image) to a channel, safe for any entry length
  */
 
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { splitAtParagraphs, replaceTemplateVariables } from '../utilities.js';
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
+import { splitAtParagraphs, replaceTemplateVariables, log } from '../utilities.js';
 import { applyEntryMarkup } from './_entryMarkup.js';
+import { withFreshAttachmentUrls } from './_exportImages.js';
 
 const IMAGES_PER_PAGE = 4;
 
@@ -42,7 +43,6 @@ function extractImageUrls(content) {
  */
 export function buildEntryPages(content, { turnNumber, writerName, showAuthors, storyEntryId, editInfo = null, sceneBreakDivider = null } = {}) {
   content = applyEntryMarkup(content, { dividerText: sceneBreakDivider, target: 'discord' });
-  const imageUrls = extractImageUrls(content);
   const chunks = splitAtParagraphs(content);
   // Word count for the whole entry (all chunks combined) — same figure shown on every page of a split entry.
   const entryWordCount = content.trim().split(/\s+/).filter(Boolean).length;
@@ -56,7 +56,9 @@ export function buildEntryPages(content, { turnNumber, writerName, showAuthors, 
     storyEntryId,
     isFirstChunk: i === 0,
     editInfo: i === 0 ? editInfo : null,
-    imageUrls: i === 0 ? imageUrls : [],
+    // Each page carries the images whose links fall in its own text, so a picture shows
+    // alongside the part of the entry it belongs to.
+    imageUrls: extractImageUrls(chunk),
   }));
 }
 
@@ -168,10 +170,38 @@ export const NAV_PREFIX = {
 // Non-interactive: stacked embeds for permanent thread posts
 // ---------------------------------------------------------------------------
 
+// Matches an image link in entry content: [caption](cdn attachment url) or a bare cdn url.
+const IMAGE_LINK_RE = /\[([^\]]*)\]\((https:\/\/cdn\.discordapp\.com\/attachments\/[^\s)]+)\)|(?<!\()(https:\/\/cdn\.discordapp\.com\/attachments\/[^\s<"]+)/g;
+
+// Split entry content into ordered text and image segments, so images can post inline.
+export function splitAtImages(content) {
+  const segments = [];
+  let last = 0;
+  for (const m of content.matchAll(IMAGE_LINK_RE)) {
+    const text = content.slice(last, m.index).trim();
+    if (text) segments.push({ type: 'text', text });
+    segments.push({ type: 'image', url: m[2] ?? m[3], caption: m[1] ?? null, raw: m[0] });
+    last = m.index + m[0].length;
+  }
+  const tail = content.slice(last).trim();
+  if (tail) segments.push({ type: 'text', text: tail });
+  return segments;
+}
+
+// File name from an attachment URL (path's last segment, query string dropped).
+function attachmentFileName(url) {
+  const path = url.split('?')[0];
+  return decodeURIComponent(path.slice(path.lastIndexOf('/') + 1));
+}
+
 /**
  * Post a story entry to a channel, splitting at paragraph boundaries so no
- * single message exceeds Discord's 6000-char total embed limit.
- * Each chunk becomes one message with one embed.
+ * single message exceeds Discord's 6000-char total embed limit, and at each image
+ * so it appears inline where the writer placed it.
+ * Each text chunk becomes one message with one embed. Each image becomes its own
+ * message with the file attached (re-uploaded, so it belongs to that message and
+ * never goes stale the way a stored signed link does), with its caption as the
+ * embed text unless the caption is just the file name.
  *
  * @param {TextChannel} channel    — Discord channel or thread to post to
  * @param {string}      content    — full entry content
@@ -180,10 +210,40 @@ export const NAV_PREFIX = {
  */
 export async function postThreadEntry(channel, content, authorLine = null, sceneBreakDivider = null) {
   content = applyEntryMarkup(content, { dividerText: sceneBreakDivider, target: 'discord' });
-  const chunks = splitAtParagraphs(content, 3800);
-  for (let i = 0; i < chunks.length; i++) {
-    const embed = new EmbedBuilder().setDescription(chunks[i]);
-    if (i === 0 && authorLine) embed.setAuthor({ name: authorLine });
-    await channel.send({ embeds: [embed] });
+  const guildName = channel?.guild?.name;
+  let segments = splitAtImages(content);
+  const imageCount = segments.filter(s => s.type === 'image').length;
+  if (imageCount > 0) {
+    // Stored links are signed and expire ~24h after issue; refresh before uploading.
+    const freshUrls = await withFreshAttachmentUrls(channel?.client?.rest, segments.map(s => s.url ?? null), { guildName });
+    segments = segments.map((s, i) => s.type === 'image' ? { ...s, freshUrl: freshUrls[i] } : s);
+  }
+  log(`postThreadEntry: posting to ${channel?.id} — ${segments.length} segment(s), ${imageCount} image(s)`, { show: false, guildName });
+
+  let first = true;
+  for (const seg of segments) {
+    if (seg.type === 'image') {
+      const name = attachmentFileName(seg.url);
+      const embed = new EmbedBuilder().setImage(`attachment://${name}`);
+      if (seg.caption && seg.caption !== name) embed.setDescription(seg.caption);
+      if (first && authorLine) embed.setAuthor({ name: authorLine });
+      try {
+        await channel.send({ embeds: [embed], files: [new AttachmentBuilder(seg.freshUrl, { name })] });
+      } catch (error) {
+        // Fall back to the link as text so the entry is never missing a piece.
+        log(`postThreadEntry failed to attach image ${name} in ${channel?.id}, posting link instead: ${error?.stack ?? error}`, { show: true, guildName });
+        const fallback = new EmbedBuilder().setDescription(seg.raw);
+        if (first && authorLine) fallback.setAuthor({ name: authorLine });
+        await channel.send({ embeds: [fallback] });
+      }
+      first = false;
+      continue;
+    }
+    for (const chunk of splitAtParagraphs(seg.text, 3800)) {
+      const embed = new EmbedBuilder().setDescription(chunk);
+      if (first && authorLine) embed.setAuthor({ name: authorLine });
+      await channel.send({ embeds: [embed] });
+      first = false;
+    }
   }
 }

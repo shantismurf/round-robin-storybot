@@ -48,6 +48,16 @@ export async function refreshAttachmentUrls(rest, urls, { guildName } = {}) {
   return refreshed;
 }
 
+// Swap every stored attachment link in `texts` for a freshly signed one, for display.
+// Links that can't be refreshed stay as stored. Returns a new array in the same order.
+export async function withFreshAttachmentUrls(rest, texts, { guildName } = {}) {
+  const { attachmentUrls } = collectImageUrls(texts);
+  if (attachmentUrls.length === 0) return texts;
+  const refreshMap = await refreshAttachmentUrls(rest, attachmentUrls, { guildName });
+  log(`withFreshAttachmentUrls: ${refreshMap.size} of ${attachmentUrls.length} attachment link(s) refreshed`, { show: false, guildName });
+  return texts.map(t => t ? t.replace(ATTACHMENT_URL_REGEX, u => refreshMap.get(u) ?? u) : t);
+}
+
 // Fetch a URL and return { buffer, contentType } for image responses, or null.
 // If the response advertises a Content-Length above maxBytes the body is not downloaded.
 async function fetchImage(url, maxBytes, fetchFn, { guildName } = {}) {
