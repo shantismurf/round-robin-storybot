@@ -363,10 +363,12 @@ async function handleEditButton(connection, interaction) {
     await connection.execute(`UPDATE story_entry SET entry_status = ? WHERE story_entry_id = ?`, [ENTRY_STATUS.DELETED, state.entryId]);
     state.entryStatus = ENTRY_STATUS.DELETED;
     log(`Entry deleted via Manage Entries: ${state.entryId} by ${interaction.user.username}`, { show: true, guildName: interaction?.guild?.name });
-    const editMsg = buildEditMessageForState(state);
-    await state.originalInteraction.editReply({
-      ...editMsg,
-      content: replaceTemplateVariables(state.editCfg?.txtManageEntryDeleteSuccess ?? '', { entry_id: String(state.entryId) })
+    // Confirmation goes in its own message below the panel — as panel content it rendered
+    // above the embed, out of sight.
+    await state.originalInteraction.editReply({ ...buildEditMessageForState(state), content: '' });
+    await interaction.followUp({
+      content: replaceTemplateVariables(state.editCfg?.txtManageEntryDeleteSuccess ?? '', { entry_id: String(state.entryId) }),
+      flags: MessageFlags.Ephemeral
     });
 
   } else if (customId === 'story_edit_manage_restore') {
@@ -379,10 +381,12 @@ async function handleEditButton(connection, interaction) {
     await connection.execute(`UPDATE story_entry SET entry_status = ? WHERE story_entry_id = ?`, [ENTRY_STATUS.CONFIRMED, state.entryId]);
     state.entryStatus = ENTRY_STATUS.CONFIRMED;
     log(`Entry restored via Manage Entries: ${state.entryId} by ${interaction.user.username}`, { show: true, guildName: interaction?.guild?.name });
-    const editMsg = buildEditMessageForState(state);
-    await state.originalInteraction.editReply({
-      ...editMsg,
-      content: replaceTemplateVariables(state.editCfg?.txtManageEntryRestoreSuccess ?? '', { writer_name: state.authorName ?? '' })
+    // Confirmation goes in its own message below the panel — as panel content it rendered
+    // above the embed, out of sight.
+    await state.originalInteraction.editReply({ ...buildEditMessageForState(state), content: '' });
+    await interaction.followUp({
+      content: replaceTemplateVariables(state.editCfg?.txtManageEntryRestoreSuccess ?? '', { writer_name: state.authorName ?? '' }),
+      flags: MessageFlags.Ephemeral
     });
 
   } else if (customId === 'story_edit_backlist') {
