@@ -21,7 +21,9 @@ if the bot starts misbehaving under load.
 - The bot is a Coolify application built with **Nixpacks** from this repo's `main` branch. The
   repo has no Dockerfile. Nixpacks detects Node and runs `npm install`, then the `start` script
   in `package.json` (`node index.js`).
-- **Deploys are manual right now.** Push to `main`, then deploy from the Coolify dashboard.
+- **Deploys are manual right now.** Push to `main`, then hit **Redeploy** in the Coolify
+  dashboard, which pulls the new commit and rebuilds. A plain Restart reuses the image Coolify
+  already built, so it won't pick up new code.
   Coolify can auto-deploy on every push to `main` (through its GitHub integration or a
   webhook). That's wanted but not switched on yet.
 - On startup, `index.js` waits for the DB to answer (`waitForDatabase()`), then runs
@@ -67,10 +69,11 @@ change in that move except that the bot now connects from the same machine.
   automatically and no per-table `ENCRYPTED=YES` is needed anywhere in schema/migrations.
 - **Connection**: the bot connects to `10.0.1.1` from its container. The `storybot` app user
   is not root. Its credentials live in `config.json` (see above).
-- **Network access**: *to confirm.* Before the move, `ufw` allowed inbound 3306 only from
-  bot-hosting.net's outbound IP (`65.21.16.214`), and the MySQL grant was
-  `storybot`@`65.21.16.214`. Both had to change for a local connection. Record the current
-  `ufw` rule and grant host here, and whether 3306 is still open to the internet at all.
+- **Network access**: the bot now connects locally, from its container to `10.0.1.1`. The old
+  `ufw` rule allowing inbound 3306 from bot-hosting.net's outbound IP (`65.21.16.214`) is
+  **still open on purpose** as of 2026-10-12, so the stopped bot-hosting.net slot could be
+  restarted as a rollback. Close that rule, and drop the matching `storybot`@`65.21.16.214`
+  grant if it's still there, when the old slot is deleted.
 - **Backups**: **none yet.** They're planned but not set up. A corrupted disk or a lost key
   file means real, unrecoverable data loss today. Any backup plan has to cover the key file as
   well as the dumps, and keep them in separate places.
