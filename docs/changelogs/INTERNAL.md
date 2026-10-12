@@ -24,9 +24,12 @@ the thing you will search for later is the old name.
 
 ---
 
-## Unreleased
+## 3.8.5 — 2026-10-12
 
-No bump (LeeAnn, 2026-10-08).
+Provenance: written alongside the work.
+
+PATCH. Two small fixes to what lands in the story thread, plus the media-label fix that was
+sitting in Unreleased. LeeAnn approved 3.8.5 on 2026-10-12.
 
 ### Fixed
 - **Media channel image posts now show the server's story and turn numbers.** The label on
@@ -36,6 +39,20 @@ No bump (LeeAnn, 2026-10-08).
   a confirmed entry, as in `/story edit`, plus one for the entry being finalized). The config
   string's token changed from `[turn_id]` to `[turn_number]`. Posts already in media channels
   keep their old numbers.
+- **The next turn's announcement no longer lands between the pages of a long entry.**
+  `doFinalizeEntry` started the next turn before posting the finished entry, and `NextTurn`
+  posted its turn-start line (`txtStoryThreadTurnStart`) without waiting, after refreshing the
+  status post. The entry's pages were sent one by one meanwhile, so on any entry longer than
+  one page the turn-start line usually landed right after page 1. `NextTurn` now takes a
+  `deferAnnouncement` option and hands back an `announce(connection)` function instead of
+  posting, and `doFinalizeEntry` runs it after the last page. Every other `NextTurn` caller
+  posts no entry and is unchanged. Quick mode confirm has the same shape but is left alone
+  because its entries never exceed one page. Side effect: the deferred announcement now runs
+  on the pool connection instead of the finalize transaction's connection, which had already
+  been released by the time the unwaited announcement used it.
+- **Story creators are now added to their story thread.** `handleJoinConfirm` added joiners
+  to the thread, but `CreateStory` built the thread and never added the creator, who is the
+  story's first writer. `CreateStory` now adds them after the story is committed.
 
 ---
 
