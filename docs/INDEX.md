@@ -36,6 +36,7 @@ Every file has a `Status` / `Created` / `Last Updated` (/ `Implemented`) header.
 | [PLAN-manage-entries-consolidation.md](plans/PLAN-manage-entries-consolidation.md) | Implemented | Manage Entries rebuilt to reuse the Edit engine (fixes truncation, Back-button, delete/restore); adds an author entry picker to `/story edit` |
 | [PLAN-story-list-overhaul.md](plans/PLAN-story-list-overhaul.md) | Pending | `/story list` layout/filter overhaul |
 | [PLAN-story-privacy.md](plans/PLAN-story-privacy.md) | Shelved 2026-09-22 | Writer-only (private) stories, create-only toggle |
+| [PLAN-staging-and-agent-on-vm.md](plans/PLAN-staging-and-agent-on-vm.md) | Planned 2026-10-12 | Staging bot and Claude Code on the Hetzner VM, walled off from production |
 | [PLAN-hub-sharing.md](plans/PLAN-hub-sharing.md) | Deferred 2026-09-22 — partially implemented | Hub server story mirroring, consent, broadcast system |
 | [hub-brainstorming.md](plans/hub-brainstorming.md) | — (companion notes) | Open questions/decisions feeding into PLAN-hub-sharing.md |
 | [PLAN-panel-rework-and-ground-rules.md](plans/PLAN-panel-rework-and-ground-rules.md) | Partially Implemented (Parts 1/1b/1c/3 shipped 2026-08-21/22, v3.5.0; Ground Rules/Part 2 still pending) | Add/Manage panel Settings/Metadata split, Move Manage Users onto the panel, Ground Rules feature, Warnings checkbox conversion |

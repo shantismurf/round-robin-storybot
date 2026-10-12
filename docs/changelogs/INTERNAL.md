@@ -35,6 +35,11 @@ the thing you will search for later is the old name.
   `CLAUDE.md`, the PR template's post-merge checklist, and `docs/INDEX.md`. The
   bot-hosting.net slot is stopped, not deleted.
 
+### Added
+- **Plan: staging bot and Claude Code on the VM** (`docs/plans/PLAN-staging-and-agent-on-vm.md`).
+  Setup steps for a walled-off agent user, staging DB and staging bot, plus the seed/reset
+  script as the next build. Docs only.
+
 ## 3.9.0 — 2026-10-12
 
 Provenance: written alongside the work.
