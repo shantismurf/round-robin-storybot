@@ -24,6 +24,23 @@ the thing you will search for later is the old name.
 
 ---
 
+## Unreleased
+
+Provenance: written alongside the work.
+
+No bump: deployment tooling only, no change to the bot's code or behavior.
+
+### Added
+- **`Dockerfile` and `.dockerignore` for the Coolify host.** The bot moved from bot-hosting.net
+  to Coolify on the Hetzner server on 2026-10-12. Coolify's default Nixpacks build reinstalled
+  every npm package on each deploy (about 100 seconds), because copying the changed code
+  invalidated its install cache. The Dockerfile installs packages in their own layer before
+  copying the code, so a code-only deploy reuses the cached install. It takes effect once the
+  Coolify app's Build Pack is set to Dockerfile. `config.json` stays out of the image and is
+  still supplied by Coolify as a File Mount at `/app/config.json`.
+
+---
+
 ## 3.9.1 — 2026-10-13
 
 Provenance: written alongside the work.
