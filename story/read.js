@@ -4,7 +4,7 @@ import { generateStoryExport } from './export.js';
 import { isRestricted, ratingBadgeKey } from './_metadata.js';
 import { pendingReadData, lastReadPage, pendingEditData } from './_state.js';
 import { buildEditMessage } from './edit.js';
-import { buildEntryEmbed, buildEntryPages } from './_entryRenderer.js';
+import { buildEntryEmbed, buildEntryPages, stepImagePage } from './_entryRenderer.js';
 import { withFreshAttachmentUrls } from './_exportImages.js';
 import { WRITER_STATUS, ENTRY_STATUS } from '../constants.js';
 
@@ -447,12 +447,9 @@ export async function handleReadNav(connection, interaction) {
     return;
   }
 
-  if (interaction.customId === 'story_read_img_prev') {
-    session.imagePageIndex = Math.max(0, (session.imagePageIndex ?? 0) - 1);
-  } else if (interaction.customId === 'story_read_img_next') {
-    const imgPage = session.pages[session.currentPage];
-    const totalImagePages = Math.ceil((imgPage.imageUrls?.length ?? 0) / 4);
-    session.imagePageIndex = Math.min(totalImagePages - 1, (session.imagePageIndex ?? 0) + 1);
+  if (interaction.customId === 'story_read_img_prev' || interaction.customId === 'story_read_img_next') {
+    const direction = interaction.customId === 'story_read_img_next' ? 1 : -1;
+    session.imagePageIndex = stepImagePage(session.imagePageIndex, session.pages[session.currentPage].imageUrls, direction);
   } else {
     // Story page navigation — reset image page to 0 whenever the turn changes
     if (interaction.customId === 'story_read_prev') {

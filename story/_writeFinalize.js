@@ -2,24 +2,48 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlag
 import { getConfigValue, log, replaceTemplateVariables, checkIsAdmin, logGuildEvent } from '../utilities.js';
 import { PickNextWriter, NextTurn, deleteThreadAndAnnouncement, endTurnGuarded } from './_turn.js';
 import { getActiveThreadId } from '../storybot.js';
-import { buildEntryPages, buildEntryEmbed, postThreadEntry } from './_entryRenderer.js';
+import { buildEntryPages, buildEntryEmbed, postThreadEntry, stepImagePage } from './_entryRenderer.js';
 import { resolveMentionsToPlainText } from './_entryMarkup.js';
 import { pendingPreviewData } from './_state.js';
 import { TURN_STATUS, ENTRY_STATUS } from '../constants.js';
 
-export function collectMessageParts(userMessages, resolveAttachment) {
+// Build entry content from the writer's turn-thread posts, in posting order. Shared by the
+// finalize preview and the confirm write so the preview always shows what will be saved.
+// What legitimately differs between the two is passed in:
+//   textFor(msg)    -> the post's mention-resolved text, or null
+//   linkImage(att)  -> the URL to link an image to, or null to leave that image out
+// The preview links the writer's own upload (still freshly signed); confirm forwards each image
+// to the media channel and links that copy, so forwarding still happens exactly once.
+export async function assembleEntryContent(userMessages, textFor, linkImage) {
   const parts = [];
+  let imageCount = 0;
   for (const msg of userMessages.values()) {
-    const msgParts = [];
-    if (msg.content) msgParts.push(msg.content);
-    for (const attachment of msg.attachments.values()) {
-      if (attachment.contentType?.startsWith('image/')) {
-        msgParts.push(resolveAttachment(attachment));
+    const msgText = await textFor(msg);
+    const imageAtts = [...msg.attachments.values()].filter(a => a.contentType?.startsWith('image/'));
+    if (imageAtts.length === 0) {
+      if (msgText) parts.push(msgText);
+      continue;
+    }
+    const links = [];
+    for (const att of imageAtts) {
+      const url = await linkImage(att);
+      if (url) {
+        links.push(`[${msgText || att.name}](${url})`);
+        imageCount++;
       }
     }
-    if (msgParts.length > 0) parts.push(msgParts.join('\n'));
+    if (links.length > 0) parts.push(links.join('\n'));
   }
-  return parts;
+  return { content: parts.join('\n\n'), imageCount };
+}
+
+// The guild's configured media channel, or null when none is set or it can't be fetched.
+// Images are only kept in an entry when there is a media channel to forward them to.
+async function getMediaChannel(connection, guild) {
+  const mediaChannelId = await getConfigValue(connection, 'cfgMediaChannelId', guild.id);
+  return (mediaChannelId && mediaChannelId !== 'cfgMediaChannelId')
+    ? await guild.channels.fetch(mediaChannelId).catch(() => null)
+    : null;
 }
 
 export function buildPreviewEmbed(userId, pageIndex, confirmRow) {
@@ -109,22 +133,18 @@ export async function handleFinalizeEntry(connection, interaction) {
       }
     }
 
-    const previewParts = [];
-    let previewImageCount = 0;
-    for (const msg of userMessages.values()) {
-      const msgText = resolvedMessages.get(msg.id);
-      const imageAtts = [...msg.attachments.values()].filter(a => a.contentType?.startsWith('image/'));
-      if (imageAtts.length === 0) {
-        if (msgText) previewParts.push(msgText);
-      } else {
-        previewImageCount += imageAtts.length;
-        for (const att of imageAtts) {
-          previewParts.push(`📎 ${msgText || att.name}`);
-        }
-      }
-    }
-    log(`handleFinalizeEntry: preview built — ${previewParts.length} parts, ${previewImageCount} image(s)`, { show: false, guildName: interaction?.guild?.name });
-    const previewContent = previewParts.join('\n\n')
+    // Same assembly as confirm, linking each image to the writer's own upload so the preview
+    // shows real pictures without forwarding anything yet. Images are left out when there is no
+    // media channel, matching what confirm will save.
+    const previewMediaChannel = await getMediaChannel(connection, interaction.guild);
+    const { content: assembled, imageCount: previewImageCount } = await assembleEntryContent(
+      userMessages,
+      msg => resolvedMessages.get(msg.id) ?? null,
+      att => previewMediaChannel ? att.url : null,
+    );
+    log(`handleFinalizeEntry: preview built — ${assembled.length} chars, ${previewImageCount} image(s)`, { show: false, guildName: interaction?.guild?.name });
+    // Preview-only display tweak: the stored entry keeps the writer's markdown as written.
+    const previewContent = assembled
       .replace(/^#{1,3} (.+)$/gm, '**$1**')
       .replace(/^-# (.+)$/gm, '*$1*');
 
@@ -178,20 +198,21 @@ export async function handlePreviewNav(connection, interaction) {
   }
 
   const id = interaction.customId;
-  if (id === 'story_preview_prev') {
-    session.currentPage = Math.max(0, session.currentPage - 1);
-  } else if (id === 'story_preview_next') {
-    session.currentPage = Math.min(session.pages.length - 1, session.currentPage + 1);
-  } else if (id === 'story_preview_back10') {
-    session.currentPage = Math.max(0, session.currentPage - 10);
-  } else if (id === 'story_preview_fwd10') {
-    session.currentPage = Math.min(session.pages.length - 1, session.currentPage + 10);
-  } else if (id === 'story_preview_img_prev') {
-    session.imagePageIndex = Math.max(0, (session.imagePageIndex ?? 0) - 1);
-  } else if (id === 'story_preview_img_next') {
-    const page = session.pages[session.currentPage];
-    const total = Math.ceil((page.imageUrls?.length ?? 0) / 4);
-    session.imagePageIndex = Math.min(total - 1, (session.imagePageIndex ?? 0) + 1);
+  if (id === 'story_preview_img_prev' || id === 'story_preview_img_next') {
+    const direction = id === 'story_preview_img_next' ? 1 : -1;
+    session.imagePageIndex = stepImagePage(session.imagePageIndex, session.pages[session.currentPage].imageUrls, direction);
+  } else {
+    // Text page navigation — the new page has its own images, so start its gallery at the first
+    if (id === 'story_preview_prev') {
+      session.currentPage = Math.max(0, session.currentPage - 1);
+    } else if (id === 'story_preview_next') {
+      session.currentPage = Math.min(session.pages.length - 1, session.currentPage + 1);
+    } else if (id === 'story_preview_back10') {
+      session.currentPage = Math.max(0, session.currentPage - 10);
+    } else if (id === 'story_preview_fwd10') {
+      session.currentPage = Math.min(session.pages.length - 1, session.currentPage + 10);
+    }
+    session.imagePageIndex = 0;
   }
 
   const [btnFinalizeConfirm, btnCancel] = await Promise.all([
@@ -252,28 +273,24 @@ export async function doFinalizeEntry(connection, interaction, storyId, writerId
     const txtProcessing = await getConfigValue(connection, 'txtEntrySubmittedProcessing', interaction.guild.id).catch(() => null);
     if (txtProcessing) await thread.send(txtProcessing).catch(() => {});
 
-    const [mediaChannelId, mediaPostLabelTemplate] = await Promise.all([
-      getConfigValue(connection, 'cfgMediaChannelId', interaction.guild.id),
+    const [mediaChannel, mediaPostLabelTemplate] = await Promise.all([
+      getMediaChannel(connection, interaction.guild),
       getConfigValue(connection, 'txtMediaPostLabel', interaction.guild.id),
     ]);
-    const mediaChannel = (mediaChannelId && mediaChannelId !== 'cfgMediaChannelId')
-      ? await interaction.guild.channels.fetch(mediaChannelId).catch(() => null)
-      : null;
     log(`doFinalizeEntry: media channel ${mediaChannel ? mediaChannel.id : 'not configured'}`, { show: false, guildName: interaction?.guild?.name });
 
-    // This function still re-fetches and re-loops the raw thread messages independently of
-    // handleFinalizeEntry's preview build above — that duplication is real and pre-dates this
-    // change, driven by two things that are genuinely different per build, not incidental:
-    // (1) the preview strips markdown (# headers -> bold, -# subtext -> italic) for its own
-    // display, which the stored entry must NOT have; (2) this build actually uploads each image
-    // to the media channel and swaps in a real link, where the preview only shows a "📎 filename"
-    // placeholder — image forwarding has to happen exactly once, on confirm, not during preview
-    // paging. Mention resolution doesn't have either reason to be redone, though, so unlike
-    // markdown-stripping and image-forwarding, it's resolved once in the preview and reused here
-    // — see docs/plans/PLAN-mention-display-text.md. Falls back to resolving fresh only if the
-    // preview session is somehow gone by the time Confirm is clicked (shouldn't happen on any
-    // real path: both callers of doFinalizeEntry fetch this same session first), so a missing
-    // session never blocks the write, just loses the "resolve once" guarantee for that one entry.
+    // This function re-fetches the raw thread messages rather than reusing the preview's, but
+    // builds the entry with the same assembleEntryContent the preview uses. The two calls differ
+    // only where they must: (1) the preview strips markdown (# headers -> bold, -# subtext ->
+    // italic) for its own display, after assembly, which the stored entry must NOT have; (2) this
+    // call forwards each image to the media channel and links that copy, where the preview links
+    // the writer's own upload — image forwarding has to happen exactly once, on confirm, not
+    // during preview paging. Mention resolution has neither reason to be redone, so it's resolved
+    // once in the preview and reused here — see docs/plans/PLAN-mention-display-text.md. Falls
+    // back to resolving fresh only if the preview session is somehow gone by the time Confirm is
+    // clicked (shouldn't happen on any real path: both callers of doFinalizeEntry fetch this same
+    // session first), so a missing session never blocks the write, just loses the "resolve once"
+    // guarantee for that one entry.
     const session = pendingPreviewData.get(interaction.user.id);
     const placeholderCfg = session
       ? null
@@ -284,36 +301,27 @@ export async function doFinalizeEntry(connection, interaction, storyId, writerId
       log(`doFinalizeEntry: no preview session found for user ${interaction.user.id} — resolving mentions fresh instead of reusing the preview's resolution`, { show: true, guildName: interaction?.guild?.name });
     }
 
-    const entryParts = [];
-    let imagesForwarded = 0;
-    for (const msg of userMessages.values()) {
-      const msgText = session
-        ? session.resolvedMessages.get(msg.id)
-        : (msg.content?.trim() ? await resolveMentionsToPlainText(msg.content.trim(), interaction.guild, placeholderCfg) : null);
-      const imageAtts = [...msg.attachments.values()].filter(a => a.contentType?.startsWith('image/'));
-      if (imageAtts.length === 0) {
-        if (msgText) entryParts.push(msgText);
-      } else if (mediaChannel) {
-        const imgLinks = [];
-        for (const att of imageAtts) {
-          log(`doFinalizeEntry: forwarding image "${att.name}" to media channel`, { show: true, guildName: interaction?.guild?.name });
-          try {
-            const forwarded = await mediaChannel.send({
-              content: replaceTemplateVariables(mediaPostLabelTemplate, { story_id: turn.guild_story_id, turn_number: turn.turn_number }),
-              files: [att.url]
-            });
-            imgLinks.push(`[${msgText || att.name}](${forwarded.attachments.first().url})`);
-            imagesForwarded++;
-            log(`doFinalizeEntry: image "${att.name}" forwarded successfully`, { show: false, guildName: interaction?.guild?.name });
-          } catch (err) {
-            log(`doFinalizeEntry: failed to forward image "${att.name}" to media channel: ${err}`, { show: true, guildName: interaction?.guild?.name });
-          }
+    const { content: entryContent, imageCount: imagesForwarded } = await assembleEntryContent(
+      userMessages,
+      async msg => session
+        ? session.resolvedMessages.get(msg.id) ?? null
+        : (msg.content?.trim() ? await resolveMentionsToPlainText(msg.content.trim(), interaction.guild, placeholderCfg) : null),
+      async att => {
+        if (!mediaChannel) return null;
+        log(`doFinalizeEntry: forwarding image "${att.name}" to media channel`, { show: true, guildName: interaction?.guild?.name });
+        try {
+          const forwarded = await mediaChannel.send({
+            content: replaceTemplateVariables(mediaPostLabelTemplate, { story_id: turn.guild_story_id, turn_number: turn.turn_number }),
+            files: [att.url]
+          });
+          log(`doFinalizeEntry: image "${att.name}" forwarded successfully`, { show: false, guildName: interaction?.guild?.name });
+          return forwarded.attachments.first().url;
+        } catch (err) {
+          log(`doFinalizeEntry: failed to forward image "${att.name}" to media channel: ${err}`, { show: true, guildName: interaction?.guild?.name });
+          return null;
         }
-        if (imgLinks.length > 0) entryParts.push(imgLinks.join('\n'));
-      }
-    }
-
-    const entryContent = entryParts.join('\n\n');
+      },
+    );
     log(`doFinalizeEntry: entry built — ${entryContent.length} chars, ${imagesForwarded} image(s) forwarded`, { show: false, guildName: interaction?.guild?.name });
 
     const [storyInfo] = await connection.execute(
