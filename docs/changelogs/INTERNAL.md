@@ -24,6 +24,43 @@ the thing you will search for later is the old name.
 
 ---
 
+## 3.9.1 — 2026-10-13
+
+Provenance: written alongside the work.
+
+PATCH. The finalize preview now shows an entry's images, from the same assembly code that
+builds the saved entry. LeeAnn approved 3.9.1 on 2026-10-13.
+
+### Fixed
+- **The finalize preview shows real images, on the page they belong to.** The preview had
+  never shown images: it built its own copy of the entry text and put a "📎 caption" line
+  wherever an image went, so the shared gallery code had no image links to show. 3.9.0's
+  per-page images made the gap obvious.
+- **The preview's image gallery restarts on each text page.** Turning the preview's text page
+  kept the old image-page position, unlike `/story read`.
+
+### Changed
+- **Preview and confirm build the entry with one function, `assembleEntryContent`.** The two
+  separate loops over the writer's posts are now one. Each call passes how to link an image:
+  the preview links the writer's own upload in the turn thread (still freshly signed), and
+  confirm forwards to the media channel and links that copy, so forwarding still happens exactly
+  once, on confirm. Preview-only markdown stripping still runs after assembly, and mentions
+  still resolve once in the preview and get reused on confirm (see
+  `docs/plans/completed/PLAN-mention-display-text.md`). The reasoning comment in
+  `doFinalizeEntry` is updated to match. A side effect: with no media channel set, the preview
+  now leaves image posts out, matching what confirm saves, instead of showing "📎" lines for
+  images that would never be saved.
+- **Images ◀ ▶ handling shared via `stepImagePage`** in `_entryRenderer.js`. Read and preview
+  each had their own copy, with the 4-per-page size hardcoded.
+- **The media-channel lookup is one helper, `getMediaChannel`,** used by both preview and
+  confirm.
+
+### Removed
+- **`collectMessageParts`** (`_writeFinalize.js`, re-exported from `write.js`). Nothing called
+  it, and `assembleEntryContent` is now the one place that turns posts into entry text.
+
+---
+
 ## 3.9.0 — 2026-10-12
 
 Provenance: written alongside the work.
