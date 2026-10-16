@@ -100,9 +100,12 @@ async function processJob(connection, client, job) {
   if (claimed.affectedRows === 0) return;
 
   const attemptNumber = job.attempts + 1;
-  const payload = JSON.parse(job.payload);
-
+  // mysql2 3.23+ parses MariaDB JSON columns itself and returns an object, older
+  // versions return the raw string. Parse inside the try so a bad payload goes
+  // through the normal retry path instead of leaving the job stuck in progress.
+  let payload = {};
   try {
+    payload = typeof job.payload === 'string' ? JSON.parse(job.payload) : (job.payload ?? {});
     switch (job.job_type) {
       case 'checkStoryDelay':
         await handleCheckStoryDelay(connection, client, payload);
