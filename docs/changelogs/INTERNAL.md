@@ -28,6 +28,19 @@ the thing you will search for later is the old name.
 
 Provenance: written alongside the work.
 
+### Fixed
+- **Every background job failed on the new host with `"[object Object]" is not valid JSON`.**
+  The `job.payload` column is `JSON`, which MariaDB stores as LONGTEXT, so mysql2 always returned
+  it as a string and `processJob` ran `JSON.parse` on it. mysql2 3.23.0 (July 2026) started
+  reading MariaDB's extended column metadata and parsing JSON columns itself, so the payload now
+  arrives as an object. With no lockfile and `^3.15.3` in `package.json`, the Coolify build's
+  fresh install pulled 3.24.x. The parse also ran after the job was claimed and outside the
+  try/catch, so each failure skipped the retry logic, surfaced as a "poll error", and left the
+  job stuck in progress until the next restart re-queued it (job 1735, departedWriterAudit, was
+  the visible case). `processJob` now accepts either a string or an object, and parses inside
+  the try so a bad payload goes through normal retries. Jobs stuck since the move are re-queued
+  on the next restart and run late. No bump: no intended behavior change.
+
 No bump: deployment tooling only, no change to the bot's code or behavior.
 
 ### Added
