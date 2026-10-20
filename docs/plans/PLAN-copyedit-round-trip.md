@@ -2,7 +2,7 @@
 
 Status: In progress — phase 1 built, phase 2 design open
 Created: 2026-09-22
-Last Updated: 2026-10-20
+Last Updated: 2026-10-20 (images decision)
 
 ## Problem
 
@@ -135,19 +135,53 @@ matching that same pattern into images. An externally hosted URL in entry conten
 not treated as an image anywhere: not in the export, not in the thread display. It
 renders as a plain link.
 
-Two ways out, not yet decided:
+**Decided 2026-10-20: widen the pattern. No images table.** Any https image URL
+counts as an image, and a writer adds or changes one by editing the
+`[caption](url)` text — including an image that was never in Discord at all, which
+is new capability rather than only a fix. The alternative considered and rejected
+was storing both URLs (Discord copy for in-server display, optional external URL
+preferred by the export) in a small images table; it keeps a safety net nobody had
+asked for at the cost of a migration and a second source of truth.
 
-1. **Widen the image pattern** to accept any https image URL, skipping the refresh
-   step that only Discord's signed links need. Small, and it makes a URL swapped
-   during a copyedit work everywhere. Cost: the media-channel copy is the reliable
-   one because the bot can re-sign it, so an image pointed at an external host has
-   its fate tied to that host.
-2. **Store both** — the Discord copy for in-server display, an optional external URL
-   the export prefers. Keeps the safety net and is what would eventually let the bot
-   emit AO3-ready HTML with working images. Needs a small images table and a migration.
+Accepted cost: the media-channel copy is the reliable one because the bot can
+re-sign it. An image pointed at an external host has its fate tied to that host.
 
-Open: whether the format is optimised for the VS Code path (real URLs in the body,
-editable) or the phone/Claude-doc path (tokens, safe from an agent rewriting them).
+### What widening actually touches
+
+The Discord CDN literal is hard-coded in **seven regexes across four files**:
+
+- `_exportImages.js:4` (`ATTACHMENT_URL_REGEX`, used to collect) and `:58`
+  (`withFreshAttachmentUrls`'s rewrite)
+- `export.js:109` (strips legacy `![](url)`) and `:120` (turns links into images in
+  the HTML)
+- `_entryRenderer.js:25`, `:28` and `:181` (`IMAGE_LINK_RE`, behind `splitAtImages`)
+- `_storyStatus.js:114` (status-embed image)
+
+These should collapse to **one shared exported pattern** rather than seven widened
+copies — the same drift that produced `story/read.js`'s stale config-key list and its
+duplicate modal.
+
+Three constraints that fall out:
+
+1. **Refresh stays Discord-only.** `refreshAttachmentUrls` posts to Discord's
+   `/attachments/refresh-urls`; foreign URLs cannot go in that call. The widened
+   collector has to partition — Discord URLs get refreshed, everything else is used
+   as-is.
+2. **The bot would fetch arbitrary user-supplied URLs.** `fetchImage`
+   (`_exportImages.js:63`) is already defensive: a request timeout, a
+   `content-type: image/*` check, and both the declared `content-length` and the
+   actual buffer measured against `cfgExportImageMaxBytes`. What is *not* covered is
+   the destination — today it is always Discord, and after widening any writer could
+   point the bot at an internal address, with the response coming back embedded in a
+   downloadable export. Worth requiring `https:` and rejecting loopback and
+   private-range hosts while the regex is being changed.
+3. **It changes existing entries retroactively.** A non-Discord image link in an
+   already-written entry renders as a plain link today and would start rendering as
+   an embedded image, in exports and in thread reposts. Probably wanted, but it is a
+   silent change to published work.
+
+With this decided, the round trip needs no image machinery of its own: real URLs stay
+in the body where they can be read and edited.
 
 ### Import flow
 
@@ -224,7 +258,8 @@ explicit turn references rather than numeric ranges.
 - Plain text with markdown, not `.docx`, and not HTML as the round-trip carrier.
 - The whole editing revamp ships as one MINOR bump, 3.10.0; steps toward it land
   under Unreleased rather than moving the number each time.
-- No image tokens. Real URLs stay in the body where they can be edited.
+- No image tokens, and no images table. Real URLs stay in the body where they can
+  be edited, and the image pattern widens to accept any https image URL.
 - Chapters get a real interface; import files do not change story-level values.
 - Turn reordering is not done by moving blocks in a file.
 
