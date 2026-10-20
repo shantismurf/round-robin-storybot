@@ -28,6 +28,47 @@ the thing you will search for later is the old name.
 
 Provenance: written alongside the work.
 
+Holding for 3.10.0: the editing revamp ships as one MINOR bump when the round trip lands, rather
+than moving the number on each step toward it. LeeAnn approved the hold and the 3.10.0 target on
+2026-10-20. Design: docs/plans/PLAN-copyedit-round-trip.md.
+
+### Added
+- **"Add Page" on the edit panel.** An entry's pages are a modal-size artifact, not stored
+  structure: `story_entry.content` is one column and `chunkEntryContent()` splits it at render
+  time to fit Discord's 4000-character text input. Growing an entry past its current page count
+  therefore meant saving and reopening to force a re-chunk, and the only hint to that effect
+  (`txtEditModalPageHint`'s predecessor) was a `TextInputBuilder` placeholder, which never renders
+  because the modal always pre-fills the field with `setValue()`. The workaround in practice was
+  padding an entry with junk text to force an extra page. `btnEditAddPage` appends an empty page
+  and opens it. It appends at the content length read inside the submit handler rather than the
+  offset captured when the button was pressed, so an edit landing in between cannot make it splice
+  at a stale position, and it supplies the paragraph break the page has no seam of its own to carry.
+  An added page submitted empty is discarded rather than rejected — on a new page, empty means
+  "never mind". Emptying a page that holds real text is still refused.
+- **`EDIT_PAGE_LIMIT`** (`utilities.js`) — the 3800-character page budget, now exported and used as
+  `chunkEntryContent`'s default. The two UI strings that quote the number read it from here, so the
+  text cannot claim a limit the splitter does not use.
+- **`EDIT_PANEL_CONFIG_KEYS`** (`story/edit.js`) — one exported list of every config key the edit
+  panel and modal read. `story/read.js` kept a hand-maintained copy, which went stale the moment a
+  key was added in `edit.js`: the modal would then render key names instead of text.
+
+### Changed
+- **The edit modal's per-page guidance is a `LabelBuilder` description, not a placeholder.** It sits
+  under the field label and is always visible, with 1024 characters of room against a placeholder's
+  100. This moves the one modal in this file from the deprecated `addComponents` path to
+  `addLabelComponents`.
+- **`story/read.js`'s Edit button shares `edit.js`'s modal builder.** It had assembled a third copy
+  of the same modal with its own hard-coded title, label and placeholder, and its placeholder
+  described the save-and-reopen workaround that Add Page replaces.
+- **Four user-facing strings moved out of code into config:** `lblEditEmbedTitle`,
+  `txtEditEmbedFooter`, `lblEditModalTitle` and `txtEditModalPageHint`. Wording is unchanged from
+  what shipped. The page suffix is a `{?...?}` optional block, stripped when an entry is one page,
+  rather than a suffix assembled inline.
+- **`?? 'fallback'` defaults dropped** from `lblEditEntryContent`, `lblPageJumpOption` and
+  `lblPageJumpPlaceholder`. Config rules forbid them, and they were masking a missing key —
+  `getConfigValue` already logs a `show: true` error and returns the key name on a miss, which also
+  reaches the hub log channel.
+
 ### Fixed
 - **Every background job failed on the new host with `"[object Object]" is not valid JSON`.**
   The `job.payload` column is `JSON`, which MariaDB stores as LONGTEXT, so mysql2 always returned

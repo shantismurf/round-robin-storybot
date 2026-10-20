@@ -44,6 +44,7 @@ For config string keys, see `config_roadmap.md`.
 | `story/_writerPanel.js` | `buildWriterPanel(state, cfg, mode)` — the one writer-settings panel behind `/mystory manage` (`'self'`) and `/storyadmin user` (`'admin'`). Only the labels, the customId prefix and the bottom action row differ between modes; the three staged settings, the Save button and the layout are built once | ~165 |
 | `story/_manageEntries.js` | Admin "Manage Entries" panel: thin picker (all entries, all writers, flat list) that hands off directly into the Story Edit session engine (`edit.js`) — no view/edit/delete logic of its own | — |
 | `story/_manageEntriesList.js` | Shared entry-picker engine used by both `_manageEntries.js` (admin, all writers + deleted) and `edit.js`'s no-turn `/story edit` picker (author, own entries only): `fetchStoryEntries`, `renderEntryListPage`, `buildEntryPickerMessage` | ~150 |
+| `story/edit.js` | Story Edit session engine: `handleEdit`, `openEditSession`, `handleEditButton`, `handleEditModalSubmit`. Exports the panel and modal builders `buildEditMessage`, `buildEditMessageForState`, `buildEntryModal`, plus `EDIT_PANEL_CONFIG_KEYS` — the single config-key list both this file and `story/read.js` fetch, since read's Edit button renders the same panel and the same modal. `buildEntryModal` carries its per-page guidance as a `LabelBuilder` description, not a `TextInputBuilder` placeholder: a placeholder never renders over a pre-filled value | ~760 |
 | `story/_tagSubmit.js` | Writer-facing tag proposal flow: submit, delete own pending proposal | — |
 | `story/_writeFinalize.js` | Normal/slow-mode entry finalize flow: preview, confirm, image handling, `doFinalizeEntry`. `assembleEntryContent` builds entry text from the writer's posts for both preview and confirm (each passes its own image linker) | — |
 | `story/_writeQuickMode.js` | Quick-mode write/confirm/discard flow, including the pending-entry recovery path | — |
@@ -77,7 +78,7 @@ Routed by `interaction.commandName` to the matching command in `client.commands`
 | `timeleft` | `handleTimeleft` | |
 | `help` | `handleHelp` | |
 | `ping` | `handlePing` | Creator/admin |
-| `edit` | `handleEdit` | `turn` optional — omit to pick from own entries (`_manageEntriesList.js`) |
+| `edit` | `handleEdit` | `turn` optional — omit to pick from own entries (`_manageEntriesList.js`). Panel offers `story_edit_add_page`, which appends an empty page and opens it |
 | `tag` | `handleTagCommand` | Active writers only; opens tag submit modal |
 
 ### Modal Submissions (`isModalSubmit`)
@@ -177,7 +178,8 @@ Unique constraint on `(job_type, guild_id, window_key)` — duplicate insert fai
 | `resolveStoryId(conn, guildId, guildStoryId)` | Resolves guild-local story number to internal PK |
 | `getTurnNumber(conn, storyId)` | Next confirmed turn number for display |
 | `getEntryEditInfo(conn, entryId, authorId, createdAt)` | Edit metadata with 1-hour grace suppression |
-| `chunkEntryContent(content, maxChunkSize)` | Splits long entries at paragraph boundaries |
+| `chunkEntryContent(content, maxChunkSize)` | Splits long entries at paragraph boundaries (defaults to `EDIT_PAGE_LIMIT`) |
+| `EDIT_PAGE_LIMIT` | `3800` — the edit modal's per-page budget. Exported so the UI strings that quote the number (`txtEditEmbedFooter`, `txtEditModalPageHint`) cannot drift from the value used to split |
 | `restoreChunkEdges(originalText, editedText)` | Re-attaches an edit page's original leading/trailing whitespace after the modal trims it, so seam paragraph breaks survive a save |
 | `replaceTemplateVariables(template, keyValueMap)` | `[key]` substitution in config string templates |
 | `sendUserMessage(conn, interaction, writerId, cfgKey)` | DM writer; falls back to channel mention |

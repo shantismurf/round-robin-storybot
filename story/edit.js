@@ -1,5 +1,5 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags, EmbedBuilder, StringSelectMenuBuilder } from 'discord.js';
-import { getConfigValue, log, sanitizeModalInput, resolveStoryId, chunkEntryContent, restoreChunkEdges, splitAtParagraphs, checkIsAdmin, checkIsCreator, replaceTemplateVariables } from '../utilities.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags, EmbedBuilder, StringSelectMenuBuilder, LabelBuilder } from 'discord.js';
+import { getConfigValue, log, sanitizeModalInput, resolveStoryId, chunkEntryContent, restoreChunkEdges, splitAtParagraphs, checkIsAdmin, checkIsCreator, replaceTemplateVariables, EDIT_PAGE_LIMIT } from '../utilities.js';
 import { postThreadEntry } from './_entryRenderer.js';
 import { resolveMentionsToPlainText } from './_entryMarkup.js';
 import { pendingReadData, pendingEditData } from './_state.js';
@@ -10,6 +10,23 @@ import { handleEditHistoryButton } from './_editHistory.js';
 import { ENTRY_STATUS } from '../constants.js';
 
 export { pendingEditData };
+
+// Every config key buildEditMessage() and buildEntryModal() read. Exported because story/read.js
+// opens the same panel and the same modal from its own Edit button and so needs the identical
+// set — it previously kept a hand-maintained copy of this list, which silently went stale the
+// moment a key was added here (the modal would then render key names instead of text).
+export const EDIT_PANEL_CONFIG_KEYS = [
+  'lblEditPageSplitNotice', 'txtEditPageSplitInstructions',
+  'btnEditPrev', 'btnEditNext', 'btnEditOpen', 'btnEditHistory', 'lblEditEntryContent',
+  'btnEditAddPage', 'txtEditModalPageHint',
+  'lblEditEmbedTitle', 'txtEditEmbedFooter', 'lblEditModalTitle',
+  'txtEditRestoreWarningMulti', 'txtEditRestoreWarningSingle',
+  'btnEditHistNewer', 'btnEditHistPrevPage', 'btnEditRestore',
+  'btnEditHistNextPage', 'btnEditHistOlder', 'btnEditBackToEntry',
+  'lblPageJumpPlaceholder', 'lblPageJumpOption',
+  'txtEditRestoreConfirmMulti',
+  'txtEditRestoreConfirmTitle', 'btnEditRestoreConfirm', 'btnEditRestoreCancel',
+];
 
 async function handleEdit(connection, interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -146,14 +163,8 @@ async function openEditSession(connection, interaction, guildId, storyId, turnNu
   });
 
   const editCfg = await getConfigValue(connection, [
-    'lblEditPageSplitNotice', 'txtEditPageSplitInstructions',
-    'btnEditPrev', 'btnEditNext', 'btnEditOpen', 'btnEditHistory', 'lblEditEntryContent',
-    'txtEditRestoreWarningMulti', 'txtEditRestoreWarningSingle',
-    'btnEditHistNewer', 'btnEditHistPrevPage', 'btnEditRestore',
-    'btnEditHistNextPage', 'btnEditHistOlder', 'btnEditBackToEntry', 'btnEditBackToList',
-    'lblPageJumpPlaceholder', 'lblPageJumpOption',
-    'txtEditRestoreConfirmMulti',
-    'txtEditRestoreConfirmTitle', 'btnEditRestoreConfirm', 'btnEditRestoreCancel',
+    ...EDIT_PANEL_CONFIG_KEYS,
+    'btnEditBackToList',
     'btnManageEntriesDelete', 'btnManageEntriesRestore',
     'txtManageEntryDeleteSuccess', 'txtManageEntryRestoreSuccess',
     'txtManageEntryAlreadyDeleted', 'txtManageEntryAlreadyConfirmed',
@@ -183,12 +194,26 @@ function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle,
   const { manageMode = false, entryStatus = null, hasPicker = false } = pickerOpts;
   const chunk = chunks[chunkPage];
   const isMultiPage = chunks.length > 1;
-  const pageLabel = isMultiPage ? ` · Page ${chunkPage + 1} of ${chunks.length}` : '';
+
+  // Page tokens are omitted on a single-page entry so the {?...?} block in lblEditEmbedTitle
+  // strips itself, rather than this building the " · Page x of y" suffix inline.
+  const pageTokens = isMultiPage
+    ? { page: String(chunkPage + 1), total: String(chunks.length) }
+    : {};
 
   const embed = new EmbedBuilder()
-    .setTitle(`#${guildStoryId} ${storyTitle} · Turn #${turnNumber}${pageLabel}`)
-    .setDescription(chunk.text)
-    .setFooter({ text: `${chunk.text.length} / 3800 on this page of ${chunks[chunks.length - 1].end} in the full entry.` })
+    .setTitle(replaceTemplateVariables(editCfg.lblEditEmbedTitle, {
+      story_num: String(guildStoryId), title: storyTitle, turn: String(turnNumber), ...pageTokens
+    }))
+    // A page added by btnEditAddPage is empty until it's saved, and setDescription() rejects an
+    // empty string (the validator requires length >= 1), so an em space stands in. CLAUDE.md
+    // permits the unicode space character as the one hard-coded exception.
+    .setDescription(chunk.text || ' ')
+    .setFooter({ text: replaceTemplateVariables(editCfg.txtEditEmbedFooter, {
+      chars: String(chunk.text.length),
+      limit: String(EDIT_PAGE_LIMIT),
+      total_chars: String(chunks[chunks.length - 1].end)
+    }) })
     .setColor(0xffd700);
 
   if (isMultiPage) {
@@ -205,8 +230,8 @@ function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle,
     let rangeStart = Math.max(0, chunkPage - Math.floor(maxOptions / 2));
     const rangeEnd = Math.min(chunks.length, rangeStart + maxOptions);
     rangeStart = Math.max(0, rangeEnd - maxOptions);
-    const optionTemplate = editCfg.lblPageJumpOption ?? 'Page [page]';
-    const placeholderTemplate = editCfg.lblPageJumpPlaceholder ?? 'Page [page] of [total]';
+    const optionTemplate = editCfg.lblPageJumpOption;
+    const placeholderTemplate = editCfg.lblPageJumpPlaceholder;
     const options = [];
     for (let i = rangeStart; i < rangeEnd; i++) {
       const label = replaceTemplateVariables(optionTemplate, { page: String(i + 1) }).slice(0, 100);
@@ -247,6 +272,19 @@ function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle,
       .setCustomId('story_edit_open_modal')
       .setLabel(editCfg.btnEditOpen)
       .setStyle(ButtonStyle.Primary)
+      .setDisabled(false)
+  );
+
+  // Appends an empty page at the end of the entry and opens it. Shown unconditionally rather
+  // than only when the last page is near full: the whole point is discoverability, and a
+  // conditional button is one more rule for a writer to work out. Note this row now carries up
+  // to 5 buttons (Prev/Next/Edit/Add Page/History), which is Discord's per-row maximum — adding
+  // another means splitting the row.
+  buttons.push(
+    new ButtonBuilder()
+      .setCustomId('story_edit_add_page')
+      .setLabel(editCfg.btnEditAddPage)
+      .setStyle(ButtonStyle.Secondary)
       .setDisabled(false)
   );
 
@@ -401,23 +439,23 @@ async function handleEditButton(connection, interaction) {
 
   } else if (customId === 'story_edit_open_modal') {
     // No defer — showModal must be the first response
-    // Use entryId in customId to prevent Discord from caching modal content across entries
-    const isMultiPage = state.chunks.length > 1;
-    const modalTitle = isMultiPage
-      ? `Edit Entry — Page ${state.chunkPage + 1} of ${state.chunks.length}`
-      : 'Edit Entry';
-    const modal = new ModalBuilder()
-      .setCustomId(`story_edit_modal_${state.entryId}_p${state.chunkPage}`)
-      .setTitle(modalTitle);
-    const input = new TextInputBuilder()
-      .setCustomId('entry_content')
-      .setLabel(state.editCfg?.lblEditEntryContent ?? 'Entry content')
-      .setStyle(TextInputStyle.Paragraph)
-      .setMaxLength(4000)
-      .setValue(state.chunks[state.chunkPage].text.slice(0, 4000))
-      .setPlaceholder(`${state.chunks[state.chunkPage].text.length} / 3800 on this page of ${state.chunks[state.chunks.length - 1].end} total. Save and reopen this page to add more.`);
-    modal.addComponents(new ActionRowBuilder().addComponents(input));
-    await interaction.showModal(modal);
+    await interaction.showModal(buildEntryModal(state));
+
+  } else if (customId === 'story_edit_add_page') {
+    // Appends an empty page at the end of the entry and opens it, so growing an entry no longer
+    // means saving and reopening to force a re-chunk. start === end === content length makes the
+    // splice in handleEditModalSubmit a pure append. isNew marks it so an empty submit can drop
+    // the page instead of erroring, and so the save knows to add the paragraph break.
+    //
+    // No defer — showModal must be the first response, which also means the embed behind the
+    // modal still shows the previous page. If the writer cancels, the empty page stays in state
+    // but contributes nothing to any later save (it spans no characters), and the next
+    // openEditSession re-chunks from content and drops it.
+    const contentLength = state.currentContent.length;
+    state.chunks.push({ text: '', start: contentLength, end: contentLength, isNew: true });
+    state.chunkPage = state.chunks.length - 1;
+    log(`story_edit_add_page: entry ${state.entryId} now has ${state.chunks.length} page(s) in session (user ${interaction.user.username})`, { show: false, guildName: interaction?.guild?.name });
+    await interaction.showModal(buildEntryModal(state));
 
   } else if (customId.startsWith('story_edit_next_entry_')) {
     const nextEntryId = parseInt(customId.split('_').at(-1));
@@ -437,6 +475,51 @@ async function handleEditButton(connection, interaction) {
   }
 }
 
+// The paragraph break needed in front of text appended to the end of an entry, so the appended
+// page starts a new paragraph without stacking blank lines on whatever the entry already ends with.
+function leadingBreakFor(content) {
+  if (!content) return '';
+  if (content.endsWith('\n\n')) return '';
+  if (content.endsWith('\n')) return '\n';
+  return '\n\n';
+}
+
+// The edit modal, shared by the Edit button and Add Page. The entryId and page are in the
+// customId so Discord can't cache modal content across entries or pages.
+//
+// The per-page guidance is a LabelBuilder description, not a TextInputBuilder placeholder: a
+// placeholder only renders over an empty field, and setValue() below always pre-fills one, so
+// the previous placeholder-based hint was never visible to anyone.
+export function buildEntryModal(state) {
+  const cfg = state.editCfg ?? {};
+  const isMultiPage = state.chunks.length > 1;
+  const pageTokens = isMultiPage
+    ? { page: String(state.chunkPage + 1), total: String(state.chunks.length) }
+    : {};
+  const chunk = state.chunks[state.chunkPage];
+
+  const input = new TextInputBuilder()
+    .setCustomId('entry_content')
+    .setStyle(TextInputStyle.Paragraph)
+    .setMaxLength(4000)
+    .setValue(chunk.text.slice(0, 4000));
+
+  return new ModalBuilder()
+    .setCustomId(`story_edit_modal_${state.entryId}_p${state.chunkPage}`)
+    .setTitle(replaceTemplateVariables(cfg.lblEditModalTitle, pageTokens))
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel(cfg.lblEditEntryContent)
+        .setDescription(replaceTemplateVariables(cfg.txtEditModalPageHint, {
+          page: String(state.chunkPage + 1),
+          total: String(state.chunks.length),
+          chars: String(chunk.text.length),
+          limit: String(EDIT_PAGE_LIMIT)
+        }))
+        .setTextInputComponent(input)
+    );
+}
+
 async function handleEditModalSubmit(connection, interaction) {
   const userId = interaction.user.id;
   const state = pendingEditData.get(userId);
@@ -452,6 +535,17 @@ async function handleEditModalSubmit(connection, interaction) {
     4000, true
   );
   if (!editedChunk) {
+    // A page added by Add Page that comes back empty means "never mind", not an error — drop the
+    // page and refresh the panel. Emptying a page that holds real text is still rejected, since
+    // that would silently delete part of the entry.
+    const pendingPage = state.chunks[state.chunkPage];
+    if (pendingPage?.isNew) {
+      state.chunks.splice(state.chunkPage, 1);
+      state.chunkPage = Math.max(0, state.chunks.length - 1);
+      log(`handleEditModalSubmit: discarded unsaved added page on entry ${state.entryId} (user ${interaction.user.username})`, { show: false, guildName: interaction?.guild?.name });
+      await interaction.deferUpdate();
+      return await interaction.editReply(buildEditMessageForState(state));
+    }
     return await interaction.reply({ content: await getConfigValue(connection, 'txtEditEntryEmpty', state.guildId), flags: MessageFlags.Ephemeral });
   }
 
@@ -486,10 +580,18 @@ async function handleEditModalSubmit(connection, interaction) {
       'txtExportPlaceholderUser', 'txtExportPlaceholderChannel', 'txtExportPlaceholderRole'
     ], state.guildId)
   );
-  // Put back the seam whitespace the modal trimmed, or the page's closing paragraph break is lost.
-  const savedChunk = restoreChunkEdges(chunk.text, resolvedChunk);
-  log(`handleEditModalSubmit: entry ${state.entryId} page ${state.chunkPage} saved ${savedChunk.length} chars (modal returned ${editedChunk.length}, after mentions ${resolvedChunk.length})`, { show: false, guildName: interaction?.guild?.name });
-  const newContent = currentContent.slice(0, chunk.start) + savedChunk + currentContent.slice(chunk.end);
+  // A page added by Add Page has no existing text and no seam of its own, so it carries the
+  // paragraph break that would normally separate it from the page before. It also appends at the
+  // freshly-read content length rather than the offset captured when the button was pressed, so
+  // an edit landing in between can't make it splice at a stale position.
+  const savedChunk = chunk.isNew
+    ? leadingBreakFor(currentContent) + resolvedChunk.trim()
+    // Put back the seam whitespace the modal trimmed, or the page's closing paragraph break is lost.
+    : restoreChunkEdges(chunk.text, resolvedChunk);
+  log(`handleEditModalSubmit: entry ${state.entryId} page ${state.chunkPage}${chunk.isNew ? ' (added)' : ''} saved ${savedChunk.length} chars (modal returned ${editedChunk.length}, after mentions ${resolvedChunk.length})`, { show: false, guildName: interaction?.guild?.name });
+  const newContent = chunk.isNew
+    ? currentContent + savedChunk
+    : currentContent.slice(0, chunk.start) + savedChunk + currentContent.slice(chunk.end);
 
   const editorName = interaction.member?.displayName ?? interaction.user.username;
 
@@ -537,18 +639,30 @@ async function handleEditModalSubmit(connection, interaction) {
   // as that shifts boundaries and causes orphaned content on subsequent edits).
   // Measure what was actually stored (seam whitespace restored, mentions resolved), not the raw
   // modal value, or the later pages' boundaries drift.
-  const delta = savedChunk.length - (chunk.end - chunk.start);
-  state.chunks[state.chunkPage] = {
-    text: savedChunk,
-    start: chunk.start,
-    end: chunk.start + savedChunk.length
-  };
-  for (let i = state.chunkPage + 1; i < state.chunks.length; i++) {
-    state.chunks[i] = {
-      ...state.chunks[i],
-      start: state.chunks[i].start + delta,
-      end: state.chunks[i].end + delta
+  //
+  // A page added by Add Page is rewritten from where the append actually landed, and loses its
+  // isNew flag: without that, editing the same page again before reopening would append a second
+  // copy instead of replacing it. It is always the last page, so nothing after it needs shifting.
+  if (chunk.isNew) {
+    state.chunks[state.chunkPage] = {
+      text: savedChunk,
+      start: currentContent.length,
+      end: currentContent.length + savedChunk.length
     };
+  } else {
+    const delta = savedChunk.length - (chunk.end - chunk.start);
+    state.chunks[state.chunkPage] = {
+      text: savedChunk,
+      start: chunk.start,
+      end: chunk.start + savedChunk.length
+    };
+    for (let i = state.chunkPage + 1; i < state.chunks.length; i++) {
+      state.chunks[i] = {
+        ...state.chunks[i],
+        start: state.chunks[i].start + delta,
+        end: state.chunks[i].end + delta
+      };
+    }
   }
   state.currentContent = newContent;
   state.hasHistory = true;

@@ -1,8 +1,8 @@
 # Copyedit Round Trip (Export → Edit → Import)
 
-Status: Draft — direction agreed, details open
+Status: In progress — phase 1 built, phase 2 design open
 Created: 2026-09-22
-Last Updated: 2026-09-22
+Last Updated: 2026-10-20
 
 ## Problem
 
@@ -77,10 +77,17 @@ left as one 40k-word story to be divided by hand later.
 
 ### Format: plain text with markdown (decided)
 
-The editing surface is Google Docs, largely on a phone. That rules out raw HTML
+**Updated 2026-10-20: the editing surface moved.** It is now VS Code on a laptop,
+or a Claude doc with an agent exporting back to HTML from a phone; Google Docs is
+out. Plain text still wins, and now for a better reason than tool constraints —
+it is the most faithful representation of what is actually stored in
+`story_entry.content`, which is what makes it right for a true copyedit. The
+original reasoning (raw HTML is unpleasant to hand-edit, and there was no good
+phone text editor) is kept below for the record.
+
+The editing surface was Google Docs, largely on a phone. That ruled out raw HTML
 (escape characters and tags) and markdown-in-a-text-editor (no good phone
-editor). Plain text opens cleanly in Docs on mobile and is the most faithful
-representation of what is actually stored in `story_entry.content`.
+editor).
 
 Inline markdown (`*italic*`, `||spoiler||`, `[[break]]`) appears literally. For
 tense/continuity work that is an advantage — what you see is what is stored —
@@ -91,6 +98,56 @@ Where a delimiter is needed (whole-story file only, see phase 2), it should
 follow the existing `[[...]]` bot-tag convention rather than inventing a new
 one. Verified safe: `applyEntryMarkup` only transforms `[[break]]` and
 `[[text|translation]]`, so an unrecognised `[[...]]` passes through untouched.
+
+### HTML as the round-trip carrier: rejected
+
+Asked 2026-10-20 whether the batch path could just take back the HTML the export
+already produces, discovering turns from its `turn`-classed wrappers. Structurally
+that holds — the export does wrap each turn that way. Rejected anyway:
+
+- Reversing the render needs a second parser. `[[break]]` is emitted as the story's
+  divider text, `[[text|translation]]` as a nested tooltip span, and `marked` runs
+  with `breaks: true` so single newlines become line-break tags. All reversible,
+  all places to silently corrupt prose.
+- The export's image URLs are not in the image tags. They are in the JSON block at
+  the foot of the file, which the file itself tells the reader not to paste into AO3.
+- Any editor that round-trips HTML through its own document model (Google Docs did
+  this; an agent re-exporting a Claude doc may too) rewrites the markup, and the two
+  things batch import depends on — turn boundaries and image links — are the two
+  least likely to survive.
+
+One format for both paths instead: the plain text above, with explicit visible
+delimiters. A `[[turn 12 · #4417]]` line is more discoverable than a div wrapper,
+not less, and a missing one can be named precisely rather than guessed at. The HTML
+export stays what it is: the one-way AO3 publication artifact.
+
+### Images: tokens rejected, and the real gap
+
+An earlier draft proposed replacing each image with an opaque token so Google Docs
+could not mangle the URL. **Dropped** — tokens were a defence against a tool no
+longer in use, and they would remove the editability that matters more.
+
+The real gap, raised 2026-10-20: there is no way to point an image at an external
+host, which is exactly what publishing to AO3 needs. The pipeline is keyed on the
+Discord CDN hostname — `ATTACHMENT_URL_REGEX` (`story/_exportImages.js:4`) matches
+only `cdn.discordapp.com/attachments/...`, and `export.js` only converts links
+matching that same pattern into images. An externally hosted URL in entry content is
+not treated as an image anywhere: not in the export, not in the thread display. It
+renders as a plain link.
+
+Two ways out, not yet decided:
+
+1. **Widen the image pattern** to accept any https image URL, skipping the refresh
+   step that only Discord's signed links need. Small, and it makes a URL swapped
+   during a copyedit work everywhere. Cost: the media-channel copy is the reliable
+   one because the bot can re-sign it, so an image pointed at an external host has
+   its fate tied to that host.
+2. **Store both** — the Discord copy for in-server display, an optional external URL
+   the export prefers. Keeps the safety net and is what would eventually let the bot
+   emit AO3-ready HTML with working images. Needs a small images table and a migration.
+
+Open: whether the format is optimised for the VS Code path (real URLs in the body,
+editable) or the phone/Claude-doc path (tokens, safe from an agent rewriting them).
 
 ### Import flow
 
@@ -139,10 +196,13 @@ explicit turn references rather than numeric ranges.
 
 ## Build order
 
-1. **Small** — an explicit "Add a page" button on the edit panel, plus
-   `LabelBuilder.setDescription()` (present in the installed builders) to make
-   the save-and-reopen behaviour visible, since it renders persistently where a
-   placeholder does not.
+1. ~~**Small** — an explicit "Add a page" button on the edit panel, plus
+   `LabelBuilder.setDescription()` to make the save-and-reopen behaviour visible.~~
+   **Built 2026-10-20**, held under Unreleased for the 3.10.0 bump. Also folded in:
+   the hard-coded strings in the files it touched moved to config, `story/read.js`'s
+   duplicate copy of the same modal consolidated onto the shared builder, and its
+   stale copy of the config-key list replaced with the exported
+   `EDIT_PANEL_CONFIG_KEYS`. See the Unreleased changelog entry.
 2. **Small/medium** — single-entry export + import on the edit interface. The
    real fix for cross-page editing. Main open question is how to present it:
    framing it as one round trip ("edit as file") likely reads more clearly than
@@ -161,7 +221,10 @@ explicit turn references rather than numeric ranges.
 
 ## Settled
 
-- Plain text with markdown, not `.docx`.
+- Plain text with markdown, not `.docx`, and not HTML as the round-trip carrier.
+- The whole editing revamp ships as one MINOR bump, 3.10.0; steps toward it land
+  under Unreleased rather than moving the number each time.
+- No image tokens. Real URLs stay in the body where they can be edited.
 - Chapters get a real interface; import files do not change story-level values.
 - Turn reordering is not done by moving blocks in a file.
 

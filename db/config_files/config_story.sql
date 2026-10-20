@@ -113,7 +113,19 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('btnEditNext', 'Next →', 'en', 1),
 ('btnEditOpen', 'Edit', 'en', 1),
 ('btnEditHistory', 'History', 'en', 1),
+('btnEditAddPage', '➕ Add Page', 'en', 1),
 ('lblEditEntryContent', 'Entry content', 'en', 1),
+-- Added: an entry's pages are a modal-size artifact, not stored structure, so growing an entry
+-- past its current page count used to mean saving and reopening to force a re-chunk. btnEditAddPage
+-- appends an empty page and opens it, and txtEditModalPageHint says so inside the modal. The hint
+-- is a LabelBuilder description rather than a placeholder because a placeholder never renders over
+-- a pre-filled value, which is why the old save-and-reopen hint was invisible.
+('txtEditModalPageHint', 'Page [page] of [total] · [chars] of [limit] characters used. Save, then use Add Page for more room.', 'en', 1),
+-- Moved into config from inline template literals in edit.js. Wording is unchanged from what
+-- shipped. The {?...?} block is stripped when page/total are absent from the map (single-page entry).
+('lblEditEmbedTitle', '#[story_num] [title] · Turn #[turn]{? · Page [page] of [total]?}', 'en', 1),
+('txtEditEmbedFooter', '[chars] / [limit] on this page of [total_chars] in the full entry.', 'en', 1),
+('lblEditModalTitle', 'Edit Entry{? — Page [page] of [total]?}', 'en', 1),
 ('txtEditRestoreWarningMulti', '*This version spans multiple pages. Restoring will replace your entire current entry and will alter the story''s turn count.*', 'en', 1),
 ('txtEditRestoreWarningSingle', '*Restoring will replace your entire current entry and will alter the story''s turn count.*', 'en', 1),
 ('btnEditHistNewer', '← Newer', 'en', 1),

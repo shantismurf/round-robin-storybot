@@ -1,9 +1,9 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, MessageFlags } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, MessageFlags } from 'discord.js';
 import { getConfigValue, log, resolveStoryId, chunkEntryContent, checkIsAdmin, checkIsCreator, discordTimestamp, replaceTemplateVariables } from '../utilities.js';
 import { generateStoryExport } from './export.js';
 import { isRestricted, ratingBadgeKey } from './_metadata.js';
 import { pendingReadData, lastReadPage, pendingEditData } from './_state.js';
-import { buildEditMessage } from './edit.js';
+import { buildEditMessage, buildEntryModal, EDIT_PANEL_CONFIG_KEYS } from './edit.js';
 import { buildEntryEmbed, buildEntryPages, stepImagePage } from './_entryRenderer.js';
 import { withFreshAttachmentUrls } from './_exportImages.js';
 import { WRITER_STATUS, ENTRY_STATUS } from '../constants.js';
@@ -364,40 +364,31 @@ export async function handleReadEditButton(connection, interaction, session, ent
     fromReadPath: !isMultiChunk,
   });
 
+  // Both branches render edit.js's own panel/modal, so they read the same key set it does —
+  // EDIT_PANEL_CONFIG_KEYS rather than a copy of the list that goes stale when a key is added there.
+  const editCfg = await getConfigValue(connection, EDIT_PANEL_CONFIG_KEYS, session.guildId);
+  const editState = pendingEditData.get(interaction.user.id);
+  if (editState) editState.editCfg = editCfg;
+
   if (isMultiChunk) {
     // Multi-chunk: show the paginated edit embed so all pages are reachable
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const editCfg = await getConfigValue(connection, [
-      'lblEditPageSplitNotice', 'txtEditPageSplitInstructions',
-      'btnEditPrev', 'btnEditNext', 'btnEditOpen', 'btnEditHistory', 'lblEditEntryContent',
-      'txtEditRestoreWarningMulti', 'txtEditRestoreWarningSingle',
-      'btnEditHistNewer', 'btnEditHistPrevPage', 'btnEditRestore',
-      'btnEditHistNextPage', 'btnEditHistOlder', 'btnEditBackToEntry',
-      'lblPageJumpPlaceholder', 'lblPageJumpOption',
-      'txtEditRestoreConfirmMulti',
-      'txtEditRestoreConfirmTitle', 'btnEditRestoreConfirm', 'btnEditRestoreCancel'
-    ], session.guildId);
-    const editState = pendingEditData.get(interaction.user.id);
-    if (editState) editState.editCfg = editCfg;
     await interaction.editReply(
       buildEditMessage(chunks, 0, page.hasHistory, page.turnNumber, storyTitle, session.guildStoryId, editCfg)
     );
   } else {
-    // Single chunk: open modal directly — no embed needed
-    // No defer — showModal must be the first response
-    // Use entryId in customId to prevent Discord from caching modal content across entries
-    const modal = new ModalBuilder()
-      .setCustomId(`story_edit_modal_${entryId}`)
-      .setTitle('Edit Entry');
-    const input = new TextInputBuilder()
-      .setCustomId('entry_content')
-      .setLabel('Entry content')
-      .setStyle(TextInputStyle.Paragraph)
-      .setMaxLength(4000)
-      .setValue(chunks[0].text.slice(0, 4000))
-      .setPlaceholder('Edit this section. If you hit the character limit, save and return to continue on the next page.');
-    modal.addComponents(new ActionRowBuilder().addComponents(input));
-    await interaction.showModal(modal);
+    // Single chunk: open modal directly — no embed needed.
+    // No defer — showModal must be the first response.
+    // Shares edit.js's buildEntryModal rather than assembling a second copy here: this one had
+    // its own hard-coded title, label and hint, and its hint described the save-and-reopen
+    // workaround that Add Page replaces.
+    if (!editState) {
+      return await interaction.reply({
+        content: await getConfigValue(connection, 'txtEditSessionExpired', session.guildId),
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    await interaction.showModal(buildEntryModal(editState));
   }
 }
 
