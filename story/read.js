@@ -4,6 +4,7 @@ import { generateStoryExport } from './export.js';
 import { isRestricted, ratingBadgeKey } from './_metadata.js';
 import { pendingReadData, lastReadPage, pendingEditData } from './_state.js';
 import { buildEditMessage, buildEntryModal, EDIT_PANEL_CONFIG_KEYS } from './edit.js';
+import { handleEntriesTextExportButton } from './_exportText.js';
 import { buildEntryEmbed, buildEntryPages, stepImagePage } from './_entryRenderer.js';
 import { withFreshAttachmentUrls } from './_exportImages.js';
 import { WRITER_STATUS, ENTRY_STATUS } from '../constants.js';
@@ -70,8 +71,8 @@ export function buildReadEmbed(session, pageIndex) {
     let rangeStart = Math.max(0, pageIndex - Math.floor(maxOptions / 2));
     const rangeEnd = Math.min(totalPages, rangeStart + maxOptions);
     rangeStart = Math.max(0, rangeEnd - maxOptions);
-    const optionTemplate = session.lblPageJumpOptionTurn ?? 'Page [page] — Turn [turn]{? ([writer])?}';
-    const placeholderTemplate = session.lblPageJumpPlaceholder ?? 'Page [page] of [total]';
+    const optionTemplate = session.lblPageJumpOptionTurn;
+    const placeholderTemplate = session.lblPageJumpPlaceholder;
     const options = [];
     for (let i = rangeStart; i < rangeEnd; i++) {
       const p = session.pages[i];
@@ -97,10 +98,13 @@ export function buildReadEmbed(session, pageIndex) {
     utilityButtons.push(
       new ButtonBuilder()
         .setCustomId(`story_read_edit_${page.storyEntryId}`)
-        .setLabel('Edit')
+        .setLabel(session.btnEditOpen)
         .setStyle(ButtonStyle.Secondary)
     );
   }
+  // Two HTML exports (for posting) plus the plain-text one (for editing). With Edit and Repost
+  // both contextual, this row reaches exactly Discord's 5-component maximum — a sixth button
+  // here has to go in a row of its own.
   utilityButtons.push(
     new ButtonBuilder()
       .setCustomId('story_read_download_noturns')
@@ -109,6 +113,10 @@ export function buildReadEmbed(session, pageIndex) {
     new ButtonBuilder()
       .setCustomId('story_read_download_withturns')
       .setLabel(session.btnExportWithBreaks)
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('story_read_download_entries')
+      .setLabel(session.btnExportForEditing)
       .setStyle(ButtonStyle.Secondary)
   );
   if (session.pendingRepostEntryId && session.pendingRepostEntryId === page.storyEntryId && page.isFirstChunk) {
@@ -285,13 +293,15 @@ if (isConfigured) {
       [storyId]
     );
 
-    const [btnSubmitTagRead, btnViewProposedTags, btnManageTags, ratingBadgeDisplay, btnExportNoBreaks, btnExportWithBreaks, lblPageJumpPlaceholder, lblPageJumpOptionTurn, lblEntryFooter] = await Promise.all([
+    const [btnSubmitTagRead, btnViewProposedTags, btnManageTags, ratingBadgeDisplay, btnExportNoBreaks, btnExportWithBreaks, btnExportForEditing, btnEditOpen, lblPageJumpPlaceholder, lblPageJumpOptionTurn, lblEntryFooter] = await Promise.all([
       getConfigValue(connection, 'btnSubmitTagRead', guildId),
       getConfigValue(connection, 'btnViewProposedTags', guildId),
       getConfigValue(connection, 'btnManageTags', guildId),
       getConfigValue(connection, ratingBadgeKey(story.rating ?? 'NR'), guildId),
       getConfigValue(connection, 'btnExportNoBreaks', guildId),
       getConfigValue(connection, 'btnExportWithBreaks', guildId),
+      getConfigValue(connection, 'btnExportForEditing', guildId),
+      getConfigValue(connection, 'btnEditOpen', guildId),
       getConfigValue(connection, 'lblPageJumpPlaceholder', guildId),
       getConfigValue(connection, 'lblPageJumpOptionTurn', guildId),
       getConfigValue(connection, 'lblEntryFooter', guildId),
@@ -314,7 +324,7 @@ if (isConfigured) {
       isAdmin, isAdminOrCreator: isAdmin || isCreator, isActiveWriter,
       pendingTagCount: Number(pendingTagCount),
       btnSubmitTagRead, btnViewProposedTags, btnManageTags,
-      btnExportNoBreaks, btnExportWithBreaks,
+      btnExportNoBreaks, btnExportWithBreaks, btnExportForEditing, btnEditOpen,
       lblPageJumpPlaceholder, lblPageJumpOptionTurn, lblEntryFooter,
       storyThreadId: story.story_thread_id, imagePageIndex: 0
     };
@@ -406,6 +416,14 @@ export async function handleReadNav(connection, interaction) {
   if (interaction.customId.startsWith('story_read_edit_')) {
     const entryId = interaction.customId.split('_').at(-1); // keep as string — DB returns BIGINT as string (bigNumberStrings: true)
     await handleReadEditButton(connection, interaction, session, entryId);
+    return;
+  }
+
+  // The plain-text editing export — unrendered entry content, handled separately from the two
+  // HTML exports below because it carries no AO3 instructions and offers no public post.
+  if (interaction.customId === 'story_read_download_entries') {
+    await interaction.deferUpdate();
+    await handleEntriesTextExportButton(connection, interaction, session.storyId, session.guildId);
     return;
   }
 

@@ -5,6 +5,16 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('txtExportPostedPublicly', '✅ Story file posted to the story thread.', 'en', 1),
 ('btnExportNoBreaks', '⬇ Export (no breaks)', 'en', 1),
 ('btnExportWithBreaks', '⬇ Export (breaks with turns and names)', 'en', 1),
+-- The plain-text editing export (story/_exportText.js). A different artifact from the two HTML
+-- exports above: unrendered story_entry.content, so what you edit is what is stored. The entry
+-- delimiter itself is NOT config — it is a structural token the importer parses, so a guild
+-- editing its wording would break import rather than translate it.
+('btnExportForEditing', '📝 Export Entries for Editing', 'en', 1),
+('txtExportTextInstructions', 'Here are the unrendered entries for **[entry_count]** turn(s), [word_count] words. This is the raw text as stored, not the published version — edit it and the formatting markers will still mean what they mean. Keep the `[[turn N | #id]]` lines exactly as they are so the entries can be matched up again.', 'en', 1),
+('txtExportTextNoEntries', 'This story has no confirmed entries to export yet.', 'en', 1),
+('txtExportTextHeader', '[title] (story #[story_num])\n[turn_count] turn(s), [entry_count] entr(ies), [word_count] words - status: [status] - exported [exported]', 'en', 1),
+('txtExportTextLegend', '--- HOW TO EDIT THIS FILE ---\nThis is the entry text exactly as the bot stores it, not the published version. Edit the prose freely.\n\nEach entry begins with a line like [[turn 12 | #4417]]. Leave those lines alone - the number after the # is how the bot matches your edits back to the right entry. Do not renumber them, merge two entries into one, or reorder them.\n\nFormatting is Discord markdown: *italic*, **bold**, __underline__, ||spoiler||, > quote, -# small.\nThese bot markers also work:\n  [[break]]          a scene break{? (shows as: [divider])?}\n  [[word|meaning]]   word with a hover translation\nImages are ordinary markdown links, [caption](url). You can change the url to move an image.\n--- END ---', 'en', 1),
+('txtExportTextFooter', '--- end of [entry_count] entr(ies) ---', 'en', 1),
 ('txtExportCompletedLabel', 'Completed', 'en', 1),
 ('txtExportUpdatedLabel', 'Updated', 'en', 1),
 ('txtExportModeQuick', 'Quick Mode', 'en', 1),

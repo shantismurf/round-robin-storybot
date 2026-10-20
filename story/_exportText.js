@@ -1,0 +1,176 @@
+// Plain-text export of a story's entries for copyediting, as opposed to export.js's HTML,
+// which is the AO3 publication artifact.
+//
+// The two exports exist for different jobs and should not be confused. The HTML is rendered:
+// Discord markdown is converted, [[break]] becomes the story's divider text, [[a|b]] becomes a
+// tooltip span, and images are embedded as data URIs. That is right for publishing and wrong for
+// editing, because what you edit is not what is stored.
+//
+// This export is the opposite. It writes story_entry.content verbatim — no markdown conversion,
+// no marker substitution, no image handling — so the text in the file is exactly the text in the
+// database. That is what makes a round trip possible: the importer can compare what came back
+// against what went out without reversing a render. See docs/plans/PLAN-copyedit-round-trip.md.
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
+import { getConfigValue, log, replaceTemplateVariables } from '../utilities.js';
+import { fetchStoryForExport } from './_exportData.js';
+import { STORY_STATUS } from '../constants.js';
+
+// The per-entry delimiter. Deliberately NOT a config value: it is a structural token the
+// importer has to parse, so a guild editing its wording would break import rather than
+// translate it. Follows the existing [[...]] bot-tag convention, which is likewise fixed in
+// code ([[break]] is hard-coded in story/_entryMarkup.js).
+//
+// The entry id is what import matches on. Turn number and writer are there for the human
+// reading the file — a turn number is not unique (a turn can hold more than one confirmed
+// entry) and neither is a writer, so neither can carry identity on its own.
+// Turn number and entry id sit in fixed leading positions and the writer name goes last, so a
+// pen name containing a '|' or a '·' cannot shift what the parser reads as the id.
+const ENTRY_DELIMITER_RE = /^\[\[turn\s+(\d+)\s*\|\s*#(\d+)\s*(?:\|.*)?\]\]$/s;
+
+export function buildEntryDelimiter(turnNumber, entryId, writerName = null) {
+  const who = writerName ? ` | ${writerName}` : '';
+  return `[[turn ${turnNumber} | #${entryId}${who}]]`;
+}
+
+// Parses a delimiter line back to { turnNumber, entryId }, or null if the line is not one.
+// Exported for the importer and for tests — the round trip's correctness rests on these two
+// functions agreeing, so they live together.
+export function parseEntryDelimiter(line) {
+  const match = ENTRY_DELIMITER_RE.exec(line.trim());
+  if (!match) return null;
+  return { turnNumber: parseInt(match[1], 10), entryId: match[2] };
+}
+
+/**
+ * Builds the plain-text editing export. Mirrors generateStoryExport's return shape so callers
+ * can treat the two interchangeably.
+ * Returns null if the story is not found, else
+ * { hasEntries, buffer, filename, title, turnCount, wordCount, writerCount, entryCount }.
+ */
+export async function generateEntriesTextExport(connection, storyId, guildId, { guildName } = {}) {
+  const fetched = await fetchStoryForExport(connection, storyId, guildId);
+  if (!fetched) return null;
+  const { story, writers, entries } = fetched;
+
+  const writerCount = writers.length;
+  if (entries.length === 0) {
+    return {
+      hasEntries: false, title: story.title, turnCount: 0, wordCount: 0,
+      writerCount, entryCount: 0, buffer: null, filename: null,
+    };
+  }
+
+  const wordCount = entries.reduce((total, e) => total + e.content.trim().split(/\s+/).filter(Boolean).length, 0);
+  const turnCount = entries[entries.length - 1].turn_number;
+
+  // txtOpen/txtClosed are the existing status words, reused rather than a new pair of keys.
+  const cfg = await getConfigValue(connection, [
+    'txtExportTextHeader', 'txtExportTextLegend', 'txtExportTextFooter',
+    'txtOpen', 'txtClosed',
+  ], guildId);
+
+  const fmt = d => new Date(d).toISOString().slice(0, 10);
+
+  const header = replaceTemplateVariables(cfg.txtExportTextHeader, {
+    title: story.title,
+    story_num: String(story.guild_story_id),
+    turn_count: String(turnCount),
+    entry_count: String(entries.length),
+    word_count: wordCount.toLocaleString(),
+    exported: fmt(new Date()),
+    status: story.story_status === STORY_STATUS.CLOSED ? cfg.txtClosed : cfg.txtOpen,
+  });
+
+  // The story's own divider text is substituted into the legend, because [[break]] means
+  // nothing to a reader who cannot see what it renders as.
+  const legend = replaceTemplateVariables(cfg.txtExportTextLegend, {
+    ...(story.scene_break_divider ? { divider: story.scene_break_divider } : {}),
+  });
+
+  const body = entries.map(entry => {
+    // show_authors is honoured here as it is in the HTML export: this file is reachable from
+    // the public close announcement, so any writer can download it.
+    const writerName = story.show_authors ? (entry.pen_name || entry.discord_display_name) : null;
+    const delimiter = buildEntryDelimiter(entry.turn_number, entry.story_entry_id, writerName);
+    // content goes out verbatim. Trailing whitespace is trimmed only at the very edge of the
+    // block so the delimiters sit on their own lines; nothing inside the entry is touched.
+    return `${delimiter}\n\n${entry.content.replace(/\s+$/, '')}`;
+  }).join('\n\n');
+
+  const footer = replaceTemplateVariables(cfg.txtExportTextFooter, {
+    entry_count: String(entries.length),
+  });
+
+  const text = `${header}\n\n${legend}\n\n${body}\n\n${footer}\n`;
+
+  log(`generateEntriesTextExport: story ${storyId} wrote ${entries.length} entr(ies), ${turnCount} turn(s), ${text.length} chars`, { show: false, guildName });
+
+  const safeTitle = story.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  return {
+    hasEntries: true,
+    title: story.title,
+    turnCount,
+    wordCount,
+    writerCount,
+    entryCount: entries.length,
+    buffer: Buffer.from(text, 'utf8'),
+    filename: `storybot${storyId}_${safeTitle}_entries.txt`,
+  };
+}
+
+// Every config key buildCloseExportRow needs. Exported for the same reason
+// EDIT_PANEL_CONFIG_KEYS is: two files render this row and must not keep separate lists.
+export const EXPORT_ROW_CONFIG_KEYS = ['btnExportNoBreaks', 'btnExportWithBreaks', 'btnExportForEditing'];
+
+// The export button row on a close announcement. story/close.js (the standalone /story close)
+// and story/_manageClose.js (the manage panel's fork of it, temporary — see docs/TODO.md) both
+// posted a byte-identical copy of this row, so adding a third button meant editing it twice.
+export function buildCloseExportRow(cfg, storyId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`story_export_close_noturns_${storyId}`)
+      .setLabel(cfg.btnExportNoBreaks)
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`story_export_close_withturns_${storyId}`)
+      .setLabel(cfg.btnExportWithBreaks)
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`story_export_close_entries_${storyId}`)
+      .setLabel(cfg.btnExportForEditing)
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
+// Delivers the plain-text editing export as an ephemeral attachment. Shared by the close
+// announcement's button (story_export_close_entries_<storyId>) and /story read's
+// (story_read_download_entries), which differ only in where the storyId comes from.
+//
+// Deliberately offers no "post publicly" follow-up, unlike the HTML export: this file is a
+// working copy for whoever is editing, not something the group reads.
+export async function handleEntriesTextExportButton(connection, interaction, storyId, guildId) {
+  try {
+    const result = await generateEntriesTextExport(connection, storyId, guildId, { guildName: interaction?.guild?.name });
+    if (!result?.hasEntries) {
+      return await interaction.followUp({
+        content: await getConfigValue(connection, 'txtExportTextNoEntries', guildId),
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    await interaction.followUp({
+      content: replaceTemplateVariables(
+        await getConfigValue(connection, 'txtExportTextInstructions', guildId),
+        { entry_count: String(result.entryCount), word_count: result.wordCount.toLocaleString() }
+      ),
+      files: [{ attachment: result.buffer, name: result.filename }],
+      flags: MessageFlags.Ephemeral,
+    });
+    log(`handleEntriesTextExportButton: story ${storyId} text export delivered to ${interaction.user.username}`, { show: true, guildName: interaction?.guild?.name });
+  } catch (err) {
+    log(`handleEntriesTextExportButton failed for story ${storyId}: ${err?.stack ?? err}`, { show: true, guildName: interaction?.guild?.name });
+    await interaction.followUp({
+      content: await getConfigValue(connection, 'errProcessingRequest', guildId),
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+}

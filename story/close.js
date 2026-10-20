@@ -5,6 +5,7 @@ import { postStoryFeedClosedAnnouncement } from '../announcements.js';
 import { generateStoryExport } from './export.js';
 import { getActiveThreadId } from '../storybot.js';
 import { STORY_STATUS, WRITER_STATUS, ENTRY_STATUS, TURN_STATUS, STORY_MODE } from '../constants.js';
+import { buildCloseExportRow, EXPORT_ROW_CONFIG_KEYS, handleEntriesTextExportButton } from './_exportText.js';
 
 // Direct stats query — independent of export generation, since export is now a manual, optional
 // step after close. Exported for story/_manageClose.js, which needs the same numbers for the
@@ -130,19 +131,9 @@ export async function handleCloseConfirm(connection, interaction) {
     const { turnCount, wordCount, writerCount } = await getStoryStats(connection, storyId);
 
     // Export buttons are offered publicly on the close announcement so any writer can grab a copy
-    const [btnExportNoBreaks, btnExportWithBreaks] = await Promise.all([
-      getConfigValue(connection, 'btnExportNoBreaks', guildId),
-      getConfigValue(connection, 'btnExportWithBreaks', guildId),
-    ]);
-    const exportRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`story_export_close_noturns_${storyId}`)
-        .setLabel(btnExportNoBreaks)
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`story_export_close_withturns_${storyId}`)
-        .setLabel(btnExportWithBreaks)
-        .setStyle(ButtonStyle.Secondary)
+    const exportRow = buildCloseExportRow(
+      await getConfigValue(connection, EXPORT_ROW_CONFIG_KEYS, guildId),
+      storyId
     );
 
     // closeStoryInternals already retitled every existing thread (unrestricted and/or
@@ -206,9 +197,16 @@ export async function handleCloseCancel(connection, interaction) {
 // manual export buttons offered on the close-success message (export is no longer automatic on close).
 export async function handleCloseExportButton(connection, interaction) {
   await interaction.deferUpdate();
-  const suppressBreaks = interaction.customId.startsWith('story_export_close_noturns_');
   const storyId = parseInt(interaction.customId.split('_').at(-1));
   const guildId = interaction.guild.id;
+
+  // story_export_close_entries_<storyId> — the plain-text editing export, a different artifact
+  // from the two HTML ones below (unrendered entry content, no AO3 instructions, no public post).
+  if (interaction.customId.startsWith('story_export_close_entries_')) {
+    return await handleEntriesTextExportButton(connection, interaction, storyId, guildId);
+  }
+
+  const suppressBreaks = interaction.customId.startsWith('story_export_close_noturns_');
 
   try {
     const result = await generateStoryExport(connection, storyId, guildId, interaction.guild, { suppressBreaks });

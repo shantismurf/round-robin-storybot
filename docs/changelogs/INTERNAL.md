@@ -51,6 +51,24 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
 - **`EDIT_PANEL_CONFIG_KEYS`** (`story/edit.js`) — one exported list of every config key the edit
   panel and modal read. `story/read.js` kept a hand-maintained copy, which went stale the moment a
   key was added in `edit.js`: the modal would then render key names instead of text.
+- **"Export Entries for Editing" — a plain-text export of a story's entries.** Offered beside the
+  two HTML exports on `/story read` and on the close announcement. The HTML export is rendered
+  (markdown converted, `[[break]]` replaced by the story's divider, `[[a|b]]` turned into a tooltip
+  span, images embedded as data URIs), which is right for publishing to AO3 and wrong for editing,
+  because what you edit is not what is stored. This one writes `story_entry.content` verbatim, so a
+  copyedit can be compared against what went out without reversing a render.
+  Each entry is preceded by `[[turn N | #entryId]]`. The entry id is what a future import will
+  match on: a turn number is not unique, since a turn can hold more than one confirmed entry, and
+  neither is a writer name. Turn and id sit in fixed leading positions with the name last, so a pen
+  name containing a `|` cannot shift what the parser reads as the id. The delimiter is fixed in
+  code rather than config, matching `[[break]]` in `story/_entryMarkup.js` — it is a structural
+  token, and a guild rewording it would break import rather than translate it. `show_authors` is
+  honoured, because this file is reachable from the public close post.
+- **`story/_exportData.js`** — `fetchStoryForExport`, the one query path both exports use, lifted
+  out of `export.js` so the two export modules share it without importing each other.
+- **`buildCloseExportRow` and `EXPORT_ROW_CONFIG_KEYS`** (`story/_exportText.js`) — the close
+  announcement's export row, which `story/close.js` and `story/_manageClose.js` each held a
+  byte-identical copy of, so adding a third button meant editing it twice.
 
 ### Changed
 - **The edit modal's per-page guidance is a `LabelBuilder` description, not a placeholder.** It sits
@@ -64,8 +82,10 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   `txtEditEmbedFooter`, `lblEditModalTitle` and `txtEditModalPageHint`. Wording is unchanged from
   what shipped. The page suffix is a `{?...?}` optional block, stripped when an entry is one page,
   rather than a suffix assembled inline.
-- **`?? 'fallback'` defaults dropped** from `lblEditEntryContent`, `lblPageJumpOption` and
-  `lblPageJumpPlaceholder`. Config rules forbid them, and they were masking a missing key —
+- **`story/read.js`'s Edit button label** was the hard-coded string `'Edit'`; it now reads the
+  existing `btnEditOpen`, which holds the same word.
+- **`?? 'fallback'` defaults dropped** from `lblEditEntryContent`, `lblPageJumpOption`,
+  `lblPageJumpPlaceholder`, `lblPageJumpOptionTurn` and read's own `lblPageJumpPlaceholder`. Config rules forbid them, and they were masking a missing key —
   `getConfigValue` already logs a `show: true` error and returns the key name on a miss, which also
   reaches the hub log channel.
 
