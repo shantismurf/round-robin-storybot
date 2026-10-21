@@ -687,13 +687,15 @@ problem it ever had was ambiguity against a second "reassign", which Change Writ
   log, discriminated by a `change_type` column rather than a marker inside `content`.
 - The import confirm is a per-turn summary, not a diff.
 - **The change log is read-only history. There is no Undo button** (LeeAnn, 2026-10-21):
-  "rather than undo a move or writer change, you'd just change it again." An Undo was
-  drafted and dropped, and she is right that it earns nothing. Undoing is not a rollback —
-  the neighbours have moved on — so it re-applies the reverse as a new change, which makes
-  it the Change Order / Change Writer path with different numbers, reached by a second
-  button. One path, not two. This is also what `story/_editHistory.js`'s Restore must refuse
-  to act on, which the `change_type` discriminator already gives us. The three Restore
-  behaviours in full:
+  "rather than undo a move or writer change, you'd just change it again", and
+  **undo exists only for bringing back a deleted entry.** An Undo on a change row was
+  drafted and dropped. The line that settles it: a structural change is never undone, it is
+  set again, with the same button that set it — putting an entry back at turn 4 or back with
+  Maria is just Change Order or Change Writer, so a second button for it would be a second
+  path to one operation. Existence and content each have a restore already; structure has
+  none and needs none. This is also what `story/_editHistory.js`'s Restore must refuse to
+  act on, which the `change_type` discriminator already gives us. The three behaviours in
+  full:
   - **Restore Entry** (Manage Entries) un-deletes: content comes back untouched, because
     delete only flips `entry_status`, and position comes back because the renumber carries
     deleted rows. Both for free, no new code.
