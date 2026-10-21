@@ -204,6 +204,20 @@ asked for at the cost of a migration and a second source of truth.
 Accepted cost: the media-channel copy is the reliable one because the bot can
 re-sign it. An image pointed at an external host has its fate tied to that host.
 
+### External images: uniform treatment is the requirement (decided 2026-10-21)
+
+An external image is presented exactly as a Discord one, everywhere: the same read gallery,
+the same download-and-reupload on a thread post, the same download-and-embed in the HTML
+export. Only the plumbing differs where it has to — an external URL skips the signature
+refresh it has no use for, and an oversize one goes straight to wsrv.nl rather than trying
+Discord's media proxy first.
+
+Whether any particular external image actually renders is explicitly **not** a concern. In
+the read gallery Discord's proxy fetches the remote host, so a slow or vanished host leaves
+an empty embed frame rather than a placeholder, since an image-only embed has no text to
+fall back to. Adding a caption to those embeds so a failed load leaves something behind was
+offered and declined: uniform handling is the property that matters, not guaranteed display.
+
 ### What widening actually touches
 
 The Discord CDN literal is hard-coded in **seven regexes across four files**:
