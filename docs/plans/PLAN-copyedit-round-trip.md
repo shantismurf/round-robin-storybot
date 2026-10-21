@@ -1,8 +1,8 @@
 # Copyedit Round Trip (Export → Edit → Import)
 
-Status: In progress — phase 1 built, phase 2 design open
+Status: In progress — phases 1-2 built, entry-ordering design open
 Created: 2026-09-22
-Last Updated: 2026-10-20 (images decision)
+Last Updated: 2026-10-21 (entry ordering and import semantics)
 
 ## Problem
 
@@ -52,13 +52,54 @@ page — not something a non-developer would ever discover.
 `addAttachmentOption` / `getAttachment` appear nowhere in the codebase. File
 upload is new ground for this bot (supported fine by discord.js).
 
-### Turn order has no sort column
+### Display order has no column — and one was removed, not dropped
 
-`turn` (`db/init.sql:55`) orders solely by `started_at`. Reordering committed
-turns — done manually once already, after a plot-trajectory change — requires a
-new sort column plus updating every `ORDER BY t.started_at` and the correlated
-`t2.started_at <= t.started_at` turn-numbering subqueries in `export.js`,
-`read.js`, and `edit.js`. This is the expensive item and is deliberately deferred.
+`turn` (`db/init.sql:55`) and `story_entry` (`db/init.sql:67`) both lack a sort
+column. Display order is derived entirely from `turn.started_at`, which is also the
+honest record of *when* the turn happened. Fourteen queries across eleven files
+compute a turn number from it, either as the correlated subquery
+`COUNT(DISTINCT t2.turn_id) ... WHERE t2.started_at <= t.started_at`
+(`story/_exportData.js:33`, `story/close.js:23`, `story/edit.js:81`/`:109`/`:706`/`:741`,
+`story/read.js:226`, `story/_manageEntriesList.js:50`, `story/_writeSkip.js:33`,
+`story/_writeQuickMode.js:198`, `story/_writeFinalize.js:245`/`:383`,
+`commands/_myStoryList.js:425`) or as
+`DENSE_RANK() OVER (ORDER BY t.started_at)` (`commands/story.js:524`/`:539`).
+`story/_manageTurnActions.js:446` goes the other way and *looks a turn up* by that
+computed number. `utilities.js:530`'s `getTurnNumber` is a separate thing — a
+`COUNT(...) + 1` next-turn counter, not an ordering.
+
+**`story_entry.order_in_turn` used to exist**, and is the obvious place to look first:
+
+```sql
+order_in_turn INT DEFAULT 1,
+UNIQUE KEY unique_turn_order (turn_id, order_in_turn)
+```
+
+It was removed in `1a8a065` (2026-04, the entry-edit system) along with every query
+that read it; `79b1c19` cleaned up an `ORDER BY` left behind. **No migration ever
+dropped the column.** It is gone from `init.sql`, so a database created after April
+does not have it — but the production database predates that commit and should still
+be carrying it, unused, holding the `DEFAULT 1` it was created with. Not verifiable
+from a cloud session; needs `SHOW COLUMNS FROM story_entry` on the VM.
+
+Reviving it is still the wrong move. The name scopes order to a turn when what is
+needed is story-wide, and `unique_turn_order` constrains `(turn_id, order_in_turn)`,
+which is not the uniqueness that matters. Every existing row holds the same default,
+so the backfill is identical either way — reuse buys nothing but a misleading name.
+**Decided 2026-10-21: drop it rather than edit or repurpose it.** Two cautions for
+that migration. It has to be conditional (`DROP ... IF EXISTS`, the pattern of
+`012_drop_additional_tags.sql`) because a post-April database never had the column.
+And it has to drop `unique_turn_order` *explicitly, first*: in MySQL and MariaDB,
+dropping a column that is part of a multi-column index removes the column from the
+index rather than dropping the index, which would leave a `UNIQUE KEY` on `turn_id`
+alone — forbidding a turn from carrying more than one `story_entry` row of any
+status, which is exactly what `021_story_entry_confirmed_unique.sql` says the schema
+expects. That is a destructive outcome from an otherwise routine drop.
+
+There is circumstantial evidence the column may already be gone from production: it
+defaults to `1` for every row, so with `unique_turn_order` live, any turn that
+accumulated a second row of any status would have collided. Still unverified either
+way, which is why the migration is written to be safe when the column is absent.
 
 ### Chapters do not exist
 
@@ -72,6 +113,10 @@ left as one 40k-word story to be divided by hand later.
 - `story.ao3_URL` (`db/init.sql:15`) is still created but referenced by zero
   JavaScript — dead column, available if a published-URL field is wanted back.
 - `CLAUDE.md` pins discord.js 14.26.4; installed resolves to 14.27.0.
+- Discord's `___text___` (underline + italic) breaks in the HTML export. The
+  underline pre-pass at `story/export.js:102` is non-greedy, so `___both___`
+  renders as underlined `_both` with a stray trailing underscore. Plain
+  `__underline__` is fine. Pre-existing, unrelated to this work, not fixed.
 
 ## Proposed direction
 
@@ -183,6 +228,48 @@ Three constraints that fall out:
 With this decided, the round trip needs no image machinery of its own: real URLs stay
 in the body where they can be read and edited.
 
+### Entry ordering: a column of its own (decided 2026-10-21)
+
+The correction that unlocks this: **display order and chronology are different facts,
+and only display order moves.** `started_at` stays exactly as it is, so `/mystory
+catchup` (`commands/_myStoryList.js:419`, which compares it as a time, not a sort key)
+and `PickNextWriter` (`story/_turn.js:27`, which deliberately sorts by the `turn_id`
+auto-increment "for reliable sequencing") keep reading the same honest history they
+read today. Reordering never rewrites a timestamp. The objection recorded earlier in
+this plan — that reordering corrupts turn selection — applied only to reordering *by
+moving* `started_at`, and does not apply to a separate column.
+
+Shape:
+
+- **`story_entry.entry_order INT`**, story-wide, added by a conditional migration and
+  backfilled from the current `started_at` ordering.
+- **Sparse values, never compacted.** Leave gaps. A soft-deleted entry keeps its
+  `entry_order`, so Restore only flips `entry_status` back and the entry returns to
+  the position it held — no renumbering pass, no reinsertion logic.
+- **Turn number follows display order**, not chronology. The published work prints it
+  at each turn break beside the author name, so a shuffled sequence there is the
+  confusing outcome. Stale turn references in older Discord posts are accepted:
+  whoever reordered the story knows why the numbers moved. Every site in the finding
+  above switches from `started_at` to `entry_order`; the `DENSE_RANK()` pair in
+  `commands/story.js` is the pattern the correlated subqueries should converge on.
+- **The export delimiter does not change.** `[[turn N | #id | writer]]` already carries
+  identity in `#id` and treats the turn number as display, so renumbering under a
+  reorder costs nothing in the file format.
+
+**Why the column belongs on `story_entry` and not on `turn`.** A per-entry order would
+normally risk splitting a turn — interleave another turn's entry between two of turn
+12's and "turn 12" appears twice with turn 13 between them. That cannot happen here:
+`021_story_entry_confirmed_unique.sql` enforces **one confirmed entry per turn** via a
+generated `confirmed_turn_id` column and a unique key on it. A turn carries at most one
+confirmed row, so ordering confirmed entries *is* ordering turns, and no contiguity
+invariant is needed.
+
+**Correction to phase 2's shipped text.** `story/_exportText.js` and the Unreleased
+changelog entry both justify matching on the entry id by claiming a turn can hold more
+than one confirmed entry. Migration 021 makes that false. Matching on the id is still
+right — ids are stable and turn numbers are about to start renumbering under reorder —
+but the stated reason needs replacing.
+
 ### Import flow
 
 Phase 1 is a **single-entry** round trip on the existing edit interface: download
@@ -210,6 +297,31 @@ Phase 2 generalises the same machinery to a whole-story file.
 
 Because edits stay within entry boundaries, every block maps 1:1 and the
 authorship ambiguity that would make this risky does not arise.
+
+### Import instructions (replaces the "leave those lines alone" paragraph)
+
+The legend shipped in phase 2 tells the reader not to reorder or remove anything.
+That is accurate only until import lands; afterwards the same paragraph becomes
+instructions for doing exactly those things. What it has to convey, inside the file:
+
+- The `[[turn N | #id | writer]]` line identifies the entry. `#id` is the identity and
+  must survive unchanged; the turn number and writer name are display values and are
+  recomputed on import.
+- **Reorder** by moving a whole entry block — delimiter and prose together — to its new
+  position. The file's own order becomes the story's order.
+- **Reassign** by changing the writer name in the delimiter to another writer already
+  joined to the story.
+- **Remove** by deleting the entry's whole block. This is a soft delete, restorable
+  from Manage Entries, and the entry returns to the position it held.
+
+Outside the file, on apply: the import reports what it is about to do — "3 entries
+reordered, 1 reassigned, 1 removed" — and waits for a confirm. That is what makes
+removal-by-omission safe to allow. An accidental drop during a copyedit is restorable
+either way, but the confirm means most accidents never need restoring.
+
+Copy is not drafted here on purpose. It should be written against the real mechanics
+once they exist, not guessed at now, and like all user-facing text it needs approval
+before it ships.
 
 ### Chapters: a real UI, not file markers (revised)
 
@@ -245,13 +357,22 @@ explicit turn references rather than numeric ranges.
    phase 2's machinery; needs the `[[...]]` delimiter.
 4. **Medium/large** — chapter interface + per-chapter export. Coordinate with
    `PLAN-series-system.md`.
-5. **Large, deferred** — turn reordering (sort column + every ORDER BY).
+5. **Medium** — `entry_order` migration: add the column, backfill from `started_at`,
+   drop the orphaned `order_in_turn` and its `unique_turn_order` index, and switch all
+   fourteen turn-number computations over. Prerequisite for both reordering and
+   import's reorder/remove semantics. No longer deferred.
+6. **Small/medium** — reorder and reassign in Manage Entries. Reassign is only
+   `turn.story_writer_id` pointing at another `story_writer` row of the same story,
+   with no ordering involved. Delete and Restore already exist (`story/edit.js:401`).
 
 ## Open decisions
 
 - How to present the single-entry round trip so it is obvious to a non-developer.
 - Whether chapters belong in this plan or in `PLAN-series-system.md`.
 - Whether the whole-story import (phase 3) is needed at all once phase 2 exists.
+- Whether reassign ships inside 3.10.0 or follows it.
+- Whether `order_in_turn` is actually still present in production — needs
+  `SHOW COLUMNS FROM story_entry` on the VM. The migration is safe either way.
 
 ## Settled
 
@@ -260,8 +381,17 @@ explicit turn references rather than numeric ranges.
   under Unreleased rather than moving the number each time.
 - No image tokens, and no images table. Real URLs stay in the body where they can
   be edited, and the image pattern widens to accept any https image URL.
-- Chapters get a real interface; import files do not change story-level values.
-- Turn reordering is not done by moving blocks in a file.
+- Chapters get a real interface; import files do not change *story-level* values
+  (title, summary, chapters). Entry-level structure is a different matter — see the
+  next entry.
+- Turn reordering **is** done by moving blocks in a file, reversing an earlier entry
+  here. Structure changes ride the import because the file is where the editing
+  happens; the confirm-on-apply step and the existing Restore cover the accident case.
+- Display order lives in a new `story_entry.entry_order`; `started_at` is left alone as
+  the record of when things happened.
+- Turn numbers follow display order and renumber on reorder. Stale references in older
+  Discord posts are an accepted cost.
+- The old `order_in_turn` column is dropped, not repurposed.
 
 ## Related
 
