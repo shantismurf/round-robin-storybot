@@ -123,13 +123,13 @@ left as one 40k-word story to be divided by hand later.
 
 ### Incidental
 
-- `story.ao3_URL` (`db/init.sql:15`) is still created but referenced by zero
-  JavaScript — dead column, available if a published-URL field is wanted back.
-- `CLAUDE.md` pins discord.js 14.26.4; installed resolves to 14.27.0.
-- Discord's `___text___` (underline + italic) breaks in the HTML export. The
-  underline pre-pass at `story/export.js:102` is non-greedy, so `___both___`
-  renders as underlined `_both` with a stray trailing underscore. Plain
-  `__underline__` is fine. Pre-existing, unrelated to this work, not fixed.
+- ~~`CLAUDE.md` pins discord.js 14.26.4; installed resolves to 14.27.0.~~ Pin updated
+  2026-10-21, and the note now also records modal file-upload support.
+- ~~Discord's `___text___` (underline + italic) breaks in the HTML export.~~ Fixed
+  2026-10-21: a `___(.+?)___` pass now runs before the `__` one, which was taking the
+  first two underscores and leaving a stray trailing one. Folded into this batch because
+  it affects the round trip — markdown edited in an export file has to render back.
+- `story.ao3_URL` stays for now (2026-10-21): a published-URL field may be reimplemented.
 
 ## Proposed direction
 
@@ -276,9 +276,40 @@ Shape:
 - **Turn number follows display order**, not chronology. The published work prints it
   at each turn break beside the author name, so a shuffled sequence there is the
   confusing outcome. Stale turn references in older Discord posts are accepted:
-  whoever reordered the story knows why the numbers moved. Every site in the finding
-  above switches from `started_at` to `entry_order`; the `DENSE_RANK()` pair in
-  `commands/story.js` is the pattern the correlated subqueries should converge on.
+  whoever reordered the story knows why the numbers moved.
+
+**Exactly which queries change.** The distinction that matters is what a given
+`started_at` reference is *for*. Sorting a list for display changes; asking which turn
+happened most recently does not.
+
+*Switches to `entry_order` — turn numbering (15 lines, 12 files).* The correlated
+subquery `COUNT(DISTINCT t2.turn_id) ... WHERE t2.started_at <= t.started_at`:
+`story/_writeSkip.js:33`, `story/close.js:23`, `story/_manageEntriesList.js:50`,
+`story/edit.js:81`/`:109`/`:706`/`:741`, `story/read.js:226`,
+`story/_writeQuickMode.js:198`, `story/_exportData.js:33`,
+`commands/_myStoryList.js:425`. Plus two variants: `story/_writeFinalize.js:245` uses
+`< ... + 1` for the number a new turn is about to get, and
+`story/_manageTurnActions.js:446` runs it backwards, looking a turn *up* by its number.
+And the `DENSE_RANK() OVER (ORDER BY t.started_at)` pair in `commands/story.js:524`/`:539`
+(the turn autocomplete), which is the shape the correlated subqueries should converge on.
+
+*Switches to `entry_order` — display sequence.* `ORDER BY t.started_at` ascending, where
+the result is a list someone reads: `story/read.js:232`, `story/_exportData.js:38`,
+`story/_manageEntriesList.js:64`, `commands/_myStoryList.js:430`, and
+`story/close.js:28` (stats only, so order is immaterial, but leaving one query sorted
+the old way is how the two orderings drift apart again).
+
+*Stays on `started_at` — genuinely chronological.* Every `ORDER BY t.started_at DESC
+LIMIT 1` asking "which turn is current or just ended": `story/_writeSkip.js:39`,
+`story/close.js:121`, `story/_manageClose.js:52`, `story/_turn.js:741`,
+`announcements.js:30`/`:208`, `commands/_myStoryList.js:411-415`. Also the catchup time
+comparison at `commands/_myStoryList.js:419`/`:429`, which uses `started_at` as a
+timestamp rather than a sort key, and `story/_turn.js:27`'s `PickNextWriter`, which sorts
+by `turn_id` for the same reason.
+
+*Needs a look, not a mechanical change.* `utilities.js:530`'s `getTurnNumber` is a
+`COUNT(DISTINCT t.turn_id) + 1` next-number counter rather than an ordering. Dense
+`1..n` keeps it correct, but it should be read against the new scheme rather than assumed.
 - **The export delimiter does not change.** `[[turn N | #id | writer]]` already carries
   identity in `#id` and treats the turn number as display, so renumbering under a
   reorder costs nothing in the file format.

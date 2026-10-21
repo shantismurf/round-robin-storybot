@@ -68,6 +68,31 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   token, and a guild rewording it would break import rather than translate it. `show_authors` is
   honoured for both the writer list and the per-entry
   labels, because this file is reachable from the public close post.
+- **Image links may now be any https image URL, not only Discord CDN attachments.** A writer
+  can point at an image they host themselves, and change one by editing the `[caption](url)`
+  text — which is what makes images survive the copyedit round trip, since there is no token
+  or images table to keep in step.
+  New **`story/_imageUrls.js`** is the single definition of "this URL is an image", replacing
+  seven separate hard-coded `cdn.discordapp.com/attachments/` patterns across four files
+  (`_exportImages.js`, `export.js`, `_entryRenderer.js`, `_storyStatus.js`) that had already
+  drifted in their delimiter sets.
+  It keeps two jobs deliberately apart: what counts as an image (any https image URL) and what
+  needs a fresh Discord signature (Discord CDN only). `collectImageUrls` now returns
+  `externalUrls` alongside `attachmentUrls`, and only the latter reaches Discord's refresh
+  endpoint — an external link has no signature to refresh.
+  Validation is on shape, never by fetching: https only, a known image extension, and no bare
+  IP literal or loopback host, since the bot fetches these URLs itself and a link is a request
+  it makes on someone else's behalf. A hostname that resolves to a private address still gets
+  through — stopping that needs resolve-then-connect control Node's fetch does not offer — so
+  the existing `image/*` content-type check, timeout and size caps in `fetchImage` remain the
+  rest of that defence. Nothing is checked for existence: a link that rots later renders as the
+  same visible placeholder it always did, and a writer never waits on an HTTP round trip to
+  save an entry.
+- **`buildExportStamp`/`parseExportStamp`** (`story/_exportText.js`) — the editing export now
+  ends with a machine-readable `[[exported-at <ISO instant>]]` trailer. The header's human date
+  is untouched and stays day-precision; the trailer carries the precision import needs to ask
+  whether an entry was edited in Discord after the file was exported. An older file without one
+  still imports, it just cannot be conflict-checked.
 - **`story/_exportData.js`** — `fetchStoryForExport`, the one query path both exports use, lifted
   out of `export.js` so the two export modules share it without importing each other.
 - **`buildCloseExportRow` and `EXPORT_ROW_CONFIG_KEYS`** (`story/_exportText.js`) — the close
@@ -94,6 +119,12 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   reaches the hub log channel.
 
 ### Fixed
+- **Discord's `___text___` (underline + italic) lost an underscore in the HTML export.** The
+  underline pre-pass is lazy, so `__(.*?)__` took the first two underscores and the shortest
+  run to the next pair, rendering `___both___` as underlined `_both` with a stray trailing
+  underscore. A `___(.+?)___` pass now runs first. Plain `__underline__` was never affected.
+  Fixed in this batch rather than deferred because it affects the round trip: markdown edited
+  in an export file has to render back correctly.
 - **Every background job failed on the new host with `"[object Object]" is not valid JSON`.**
   The `job.payload` column is `JSON`, which MariaDB stores as LONGTEXT, so mysql2 always returned
   it as a string and `processJob` ran `JSON.parse` on it. mysql2 3.23.0 (July 2026) started

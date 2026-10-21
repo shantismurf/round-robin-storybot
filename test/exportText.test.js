@@ -6,6 +6,8 @@ import {
   parseEntryDelimiter,
   buildCloseExportRow,
   EXPORT_ROW_CONFIG_KEYS,
+  buildExportStamp,
+  parseExportStamp,
 } from '../story/_exportText.js';
 import { makeFakeConnection } from './_fakeConnection.js';
 import { STORY_STATUS } from '../constants.js';
@@ -188,6 +190,46 @@ describe('generateEntriesTextExport', () => {
 
     const open = await read(story({ story_status: STORY_STATUS.ACTIVE }), [], [entry(41, 1, 'T.')]);
     assert.ok(open.buffer.toString('utf8').includes('status: Open'));
+  });
+});
+
+describe('the export stamp', () => {
+  test('round-trips an instant at full precision', () => {
+    const when = new Date('2026-10-21T20:54:13.123Z');
+    const parsed = parseExportStamp(buildExportStamp(when));
+    // Full precision is the point: a date alone cannot tell the importer whether an edit
+    // made the same day happened before or after the export.
+    assert.equal(parsed.getTime(), when.getTime());
+  });
+
+  test('tolerates the surrounding whitespace an edited file will have', () => {
+    const when = new Date('2026-01-02T03:04:05.000Z');
+    assert.equal(parseExportStamp(`  ${buildExportStamp(when)} `).getTime(), when.getTime());
+  });
+
+  test('returns null for anything that is not a stamp', () => {
+    for (const line of [
+      '', null, undefined, 'Just prose.', '--- END ---',
+      '[[turn 2 | #55]]', '[[exported-at]]', '[[exported-at not-a-date]]',
+      'She said [[exported-at 2026-10-21T00:00:00Z]] oddly.',
+    ]) assert.equal(parseExportStamp(line), null, `should not parse: ${line}`);
+  });
+
+  test('the generated file ends with a parseable stamp', async () => {
+    const conn = makeFakeConnection(queue(story(), [], [entry(41, 1, 'Text.')]));
+    const result = await generateEntriesTextExport(conn, 7, 'guild1');
+    const lines = result.buffer.toString('utf8').trimEnd().split('\n');
+    const parsed = parseExportStamp(lines[lines.length - 1]);
+    assert.ok(parsed instanceof Date, 'last line should be the stamp');
+    assert.ok(Date.now() - parsed.getTime() < 60_000, 'stamp should be the export instant');
+  });
+
+  test('the human header keeps its plain date, unchanged by the stamp', async () => {
+    const conn = makeFakeConnection(queue(story(), [], [entry(41, 1, 'Text.')]));
+    const text = (await generateEntriesTextExport(conn, 7, 'guild1')).buffer.toString('utf8');
+    // The header's date ends its line, so no trailing character to anchor against.
+    assert.match(text, /exported \d{4}-\d{2}-\d{2}$/m, 'header date should stay day-precision');
+    assert.ok(!/exported \d{4}-\d{2}-\d{2}T/.test(text), 'header must not gain a time component');
   });
 });
 

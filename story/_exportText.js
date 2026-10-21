@@ -41,6 +41,34 @@ export function parseEntryDelimiter(line) {
   return { turnNumber: parseInt(match[1], 10), entryId: match[2] };
 }
 
+// The export instant, as a machine-readable trailer on the last line.
+//
+// Separate from the header's human-readable [exported] date, which stays a plain day so the
+// approved header copy is untouched. Full precision is what makes conflict detection
+// possible on import: the question is "was this entry edited in Discord after this file was
+// exported?", and a date alone cannot answer that for an edit made the same day — which is
+// the common case, since a file is usually exported and re-imported within a day or two.
+//
+// Fixed in code rather than config, for the same reason the entry delimiter is: the importer
+// parses it, so a guild rewording it would break conflict detection rather than translate it.
+// The importer reads it from the end of the file rather than by scanning, so an entry whose
+// prose happens to contain a similar line cannot be mistaken for the trailer.
+const EXPORT_STAMP_RE = /^\[\[exported-at\s+(\S+)\s*\]\]$/;
+
+export function buildExportStamp(date) {
+  return `[[exported-at ${new Date(date).toISOString()}]]`;
+}
+
+// Returns a Date, or null if the line is not a stamp or carries an unparseable instant.
+// A file exported before this trailer existed simply has none; import still works, it just
+// cannot conflict-check, and should say so rather than skipping the check silently.
+export function parseExportStamp(line) {
+  const match = EXPORT_STAMP_RE.exec(String(line ?? '').trim());
+  if (!match) return null;
+  const parsed = new Date(match[1]);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 /**
  * Builds the plain-text editing export. Mirrors generateStoryExport's return shape so callers
  * can treat the two interchangeably.
@@ -70,6 +98,8 @@ export async function generateEntriesTextExport(connection, storyId, guildId, { 
   ], guildId);
 
   const fmt = d => new Date(d).toISOString().slice(0, 10);
+  // One instant for both the human date and the machine trailer, so they cannot disagree.
+  const exportedAt = new Date();
 
   // Writer list for the header, in join order, so an editor can see at a glance whose prose
   // they are about to touch. Honoured against show_authors for the same reason the per-entry
@@ -87,7 +117,7 @@ export async function generateEntriesTextExport(connection, storyId, guildId, { 
     turn_count: String(turnCount),
     entry_count: String(entries.length),
     word_count: wordCount.toLocaleString(),
-    exported: fmt(new Date()),
+    exported: fmt(exportedAt),
     status: story.story_status === STORY_STATUS.CLOSED ? cfg.txtClosed : cfg.txtOpen,
   });
 
@@ -111,7 +141,7 @@ export async function generateEntriesTextExport(connection, storyId, guildId, { 
     entry_count: String(entries.length),
   });
 
-  const text = `${header}\n\n${legend}\n\n${body}\n\n${footer}\n`;
+  const text = `${header}\n\n${legend}\n\n${body}\n\n${footer}\n${buildExportStamp(exportedAt)}\n`;
 
   log(`generateEntriesTextExport: story ${storyId} wrote ${entries.length} entr(ies), ${turnCount} turn(s), ${text.length} chars`, { show: false, guildName });
 

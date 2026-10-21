@@ -6,6 +6,7 @@ import { applyEntryMarkup, isSceneBreakLine, resolveMentionsToPlainText } from '
 import { getActiveThreadId } from '../storybot.js';
 import { STORY_STATUS, STORY_MODE } from '../constants.js';
 import { collectImageUrls, refreshAttachmentUrls, buildImageStore, buildImageDataBlock, emojiUrl } from './_exportImages.js';
+import { ANCHOR_IMAGE_RE, BANG_IMAGE_RE } from './_imageUrls.js';
 import { fetchStoryForExport } from './_exportData.js';
 
 // Renders an embedded image (data-storybot-img id, filled by the loader script at the
@@ -99,6 +100,10 @@ export async function discordMarkdownToHtml(text, guild = null, dividerText = nu
   }
   text = processed.join('\n');
 
+  // Discord ___underline italic___ → <u><em>, before the __ pass below. It has to come
+  // first: the lazy /__(.*?)__/ would take the first two underscores and the shortest run
+  // to the next pair, turning ___both___ into <u>_both</u> plus a stray trailing underscore.
+  text = text.replace(/___(.+?)___/gs, '<u><em>$1</em></u>');
   // Discord __underline__ → <u> before marked sees it (marked treats __ as bold)
   text = text.replace(/__(.*?)__/gs, '<u>$1</u>');
   // Discord ||spoiler|| → styled span
@@ -107,18 +112,18 @@ export async function discordMarkdownToHtml(text, guild = null, dividerText = nu
   text = applyEntryMarkup(text, { target: 'html' });
   // Strip any legacy ![]() image syntax so marked doesn't try to render it
   // (we'll handle image URLs after marked runs, to avoid marked escaping injected HTML)
-  text = text.replace(/!\[\]\((https:\/\/cdn\.discordapp\.com\/attachments\/[^\s)]+)\)/g, '$1');
+  text = text.replace(BANG_IMAGE_RE, '$1');
 
   // Run through marked with breaks:true so single newlines render as line breaks (matching Discord behaviour)
   let html = marked.parse(text, { breaks: true });
 
-  // Convert Discord CDN attachment links to embedded images after marked has run.
-  // New format [display text](cdn_url): marked renders as <a href="url">text</a> — use text as alt.
+  // Convert image links to embedded images after marked has run.
+  // New format [display text](url): marked renders as <a href="url">text</a> — use text as alt.
   // Legacy format bare url: marked auto-links as <a href="url">url</a> — omit alt when text === url.
   // marked HTML-escapes '&' in href attributes, so unescape before the imageStore lookup
   // (keys are the raw URLs collected from entry markdown).
   html = html.replace(
-    /<a href="(https:\/\/cdn\.discordapp\.com\/attachments\/[^\s"]+)"[^>]*>([^<]*)<\/a>/g,
+    ANCHOR_IMAGE_RE,
     (_, hrefUrl, linkText) => {
       const url = hrefUrl.replace(/&amp;/g, '&');
       const text = linkText.trim();
@@ -163,10 +168,13 @@ export async function generateStoryExport(connection, storyId, guildId, guild = 
     ...dynamicOptions,
   ], guildId);
 
-  const { attachmentUrls, emojiUrls } = collectImageUrls([...entries.map(e => e.content), story.summary]);
+  const { attachmentUrls, externalUrls, emojiUrls } = collectImageUrls([...entries.map(e => e.content), story.summary]);
+  // Only attachmentUrls go to the refresh endpoint — an external link has no Discord
+  // signature to refresh. See story/_imageUrls.js for why the two stay separate.
   const refreshMap = await refreshAttachmentUrls(guild?.client?.rest, attachmentUrls, { guildName: guild?.name });
   const imageStore = await buildImageStore({
     attachmentUrls,
+    externalUrls,
     emojiUrls,
     refreshMap,
     maxBytes: parseInt(cfg.cfgExportImageMaxBytes, 10),
