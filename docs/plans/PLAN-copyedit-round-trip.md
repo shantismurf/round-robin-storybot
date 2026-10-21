@@ -631,6 +631,9 @@ header's writer list.
 | `txtEditHistoryChangeBy` | Changed by [edited_by] · [edited_at] |
 | `txtEditHistoryNoRestore` | -# This is a record of a change, not a saved version, so there is nothing to restore here. |
 
+`txtEditHistoryNoRestore` carries the whole behaviour on a change row: the panel suppresses
+the Restore button and shows that line. No Undo button and no undo strings — see Settled.
+
 **Three existing strings come into config with this work, wording unchanged.** They are
 hard-coded in `story/_editHistory.js` today (the panel title, the footer, and the restore
 warning field). Once a row can be a change rather than a version the title has to branch,
@@ -657,11 +660,6 @@ problem it ever had was ambiguity against a second "reassign", which Change Writ
 - How to present the single-entry round trip so it is obvious to a non-developer.
 - Whether chapters belong in this plan or in `PLAN-series-system.md`.
 - Whether the whole-story import (phase 3) is needed at all once phase 2 exists.
-- Whether Restore undoes reorders and reassignments or the change log is read-only
-  history. Restoring content is one update; restoring a reorder renumbers the
-  neighbours again, which is a meaningfully larger piece of work than the audit row.
-  Restore of a *deletion* is settled — see the entry-ordering section; this is only
-  about the reorder and reassign rows.
 - Whether `order_in_turn` is actually still present in production — needs
   `SHOW COLUMNS FROM story_entry` on the VM. No inference from the application's
   behaviour settles it; the migration is safe either way.
@@ -688,6 +686,22 @@ problem it ever had was ambiguity against a second "reassign", which Change Writ
 - Reordering and reassignment are audited in `story_entry_edit` as a per-entry event
   log, discriminated by a `change_type` column rather than a marker inside `content`.
 - The import confirm is a per-turn summary, not a diff.
+- **The change log is read-only history. There is no Undo button** (LeeAnn, 2026-10-21):
+  "rather than undo a move or writer change, you'd just change it again." An Undo was
+  drafted and dropped, and she is right that it earns nothing. Undoing is not a rollback —
+  the neighbours have moved on — so it re-applies the reverse as a new change, which makes
+  it the Change Order / Change Writer path with different numbers, reached by a second
+  button. One path, not two. This is also what `story/_editHistory.js`'s Restore must refuse
+  to act on, which the `change_type` discriminator already gives us. The three Restore
+  behaviours in full:
+  - **Restore Entry** (Manage Entries) un-deletes: content comes back untouched, because
+    delete only flips `entry_status`, and position comes back because the renumber carries
+    deleted rows. Both for free, no new code.
+  - **Restore This Version** (History) replaces content from a saved version and never
+    moves the entry — position is not part of a content version, and keeping the two axes
+    independent is what makes either predictable.
+  - **A change row** offers nothing to restore; `txtEditHistoryNoRestore` says so in place
+    of the button.
 - **Change Order and Change Writer live on the existing per-entry panel** (2026-10-21), the
   classic message you reach through Manage Entries on the V2 Story Manage panel, beside the
   Delete and Restore buttons that are already there. Both act on the one entry just selected,
