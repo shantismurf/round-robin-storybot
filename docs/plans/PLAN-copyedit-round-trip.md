@@ -622,6 +622,19 @@ Settled.
 - Reordering and reassignment are audited in `story_entry_edit` as a per-entry event
   log, discriminated by a `change_type` column rather than a marker inside `content`.
 - The import confirm is a per-turn summary, not a diff.
+- **Change Order and Change Writer live on the existing per-entry panel** (2026-10-21), the
+  classic message you reach through Manage Entries on the V2 Story Manage panel, beside the
+  Delete and Restore buttons that are already there. Both act on the one entry just selected,
+  and the V2-to-classic hop is what that button already does today. A Manage Entries panel of
+  its own was considered and is not needed: worst case that panel uses four of Discord's five
+  action rows — page-jump select, the five-button nav row, Delete/Restore, Back to List — so
+  the two new buttons take the admin row to four of five with a row still spare. Revisit the
+  separate panel when the single-entry round trip adds its buttons in step 5, not before.
+  Note the installed builders validate no component counts at all, so an over-budget payload
+  fails at send time rather than at build time.
+- Button labels **Change Order** and **Change Writer**, approved 2026-10-21. "Reassign" was
+  rejected for the entry action because Manage Turns already uses it for handing the current
+  turn back to the previous writer; the two read as a pair, and the modal carries the detail.
 - Reassign ships inside 3.10.0, as part of the edit import (2026-10-21) — it is a
   structure change made in the file alongside reordering, not a separate later feature.
 - The plain-text export header credits **everyone who has an entry in the work**, in
