@@ -634,6 +634,54 @@ A change row needs no string of its own: the Restore button is **disabled** rath
 replaced by a message (LeeAnn, 2026-10-21). A drafted `txtEditHistoryNoRestore` was dropped
 with it, as were the Undo strings — see Settled.
 
+### Export and import copy, and the filename (2026-10-21)
+
+**`txtExportTextFooter` is removed.** It reprinted the entry count as the file's last human
+line. Its only real job was proving the file wasn't truncated, and the `[[exported-at]]`
+trailer that follows it does that for the importer, so it told the reader only that they had
+reached the end of the file they were looking at. Removing it touches `_exportText.js`, the
+config file and one test.
+
+**The single-entry download message, in LeeAnn's own words** (2026-10-21), so it ships as
+written:
+
+> Download the text of entry [turn_number] ([word_count] words) for editing. This is the raw
+> text of the entry, so keep any formatting markdown intact. Do not remove the first line,
+> which contains the internal turn ID, so that the entry can be imported correctly.
+
+That copy fixes the shape of the single-entry file: the `[[turn N | #id | writer]]` delimiter
+is its **first line**, with no title-and-counts header of its own, then the prose, then the
+`[[exported-at]]` trailer. An earlier draft of this plan said a single-entry file needs no
+delimiter at all. That is wrong, and the reason is hers: the gap between export and import is
+"several minutes, if not hours or days", so the wrong-file and stale-file checks are not
+theoretical, and both need the id.
+
+**Filename convention**, for both exports. Today both are
+`storybot<story_id>_<title>.{html,txt}` where the title has every non-alphanumeric character
+replaced by `_`. Three changes:
+
+- **Use the story number the user sees** (`guild_story_id`), not the internal `story_id`. The
+  current number matches nothing visible in the UI. This changes a production filename, so it
+  needs to land deliberately.
+- **Sanitize only what has to go** — `\ / : * ? " < > |`, control characters, and leading or
+  trailing dots — collapsing runs of whitespace to one underscore. The current pattern mangles
+  ordinary titles: "The Dragon's Keep (Part 2)" becomes `the_dragon_s_keep__part_2_`.
+- **Add the export date and time**, UTC on a 24-hour clock, because downloading the same story
+  twice otherwise leaves `(1)` and `(2)` in a downloads folder with nothing to tell them apart.
+  **No colon and no `Z` suffix**: a colon is forbidden in Windows filenames and historically
+  bad on macOS, and the `Z` is jargon to almost everyone (her call — "a four digit timestamp is
+  either nonsense or perfectly logical to users, that's fine").
+- **Truncate the sanitized title at 60 characters**, trailing underscore trimmed, no ellipsis.
+
+Giving: `storybot3_a_test_story_entries_2026-10-21_2348.txt` and, for one entry,
+`storybot3_a_test_story_turn12_2026-10-21_2348.txt`.
+
+**Still unapproved** as of 2026-10-21: `txtExportTextNoEntries`, `btnEditAddPage`, and the
+wording of `txtEditModalPageHint`. On the hint, her objection stands — a modal's contents only
+reach the bot on submit, so Add Page being a panel button means unsaved typing is lost, and
+"Save any changes before adding a page" says that where "Save, then use Add Page" buried it.
+The open question is only whether the string also names the button.
+
 **Three existing strings come into config with this work, wording unchanged.** They are
 hard-coded in `story/_editHistory.js` today (the panel title, the footer, and the restore
 warning field). Once a row can be a change rather than a version the title has to branch,
