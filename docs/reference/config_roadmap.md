@@ -81,7 +81,9 @@ rather than rendering it. txtExportTextLegend is the format spec the file carrie
 (and for an agent being handed the file) - note it is config while the delimiter it describes is
 fixed in code, so an edit here can describe the format wrongly without breaking the parser.
 txtExportTextHeader and txtExportTextLegend are multi-line and use \n escapes, which
-sync-config.js converts on load. The entry delimiter is deliberately NOT a config key: the
+sync-config.js converts on load. txtExportTextHeader's [authors] token is wrapped in a
+{?...?} optional block, so the Writers line disappears on a story with show_authors off
+rather than leaking names into a file any writer can download off the close announcement. The entry delimiter is deliberately NOT a config key: the
 importer parses it, so a guild rewording it would break import rather than translate it. Status
 words reuse the existing txtOpen/txtClosed. See docs/plans/PLAN-copyedit-round-trip.md.
 

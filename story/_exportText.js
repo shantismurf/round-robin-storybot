@@ -71,8 +71,18 @@ export async function generateEntriesTextExport(connection, storyId, guildId, { 
 
   const fmt = d => new Date(d).toISOString().slice(0, 10);
 
+  // Writer list for the header, in join order, so an editor can see at a glance whose prose
+  // they are about to touch. Honoured against show_authors for the same reason the per-entry
+  // delimiters are: this file is reachable from the public close announcement, so a story whose
+  // writers chose not to be credited must not leak their names here. With no list, the
+  // header's {?...?} block strips itself.
+  const authors = story.show_authors
+    ? writers.map(w => w.pen_name || w.discord_display_name).filter(Boolean).join(', ')
+    : '';
+
   const header = replaceTemplateVariables(cfg.txtExportTextHeader, {
     title: story.title,
+    ...(authors ? { authors } : {}),
     story_num: String(story.guild_story_id),
     turn_count: String(turnCount),
     entry_count: String(entries.length),

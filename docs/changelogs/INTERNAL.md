@@ -57,13 +57,17 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   span, images embedded as data URIs), which is right for publishing to AO3 and wrong for editing,
   because what you edit is not what is stored. This one writes `story_entry.content` verbatim, so a
   copyedit can be compared against what went out without reversing a render.
-  Each entry is preceded by `[[turn N | #entryId]]`. The entry id is what a future import will
+  The file opens with the title, counts, status, export date and the writer list, then a legend
+  describing the markers and the markdown it supports — the format spec the file carries for
+  whoever (or whatever) edits it.
+  Each entry is preceded by `[[turn N | #entryId | writer]]`. The entry id is what a future import will
   match on: a turn number is not unique, since a turn can hold more than one confirmed entry, and
   neither is a writer name. Turn and id sit in fixed leading positions with the name last, so a pen
   name containing a `|` cannot shift what the parser reads as the id. The delimiter is fixed in
   code rather than config, matching `[[break]]` in `story/_entryMarkup.js` — it is a structural
   token, and a guild rewording it would break import rather than translate it. `show_authors` is
-  honoured, because this file is reachable from the public close post.
+  honoured for both the writer list and the per-entry
+  labels, because this file is reachable from the public close post.
 - **`story/_exportData.js`** — `fetchStoryForExport`, the one query path both exports use, lifted
   out of `export.js` so the two export modules share it without importing each other.
 - **`buildCloseExportRow` and `EXPORT_ROW_CONFIG_KEYS`** (`story/_exportText.js`) — the close

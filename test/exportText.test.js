@@ -13,7 +13,7 @@ import { STORY_STATUS } from '../constants.js';
 // Real values from db/config_files/config_metadata.sql, with \n already converted the way
 // sync-config.js:24 converts it when loading.
 const CFG = {
-  txtExportTextHeader: '[title] (story #[story_num])\n[turn_count] turn(s), [entry_count] entr(ies), [word_count] words - status: [status] - exported [exported]',
+  txtExportTextHeader: '[title] (story #[story_num])\n[turn_count] turn(s), [entry_count] entr(ies), [word_count] words - status: [status] - exported [exported]{?\nWriters: [authors]?}',
   txtExportTextLegend: '--- HOW TO EDIT THIS FILE ---\nEach entry begins with a line like [[turn 12 | #4417]].\n  [[break]]          a scene break{? (shows as: [divider])?}\n--- END ---',
   txtExportTextFooter: '--- end of [entry_count] entr(ies) ---',
   txtOpen: 'Open',
@@ -163,6 +163,23 @@ describe('generateEntriesTextExport', () => {
   test('returns null when the story is not in this guild', async () => {
     const conn = makeFakeConnection([[]]);
     assert.equal(await generateEntriesTextExport(conn, 7, 'guild1'), null);
+  });
+
+  test('header lists the writers in join order', async () => {
+    const writers = [
+      { discord_display_name: 'lee_a', pen_name: 'LeeAnn' },
+      { discord_display_name: 'maria_d', pen_name: null },
+    ];
+    const result = await read(story({ show_authors: 1 }), writers, [entry(41, 1, 'T.')]);
+    // pen_name when set, the Discord display name when not.
+    assert.ok(result.buffer.toString('utf8').includes('Writers: LeeAnn, maria_d'));
+  });
+
+  test('omits the writers line entirely when show_authors is off', async () => {
+    const writers = [{ discord_display_name: 'lee_a', pen_name: 'LeeAnn' }];
+    const text = (await read(story({ show_authors: 0 }), writers, [entry(41, 1, 'T.')])).buffer.toString('utf8');
+    assert.ok(!text.includes('Writers:'), 'the optional header block was not stripped');
+    assert.ok(!text.includes('LeeAnn'), 'writer name leaked into the header');
   });
 
   test('header reflects open vs closed from config, not a hard-coded word', async () => {
