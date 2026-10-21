@@ -256,9 +256,23 @@ Shape:
 
 - **`story_entry.entry_order INT`**, story-wide, added by a conditional migration and
   backfilled from the current `started_at` ordering.
-- **Sparse values, never compacted.** Leave gaps. A soft-deleted entry keeps its
-  `entry_order`, so Restore only flips `entry_status` back and the entry returns to
-  the position it held — no renumbering pass, no reinsertion logic.
+- **Dense `1..n` per story, renumbered on reorder.** An earlier draft proposed sparse
+  values with gaps, to avoid renumbering on insert. That was solving a problem that
+  does not exist: soft delete keeps the row, so a deleted entry that keeps its
+  `entry_order` leaves no hole in the stored sequence, and Restore only flips
+  `entry_status` back for the entry to reappear in place. Gaps would only help if
+  renumbering were expensive, and at a story's scale — tens to a couple of hundred
+  entries, reordered by a rare deliberate admin action — it is one UPDATE inside the
+  transaction every story state change already runs in. Dense also gives an invariant
+  that can be asserted and eyeballed, where a sparse scheme gives none and drifts
+  invisibly.
+- Display turn number is a `DENSE_RANK()` over the *confirmed* rows in `entry_order`
+  order, not the raw column, so a soft-deleted entry holding its slot does not leave a
+  hole in the numbering readers see.
+- Note that `story_entry` has no `story_id` — it reaches the story via
+  `turn.story_writer_id` -> `story_writer.story_id`. Per-story uniqueness or contiguity
+  is therefore not expressible as a schema constraint without denormalising, and is
+  application-enforced under either scheme.
 - **Turn number follows display order**, not chronology. The published work prints it
   at each turn break beside the author name, so a shuffled sequence there is the
   confusing outcome. Stale turn references in older Discord posts are accepted:
@@ -269,8 +283,17 @@ Shape:
   identity in `#id` and treats the turn number as display, so renumbering under a
   reorder costs nothing in the file format.
 
-**Why the column belongs on `story_entry` and not on `turn`.** A per-entry order would
-normally risk splitting a turn — interleave another turn's entry between two of turn
+**Why the column belongs on `story_entry` and not on `turn`.** First, because a turn
+row can exist with no entry at all: `story/_writeSkip.js` contains no insert into
+`story_entry`, and `TURN_STATUS` holds only `ENDED` and `ACTIVE` (`constants.js:14`),
+so a skipped or timed-out turn is simply an ended turn that produced nothing. Order on
+`turn` would hand slots to turns that contribute nothing to the story and need
+filtering back out. The existing numbering subqueries already do exactly that
+filtering — each joins `story_entry` on `entry_status = confirmed` — so turn numbering
+has always been entry-driven in effect, and merely *sorted* by `turn.started_at`.
+Putting the column on `story_entry` makes the schema say what the code already computes.
+
+Second, a per-entry order would normally risk splitting a turn — interleave another turn's entry between two of turn
 12's and "turn 12" appears twice with turn 13 between them. That cannot happen here:
 `021_story_entry_confirmed_unique.sql` enforces **one confirmed entry per turn** via a
 generated `confirmed_turn_id` column and a unique key on it. A turn carries at most one
@@ -401,7 +424,8 @@ explicit turn references rather than numeric ranges.
 - Turn reordering **is** done by moving blocks in a file, reversing an earlier entry
   here. Structure changes ride the import because the file is where the editing
   happens; the confirm-on-apply step and the existing Restore cover the accident case.
-- Display order lives in a new `story_entry.entry_order`; `started_at` is left alone as
+- Display order lives in a new `story_entry.entry_order`, dense `1..n` per story and
+  renumbered on reorder; `started_at` is left alone as
   the record of when things happened.
 - Turn numbers follow display order and renumber on reorder. Stale references in older
   Discord posts are an accepted cost.
