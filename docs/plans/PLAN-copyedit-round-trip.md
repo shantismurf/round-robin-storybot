@@ -519,8 +519,6 @@ explicit turn references rather than numeric ranges.
 - Whether Restore undoes reorders and reassignments or the change log is read-only
   history. Restoring content is one update; restoring a reorder renumbers the
   neighbours again, which is a meaningfully larger piece of work than the audit row.
-- Release shape: whether the editing revamp ships as 3.10.0 on its own, or is held and
-  rolled together with chapters and series as a 4.0. See the note below.
 - Whether `order_in_turn` is actually still present in production — needs
   `SHOW COLUMNS FROM story_entry` on the VM. No inference from the application's
   behaviour settles it; the migration is safe either way.
@@ -547,6 +545,14 @@ explicit turn references rather than numeric ranges.
 - Reordering and reassignment are audited in `story_entry_edit` as a per-entry event
   log, discriminated by a `change_type` column rather than a marker inside `content`.
 - The import confirm is a per-turn summary, not a diff.
+- **Release shape (2026-10-21):** the editing revamp ships on its own as 3.10.0. Chapters
+  and series become 4.0, where the major bump is earned by the unit of the product
+  changing — a story becomes a chaptered work becomes a series. Rolling the editing work
+  into 4.0 was considered and declined: `PLAN-series-system.md` is still an undesigned
+  stub, phases 1-2 are already on main under Unreleased, and holding them would delay a
+  fix for a problem the editor has now. This work is deliberately the groundwork for that
+  larger implementation — chapters need `entry_order` and per-chapter export, so the build
+  order is editing-first regardless of the numbering.
 
 ## Related
 
