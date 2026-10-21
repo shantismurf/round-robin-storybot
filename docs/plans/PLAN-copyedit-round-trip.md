@@ -629,10 +629,10 @@ header's writer list.
 | `txtEditHistoryMoved` | Moved from turn [from_position] to turn [to_position]. |
 | `txtEditHistoryChangeTitle` | Entry History - Change [version] of [total] |
 | `txtEditHistoryChangeBy` | Changed by [edited_by] · [edited_at] |
-| `txtEditHistoryNoRestore` | -# This is a record of a change, not a saved version, so there is nothing to restore here. |
 
-`txtEditHistoryNoRestore` carries the whole behaviour on a change row: the panel suppresses
-the Restore button and shows that line. No Undo button and no undo strings — see Settled.
+A change row needs no string of its own: the Restore button is **disabled** rather than
+replaced by a message (LeeAnn, 2026-10-21). A drafted `txtEditHistoryNoRestore` was dropped
+with it, as were the Undo strings — see Settled.
 
 **Three existing strings come into config with this work, wording unchanged.** They are
 hard-coded in `story/_editHistory.js` today (the panel title, the footer, and the restore
@@ -702,8 +702,13 @@ problem it ever had was ambiguity against a second "reassign", which Change Writ
   - **Restore This Version** (History) replaces content from a saved version and never
     moves the entry — position is not part of a content version, and keeping the two axes
     independent is what makes either predictable.
-  - **A change row** offers nothing to restore; `txtEditHistoryNoRestore` says so in place
-    of the button.
+  - **A change row** disables the Restore button (her call, 2026-10-21) instead of printing
+    an explanation. The page already says which kind it is — "Entry History - Change 3 of 7"
+    over a line reading "Writer changed from Maria to Jun" — so a message would restate it,
+    and `setDisabled` is how this same panel already handles Delete and Restore in manage
+    mode. Note the existing code *omits* the Restore button on the later pages of a
+    multi-page version rather than disabling it (`story/_editHistory.js`, the
+    `histChunkPage === 0` guard); left as it is, not matched, unless she asks.
 - **Change Order and Change Writer live on the existing per-entry panel** (2026-10-21), the
   classic message you reach through Manage Entries on the V2 Story Manage panel, beside the
   Delete and Restore buttons that are already there. Both act on the one entry just selected,
