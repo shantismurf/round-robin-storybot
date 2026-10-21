@@ -586,6 +586,67 @@ Chapters and per-chapter export are deliberately **not** in this list — they a
 work, coordinated with `PLAN-series-system.md`. See the release-shape entry under
 Settled.
 
+## Approved copy — Change Order, Change Writer, and the change log
+
+Approved by LeeAnn 2026-10-21. These are the exact values to land when step 4 builds; they
+go into `db/config_files/config_storyadmin.sql` (the Manage Entries keys) and
+`config_turn.sql` (the history keys), and into `docs/reference/config_roadmap.md`. They are
+deliberately **not** synced ahead of the build — an unused key in the DB is noise.
+
+**Change Order** — the move modal on the per-entry panel.
+
+| Key | Value |
+| --- | --- |
+| `btnManageEntriesChangeOrder` | Change Order |
+| `txtManageEntriesChangeOrderModalTitle` | Change Order |
+| `lblManageEntriesChangeOrderTurn` | Move to turn number (1-[total]) |
+| `txtManageEntriesChangeOrderPlaceholder` | e.g. 4 |
+| `txtManageEntriesChangeOrderSuccess` | ✅ Moved to turn [to_position]. The turns in between have been renumbered. |
+| `txtManageEntriesChangeOrderInvalid` | ❌ Enter a turn number between 1 and [total]. |
+| `txtManageEntriesChangeOrderNoChange` | ❌ This entry is already turn [to_position]. |
+
+**Change Writer** — the writer picker, delivered as a follow-up select like Manage Turns'
+next-writer flow, so it costs no row on the panel.
+
+| Key | Value |
+| --- | --- |
+| `btnManageEntriesChangeWriter` | Change Writer |
+| `txtManageEntriesChangeWriterSelect` | Who should turn [turn_number] belong to? |
+| `txtManageEntriesChangeWriterPlaceholder` | Select a writer... |
+| `txtManageEntriesChangeWriterSuccess` | ✅ Turn [turn_number] now belongs to **[to_writer]** (was [from_writer]). |
+| `txtManageEntriesChangeWriterSame` | ❌ This entry already belongs to [to_writer]. |
+| `txtManageEntriesChangeWriterLatest` | -# This is the most recent turn, so changing its writer also changes whose turn comes next. |
+
+The picker lists **everyone ever joined to the story**, any `sw_status`, not just active
+members: crediting an entry is not about who can write next, and it matches the export
+header's writer list.
+
+**The change log**, rendered in the History panel.
+
+| Key | Value |
+| --- | --- |
+| `txtEditHistoryWriterChanged` | Writer changed from **[from_writer]** to **[to_writer]**. |
+| `txtEditHistoryMoved` | Moved from turn [from_position] to turn [to_position]. |
+| `txtEditHistoryChangeTitle` | Entry History - Change [version] of [total] |
+| `txtEditHistoryChangeBy` | Changed by [edited_by] · [edited_at] |
+| `txtEditHistoryNoRestore` | -# This is a record of a change, not a saved version, so there is nothing to restore here. |
+
+**Three existing strings come into config with this work, wording unchanged.** They are
+hard-coded in `story/_editHistory.js` today (the panel title, the footer, and the restore
+warning field). Once a row can be a change rather than a version the title has to branch,
+so they cannot stay inline. Her current words are preserved verbatim; only the home moves:
+
+- `txtEditHistoryVersionTitle` - `Edit History — Version [version] of [total]{? · Page [page] of [pages]?}`
+- `txtEditHistoryEditedBy` - `Edited by [edited_by] · [edited_at]`
+- `txtEditHistoryRestoreNotice` / `...RestoreNoticeMulti` - the two forms of
+  "*Restoring will replace your entire current entry and will alter the story's turn
+  count.*", the second prefixed with "*This version spans multiple pages.*"
+
+Rejected label: **Reassign** for the entry action. Manage Turns already uses it for handing
+the current turn back to the previous writer, which is a different operation, and "Reassign
+Entry" leaves open whether the new writer gets to rewrite it. Change Order and Change Writer
+read as a pair, and the modal carries the detail.
+
 ## Open decisions
 
 - How to present the single-entry round trip so it is obvious to a non-developer.
