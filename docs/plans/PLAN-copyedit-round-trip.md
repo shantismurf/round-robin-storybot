@@ -647,6 +647,11 @@ the current turn back to the previous writer, which is a different operation, an
 Entry" leaves open whether the new writer gets to rewrite it. Change Order and Change Writer
 read as a pair, and the modal carries the detail.
 
+**Manage Turns keeps "↩️ Reassign to Previous" unchanged** (LeeAnn, 2026-10-21). Renaming it
+was offered and declined: the label plus its confirm text ("They will get a new turn
+immediately, then [current_writer] will go next") already says what it does, and the only
+problem it ever had was ambiguity against a second "reassign", which Change Writer removes.
+
 ## Open decisions
 
 - How to present the single-entry round trip so it is obvious to a non-developer.
