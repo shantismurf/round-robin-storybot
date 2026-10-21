@@ -2,7 +2,7 @@
 
 Status: In progress — phases 1-2 built, entry-ordering design open
 Created: 2026-09-22
-Last Updated: 2026-10-21 (entry ordering and import semantics)
+Last Updated: 2026-10-21 (change log, import confirmation)
 
 ## Problem
 
@@ -306,6 +306,76 @@ than one confirmed entry. Migration 021 makes that false. Matching on the id is 
 right — ids are stable and turn numbers are about to start renumbering under reorder —
 but the stated reason needs replacing.
 
+### Reassignment, reordering, and the change log (decided 2026-10-21)
+
+Reassigning a turn is one column: `UPDATE turn SET story_writer_id = ?`, pointing at the
+`story_writer` row for another member of the same story. `story_writer` carries
+`UNIQUE KEY (story_id, discord_user_id)`, so there is exactly one row per person per
+story and no ambiguity about the target; someone who left and rejoined is that same row
+with `sw_status` flipped. `pen_name` lives on that row and every display query resolves
+the name through the join, so the export, status post and thread all follow the change
+with no denormalised copy to chase. Nothing writes `turn.story_writer_id` today — every
+reference in the codebase is a JOIN — so this is new behaviour with nothing to
+coordinate against.
+
+Two cautions. `PickNextWriter` decides who is up by reading the most recent turn's
+`story_writer_id` (`story/_turn.js:27-32`), so reassigning a *past* turn is inert while
+reassigning the latest one shifts the rotation — wanted for fairness, but it should not
+be a surprise. And `turn.thread_id` keeps pointing at the original writer's turn thread,
+which is harmless since those are cleaned up.
+
+**Both changes are audited in `story_entry_edit`, which becomes a per-entry event log.**
+Not a column on `turn`: a single `original_story_writer_id` would record the first
+author and silently swallow the hops, where a row per change preserves a
+Maria -> Jun -> Maria chain with who made each change and when. The table is already the
+audit trail, already surfaced in the history panel, and already denormalises a name
+(`edited_by_name`) so history survives.
+
+Schema changes:
+
+- `content` becomes nullable — a reorder or reassignment row has no content to snapshot.
+- `change_type` nullable, the discriminator. `change_type IS NULL` is a content version.
+- previous and new writer (id plus a name snapshot, mirroring `edited_by`/`edited_by_name`),
+  and previous and new position.
+- **Both sides of the change on the row, not just the previous value.** The history panel
+  pages one row at a time (`story/_editHistory.js:15`, `LIMIT 1 OFFSET ?`), so whatever is
+  on the row is all it has to render with. Store only the previous writer and showing
+  "Maria -> Jun" means fetching a neighbour, or the turn itself for the newest row.
+- Typed columns rather than a `detail JSON` like `guild_event` has. Three stable change
+  types, the panel reads these rows on every page turn, and mysql2's switch to returning
+  MariaDB JSON as objects already took out every job once (PR #87). Not worth inviting
+  back into a read path.
+
+**Rejected: encoding the change as a marker inside `content`.** Attractive because it
+needs no migration, and it was pursued as far as a `[[reassign|<from>|<to>]]` pattern with
+a build/parse pair mirroring `story/_exportText.js`. It does not survive contact with the
+existing markup. `[[break]]` is safe — `isSceneBreakLine` (`story/_entryMarkup.js:83`) is
+an exact full-line match with no pipe. But `TOOLTIP_RE` (`:16`) is
+`/\[\[([^[\]\n|]*)\|([^[\]\n]*)\]\]/g`: the first group excludes pipes and the second does
+not, so `[[reassign|123|456]]` matches it as text `reassign`, translation `123|456`
+(verified by running it). An internal marker in that namespace is not merely *mistakable*
+for a translation tag, it *is* one, and the history panel rendering content is exactly a
+render path. A `!` prefix does not escape it either, since `!` is not an excluded
+character. Generally: `[[...]]` is the user's markup namespace and `content` is free text
+they control, so no in-content marker can be made collision-proof, only improbable — and
+these rows are user-facing, so a marker that renders as a tooltip is a visible bug.
+
+**Restore must refuse non-content rows.** `story/_editHistory.js:113` reads `content` from
+the chosen row and `:137` writes it into `story_entry`, so without a discriminator a
+Restore on an audit row would overwrite an entry with a log marker. With the column the
+dangerous case is unreachable rather than carefully handled.
+
+**Log intent, not consequence.** `entry_order` is dense, so moving one entry rewrites the
+position of every entry after it. Logging each would write ~30 rows for a single move in a
+40-turn story, 29 of them entries that merely shifted to make room, burying the real
+content history. One row records the deliberate move; the incidental renumbering is
+derivable.
+
+**These rows are user-facing**, so they need config strings rather than stored prose —
+provisionally `txtEditHistoryReassigned` and `txtEditHistoryReordered`, with
+`[from_writer]`/`[to_writer]` and `[from_position]`/`[to_position]` tokens through
+`replaceTemplateVariables`. Wording needs approval before it ships.
+
 ### Import flow
 
 Phase 1 is a **single-entry** round trip on the existing edit interface: download
@@ -359,6 +429,41 @@ Copy is not drafted here on purpose. It should be written against the real mecha
 once they exist, not guessed at now, and like all user-facing text it needs approval
 before it ships.
 
+### Import confirmation (decided 2026-10-21)
+
+No full diff. The editor made the edits and does not need them read back; the confirm
+exists to surface what they could *not* have intended. One row per turn, which absorbs
+the categories instead of splitting them into separate lists:
+
+`12. Maria - 1,420 -> 1,380 words (moved to 9)`
+
+A removal reads as `-> removed` on the line where that turn belongs, a reassignment is
+the writer name changing on the line, and a conflict — an entry edited in Discord between
+export and import, the one item in the summary the editor cannot know about — is a marker
+on the line. Listing removals individually rather than counting them is also the
+truncation safeguard: a phone editor that eats the tail of the file arrives as a list of
+entries the editor recognises, which is alarming in a way "9 removed" is not.
+
+Only changed turns are listed, finishing with a count of the rest ("28 unchanged"), since
+the signal is what moved. At roughly forty characters a line, about a hundred turns fit an
+embed description; when the changed list overflows, show the first stretch inline and
+attach the full summary as a `.txt`, reusing the attachment pattern the exports already
+use rather than building another paginated panel.
+
+An entry id that is not in this story, or the same id twice, is not a confirmation case —
+that is a wrong or mangled file, and it refuses with a reason rather than offering a
+summary to approve.
+
+Conflict detection needs the export's timestamp at full precision. The header currently
+stamps the day only (`story/_exportText.js`, `.toISOString().slice(0, 10)`), where the
+check wants the instant, comparing against `story_entry_edit.edited_at`. Cheap to change
+now and awkward once files are in flight that the parser has to keep accepting.
+
+The flow needs no slash command with an attachment option: modals take file uploads in
+discord.js 14.27.0 (`FileUploadBuilder`, `ModalSubmitFields.getUploadedFiles()`, and
+`docs/reference/discordjs_reference.md:149`), so it is a button on the edit panel, a modal
+that takes the file, the ephemeral confirm, then apply.
+
 ### Chapters: a real UI, not file markers (revised)
 
 An earlier draft proposed defining chapters with markers inside the imported
@@ -400,6 +505,10 @@ explicit turn references rather than numeric ranges.
 6. **Small/medium** — reorder and reassign in Manage Entries. Reassign is only
    `turn.story_writer_id` pointing at another `story_writer` row of the same story,
    with no ordering involved. Delete and Restore already exist (`story/edit.js:401`).
+7. **Medium** — the change log: `story_entry_edit` gains `change_type` and the
+   previous/new columns, `content` goes nullable, the history panel branches per row
+   type, and Restore refuses non-content rows. Ships with (6), since reorder and
+   reassign should not land unaudited.
 
 ## Open decisions
 
@@ -407,6 +516,11 @@ explicit turn references rather than numeric ranges.
 - Whether chapters belong in this plan or in `PLAN-series-system.md`.
 - Whether the whole-story import (phase 3) is needed at all once phase 2 exists.
 - Whether reassign ships inside 3.10.0 or follows it.
+- Whether Restore undoes reorders and reassignments or the change log is read-only
+  history. Restoring content is one update; restoring a reorder renumbers the
+  neighbours again, which is a meaningfully larger piece of work than the audit row.
+- Release shape: whether the editing revamp ships as 3.10.0 on its own, or is held and
+  rolled together with chapters and series as a 4.0. See the note below.
 - Whether `order_in_turn` is actually still present in production — needs
   `SHOW COLUMNS FROM story_entry` on the VM. No inference from the application's
   behaviour settles it; the migration is safe either way.
@@ -430,6 +544,9 @@ explicit turn references rather than numeric ranges.
 - Turn numbers follow display order and renumber on reorder. Stale references in older
   Discord posts are an accepted cost.
 - The old `order_in_turn` column is dropped, not repurposed.
+- Reordering and reassignment are audited in `story_entry_edit` as a per-entry event
+  log, discriminated by a `change_type` column rather than a marker inside `content`.
+- The import confirm is a per-turn summary, not a diff.
 
 ## Related
 
