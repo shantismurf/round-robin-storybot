@@ -547,6 +547,8 @@ explicit turn references rather than numeric ranges.
 
 ## Build order
 
+Sequence set by LeeAnn on 2026-10-21; this is the order to build in, not a menu.
+
 1. ~~**Small** — an explicit "Add a page" button on the edit panel, plus
    `LabelBuilder.setDescription()` to make the save-and-reopen behaviour visible.~~
    **Built 2026-10-20**, held under Unreleased for the 3.10.0 bump. Also folded in:
@@ -554,25 +556,35 @@ explicit turn references rather than numeric ranges.
    duplicate copy of the same modal consolidated onto the shared builder, and its
    stale copy of the config-key list replaced with the exported
    `EDIT_PANEL_CONFIG_KEYS`. See the Unreleased changelog entry.
-2. **Small/medium** — single-entry export + import on the edit interface. The
-   real fix for cross-page editing. Main open question is how to present it:
-   framing it as one round trip ("edit as file") likely reads more clearly than
-   two separate download/upload buttons.
-3. **Medium** — whole-story export + import with an attached diff. Generalises
-   phase 2's machinery; needs the `[[...]]` delimiter.
-4. **Medium/large** — chapter interface + per-chapter export. Coordinate with
-   `PLAN-series-system.md`.
-5. **Medium** — `entry_order` migration: add the column, backfill from `started_at`,
-   drop the orphaned `order_in_turn` and its `unique_turn_order` index, and switch all
-   fourteen turn-number computations over. Prerequisite for both reordering and
-   import's reorder/remove semantics. No longer deferred.
-6. **Small/medium** — reorder and reassign in Manage Entries. Reassign is only
-   `turn.story_writer_id` pointing at another `story_writer` row of the same story,
-   with no ordering involved. Delete and Restore already exist (`story/edit.js:401`).
-7. **Medium** — the change log: `story_entry_edit` gains `change_type` and the
-   previous/new columns, `content` goes nullable, the history panel branches per row
-   type, and Restore refuses non-content rows. Ships with (6), since reorder and
-   reassign should not land unaudited.
+2. ~~**Small/medium** — the plain-text "Export Entries for Editing" file: header,
+   legend, `[[turn N | #id | writer]]` delimiters, the `[[exported-at]]` trailer, and
+   the image-pattern widening that came with it.~~ **Built 2026-10-21**, also under
+   Unreleased.
+3. **Medium** — the `entry_order` migration. Add the column and backfill it from the
+   current `started_at` ordering; drop `order_in_turn` **and its `unique_turn_order`
+   index explicitly first**, with `IF EXISTS` guards; then switch the fifteen
+   turn-numbering lines and the five display sorts over. See "Exactly which queries
+   change" for the inventory. Prerequisite for everything below it, because both
+   reordering in the panel and reorder/remove semantics on import need a column to
+   write to.
+4. **Small/medium** — reorder and writer-change in Manage Entries, **with the change
+   log in the same piece of work** — reorder and reassign should not land unaudited.
+   The move is `entry_order` plus a renumber that carries soft-deleted rows; the
+   writer change is `turn.story_writer_id` pointed at another `story_writer` row of
+   the same story, with no ordering involved. Delete and Restore already exist
+   (`story/edit.js:401`). The change log is `story_entry_edit` gaining `change_type`
+   and the previous/new columns, `content` going nullable, the history panel branching
+   per row type, and Restore refusing non-content rows.
+5. **Small/medium** — single-entry export + import on the edit panel. The real fix for
+   cross-page editing. Main open question is how to present it: framing it as one round
+   trip ("edit as file") likely reads more clearly than two separate download/upload
+   buttons.
+6. **Medium** — whole-story import with the per-turn confirm. Generalises (5)'s
+   machinery over the file (2) already produces.
+
+Chapters and per-chapter export are deliberately **not** in this list — they are 4.0
+work, coordinated with `PLAN-series-system.md`. See the release-shape entry under
+Settled.
 
 ## Open decisions
 
