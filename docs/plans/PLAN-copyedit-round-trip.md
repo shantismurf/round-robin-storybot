@@ -86,20 +86,33 @@ Reviving it is still the wrong move. The name scopes order to a turn when what i
 needed is story-wide, and `unique_turn_order` constrains `(turn_id, order_in_turn)`,
 which is not the uniqueness that matters. Every existing row holds the same default,
 so the backfill is identical either way — reuse buys nothing but a misleading name.
-**Decided 2026-10-21: drop it rather than edit or repurpose it.** Two cautions for
-that migration. It has to be conditional (`DROP ... IF EXISTS`, the pattern of
-`012_drop_additional_tags.sql`) because a post-April database never had the column.
-And it has to drop `unique_turn_order` *explicitly, first*: in MySQL and MariaDB,
-dropping a column that is part of a multi-column index removes the column from the
-index rather than dropping the index, which would leave a `UNIQUE KEY` on `turn_id`
-alone — forbidding a turn from carrying more than one `story_entry` row of any
-status, which is exactly what `021_story_entry_confirmed_unique.sql` says the schema
-expects. That is a destructive outcome from an otherwise routine drop.
+**Decided 2026-10-21: drop it rather than edit or repurpose it.** The migration has
+to be conditional (`DROP ... IF EXISTS`, the pattern of
+`012_drop_additional_tags.sql`), because a post-April database never had the column.
+It should also drop `unique_turn_order` explicitly rather than relying on the column
+drop: in MySQL and MariaDB, dropping a column that is part of a multi-column index
+removes the column *from* the index instead of dropping the index, which would leave
+a `UNIQUE KEY` on `turn_id` alone. That constraint would be harmless today (see
+below) but is one nobody intended, and leaving it behind for a future session to
+puzzle over is worse than one extra line in the migration.
 
-There is circumstantial evidence the column may already be gone from production: it
-defaults to `1` for every row, so with `unique_turn_order` live, any turn that
-accumulated a second row of any status would have collided. Still unverified either
-way, which is why the migration is written to be safe when the column is absent.
+**One `story_entry` row per turn, in every mode.** Worth recording, because it is not
+obvious from the schema and an earlier draft of this section got it wrong. Quick mode
+is the only path that creates a row before finalize (`story/_writeQuickMode.js:115`,
+inserted `pending`), and it then transitions *that same row* in place — `:188` to
+`confirmed` on submit, `:269` to `discarded` on discard or timeout — and on a rewrite
+after a discard it selects the existing row and updates it (`:103-113`) rather than
+inserting a second. Quick mode takes a single input, so there is never more than one.
+Thread modes never stage a row at all: `story/_writeFinalize.js:351` inserts straight
+to `confirmed`. No code path gives a turn two `story_entry` rows.
+
+So `021_story_entry_confirmed_unique.sql`'s comment that "a turn is expected to carry
+other-status rows too" describes what its partial-unique trick *tolerates*, not what
+the application actually produces. And an earlier claim here — that production may
+have already lost `order_in_turn`, because its `DEFAULT 1` would have collided on any
+turn holding a second row — does not hold: no turn ever holds a second row, so no
+collision would ever have occurred. Whether the column is still there is simply
+unknown, and needs `SHOW COLUMNS FROM story_entry` on the VM.
 
 ### Chapters do not exist
 
@@ -372,7 +385,8 @@ explicit turn references rather than numeric ranges.
 - Whether the whole-story import (phase 3) is needed at all once phase 2 exists.
 - Whether reassign ships inside 3.10.0 or follows it.
 - Whether `order_in_turn` is actually still present in production — needs
-  `SHOW COLUMNS FROM story_entry` on the VM. The migration is safe either way.
+  `SHOW COLUMNS FROM story_entry` on the VM. No inference from the application's
+  behaviour settles it; the migration is safe either way.
 
 ## Settled
 
