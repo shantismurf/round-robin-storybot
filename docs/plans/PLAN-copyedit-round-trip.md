@@ -34,15 +34,21 @@ is what makes a per-entry round trip safe, with no authorship ambiguity.
 ### Growing an entry is undiscoverable
 
 Within an edit session the chunk list is deliberately frozen — see the comment
-at `story/edit.js:529` ("do NOT re-chunk from scratch, as that shifts boundaries
-and causes orphaned content"). To add a page you must save and reopen. The only
-in-app hint is `setPlaceholder()` at `story/edit.js:414`.
+at `story/edit.js:638` ("do NOT re-chunk from scratch, as that shifts boundaries
+and causes orphaned content"). To add a page you must save and reopen.
 
-A placeholder renders only when the field is empty, and `setValue()` on the
-preceding line always pre-fills it — so that hint almost certainly never
-displays. **Not verified against a live client**; the builder just forwards
+Before phase 1, the only in-app hint that this was possible was a
+`setPlaceholder()` on the edit modal's content field — on main at
+`story/edit.js:418`, reading "N / 3800 on this page of M total. Save and reopen
+this page to add more." (hard-coded, which is its own CLAUDE.md problem). A
+placeholder renders only when the field is empty, and the `setValue()` beside it
+always pre-fills the field, so that hint almost certainly never displayed to
+anyone. **Not verified against a live client** — the builder just forwards
 `placeholder` to the API and cannot settle a client rendering question, and this
-host has no local/staging execution. Treat as strong suspicion pending a live check.
+host has no local/staging execution — so it stays a strong suspicion rather than
+a fact. It is moot either way now: phase 1 replaced it with a `LabelBuilder`
+description above the field (`story/edit.js:513`, config key
+`txtEditModalPageHint`), which renders regardless of whether the field is empty.
 
 The observed workaround is padding an entry with junk text to force an extra
 page — not something a non-developer would ever discover.
@@ -283,6 +289,19 @@ Shape:
 - Display turn number is a `DENSE_RANK()` over the *confirmed* rows in `entry_order`
   order, not the raw column, so a soft-deleted entry holding its slot does not leave a
   hole in the numbering readers see.
+- **Restore puts an entry back in its old slot, and the one rule that makes that work is
+  that a renumber carries soft-deleted rows too** (decided 2026-10-21). A reorder
+  renumbers every row of the story, deleted ones included — not just the confirmed ones.
+  Skip them and a deleted row's stale value collides with a live one: positions 1-5,
+  delete #3 (it keeps 3), then move #5 to the front, and the confirmed rows renumber 1-4
+  while a deleted row still holds 3. Carried through the renumber, "it holds its slot"
+  stays true across any number of reorders, Restore stays a pure `entry_status` flip with
+  no ordering logic in it at all, and the entry comes back where it was *relative to
+  whatever its neighbours have become* — which is the requirement: if other entries
+  shifted around it, we do not try to second-guess that. A newly written entry takes
+  `MAX(entry_order) + 1` over all statuses, so it can never land on a held slot. The
+  alternative considered and rejected is storing a neighbour anchor ("restore after entry
+  #X"), which is the second-guessing, and breaks when the anchor is itself deleted.
 - Note that `story_entry` has no `story_id` — it reaches the story via
   `turn.story_writer_id` -> `story_writer.story_id`. Per-story uniqueness or contiguity
   is therefore not expressible as a schema constraint without denormalising, and is
@@ -560,10 +579,11 @@ explicit turn references rather than numeric ranges.
 - How to present the single-entry round trip so it is obvious to a non-developer.
 - Whether chapters belong in this plan or in `PLAN-series-system.md`.
 - Whether the whole-story import (phase 3) is needed at all once phase 2 exists.
-- Whether reassign ships inside 3.10.0 or follows it.
 - Whether Restore undoes reorders and reassignments or the change log is read-only
   history. Restoring content is one update; restoring a reorder renumbers the
   neighbours again, which is a meaningfully larger piece of work than the audit row.
+  Restore of a *deletion* is settled — see the entry-ordering section; this is only
+  about the reorder and reassign rows.
 - Whether `order_in_turn` is actually still present in production — needs
   `SHOW COLUMNS FROM story_entry` on the VM. No inference from the application's
   behaviour settles it; the migration is safe either way.
@@ -590,6 +610,12 @@ explicit turn references rather than numeric ranges.
 - Reordering and reassignment are audited in `story_entry_edit` as a per-entry event
   log, discriminated by a `change_type` column rather than a marker inside `content`.
 - The import confirm is a per-turn summary, not a diff.
+- Reassign ships inside 3.10.0, as part of the edit import (2026-10-21) — it is a
+  structure change made in the file alongside reordering, not a separate later feature.
+- The plain-text export header credits **everyone who has an entry in the work**, in
+  order of their first one (2026-10-21), taken from the entries rather than from the
+  active-writer list: a writer who has since left still wrote prose the editor is about
+  to touch, and a member who joined but never wrote is not an author of it.
 - **Release shape (2026-10-21):** the editing revamp ships on its own as 3.10.0. Chapters
   and series become 4.0, where the major bump is earned by the unit of the product
   changing — a story becomes a chaptered work becomes a series. Rolling the editing work

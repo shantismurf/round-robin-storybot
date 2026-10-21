@@ -167,19 +167,30 @@ describe('generateEntriesTextExport', () => {
     assert.equal(await generateEntriesTextExport(conn, 7, 'guild1'), null);
   });
 
-  test('header lists the writers in join order', async () => {
-    const writers = [
-      { discord_display_name: 'lee_a', pen_name: 'LeeAnn' },
-      { discord_display_name: 'maria_d', pen_name: null },
+  test('header lists everyone with an entry, in order of their first one, once each', async () => {
+    const entries = [
+      entry(41, 1, 'T.', { discord_display_name: 'lee_a', pen_name: 'LeeAnn' }),
+      entry(42, 2, 'T.', { discord_display_name: 'maria_d', pen_name: null }),
+      entry(43, 3, 'T.', { discord_display_name: 'lee_a', pen_name: 'LeeAnn' }),
     ];
-    const result = await read(story({ show_authors: 1 }), writers, [entry(41, 1, 'T.')]);
-    // pen_name when set, the Discord display name when not.
+    const result = await read(story({ show_authors: 1 }), [], entries);
+    // pen_name when set, the Discord display name when not, and no repeat for a second turn.
     assert.ok(result.buffer.toString('utf8').includes('Writers: LeeAnn, maria_d'));
   });
 
+  // The writer list fetchStoryForExport returns is active members only, so it is the wrong
+  // source for a header that credits the prose in the file.
+  test('credits a writer who has left and leaves out a member who never wrote', async () => {
+    const activeWriters = [{ discord_display_name: 'lee_a', pen_name: 'LeeAnn' }];
+    const entries = [entry(41, 1, 'T.', { discord_display_name: 'gone_g', pen_name: 'Gwen' })];
+    const text = (await read(story({ show_authors: 1 }), activeWriters, entries)).buffer.toString('utf8');
+    assert.ok(text.includes('Writers: Gwen'), 'a departed writer with an entry was dropped');
+    assert.ok(!text.includes('LeeAnn'), 'a member with no entry was credited');
+  });
+
   test('omits the writers line entirely when show_authors is off', async () => {
-    const writers = [{ discord_display_name: 'lee_a', pen_name: 'LeeAnn' }];
-    const text = (await read(story({ show_authors: 0 }), writers, [entry(41, 1, 'T.')])).buffer.toString('utf8');
+    const entries = [entry(41, 1, 'T.', { discord_display_name: 'lee_a', pen_name: 'LeeAnn' })];
+    const text = (await read(story({ show_authors: 0 }), [], entries)).buffer.toString('utf8');
     assert.ok(!text.includes('Writers:'), 'the optional header block was not stripped');
     assert.ok(!text.includes('LeeAnn'), 'writer name leaked into the header');
   });

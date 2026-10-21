@@ -101,13 +101,16 @@ export async function generateEntriesTextExport(connection, storyId, guildId, { 
   // One instant for both the human date and the machine trailer, so they cannot disagree.
   const exportedAt = new Date();
 
-  // Writer list for the header, in join order, so an editor can see at a glance whose prose
-  // they are about to touch. Honoured against show_authors for the same reason the per-entry
-  // delimiters are: this file is reachable from the public close announcement, so a story whose
-  // writers chose not to be credited must not leak their names here. With no list, the
-  // header's {?...?} block strips itself.
+  // Writer list for the header: everyone who has an entry in the work, in order of their
+  // first one. Taken from the entries rather than from fetchStoryForExport's writer list,
+  // because that list is active members only — a writer who has since left still wrote prose
+  // the editor is about to touch, and a member who joined but never wrote is not an author of
+  // it. Honoured against show_authors for the same reason the per-entry delimiters are: this
+  // file is reachable from the public close announcement, so a story whose writers chose not
+  // to be credited must not leak their names here. With no names, the header's {?...?} block
+  // strips itself.
   const authors = story.show_authors
-    ? writers.map(w => w.pen_name || w.discord_display_name).filter(Boolean).join(', ')
+    ? [...new Set(entries.map(e => e.pen_name || e.discord_display_name).filter(Boolean))].join(', ')
     : '';
 
   const header = replaceTemplateVariables(cfg.txtExportTextHeader, {

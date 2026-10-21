@@ -68,6 +68,11 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   token, and a guild rewording it would break import rather than translate it. `show_authors` is
   honoured for both the writer list and the per-entry
   labels, because this file is reachable from the public close post.
+  The header's writer list is everyone who has an entry in the work, in order of their first one,
+  derived from the entries rather than from `fetchStoryForExport`'s writer list. That list is
+  active members only, which is the wrong set for a header that credits the prose in the file: a
+  writer who has since left still wrote some of it, and a member who joined but never wrote did
+  not. The HTML export's own writer line and the `writerCount` both exports return are unchanged.
 - **Image links may now be any https image URL, not only Discord CDN attachments.** A writer
   can point at an image they host themselves, and change one by editing the `[caption](url)`
   text — which is what makes images survive the copyedit round trip, since there is no token
