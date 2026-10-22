@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { splitStoryFile, planStoryImport } from '../story/_importPlan.js';
+import { splitStoryFile, planStoryImport, movedEntryIds } from '../story/_importPlan.js';
 import { parseEntryDelimiter, parseExportStamp, buildEntryDelimiter, buildExportStamp } from '../story/_exportText.js';
 import { ENTRY_STATUS } from '../constants.js';
 
@@ -169,7 +169,36 @@ describe('planStoryImport — order', () => {
     assert.equal(rowFor(result, 43).toPosition, 1);
     assert.equal(rowFor(result, 43).fromPosition, 3);
     assert.equal(rowFor(result, 43).moved, true);
-    assert.equal(rowFor(result, 41).moved, true);
+    // 41 and 42 were renumbered by 43 arriving in front of them, which is not a move they made:
+    // their order relative to each other, and to everything else left, is untouched.
+    assert.equal(rowFor(result, 41).moved, false);
+    assert.equal(rowFor(result, 42).moved, false);
+    assert.equal(result.changedCount, 1); // the one turn the editor moved, and nothing else
+  });
+
+  // The whole reason moves are measured relatively: LeeAnn, 2026-10-22, "saying the number of
+  // turns changed isn't helpful when they all get reordered".
+  test('a turn dragged to the front is one move, not one per turn behind it', () => {
+    const ids = ['41', '42', '43', '44', '45', '46'];
+    const movedToFront = ['46', '41', '42', '43', '44', '45'];
+    assert.deepEqual([...movedEntryIds(ids, movedToFront)], ['46']);
+  });
+
+  test('two turns swapped with each other is one move', () => {
+    assert.deepEqual([...movedEntryIds(['41', '42', '43'], ['42', '41', '43'])].length, 1);
+  });
+
+  test('a file in the story order has no moves in it', () => {
+    assert.deepEqual([...movedEntryIds(['41', '42', '43'], ['41', '42', '43'])], []);
+  });
+
+  test('a reversed story reports every turn but the one left in place', () => {
+    assert.equal(movedEntryIds(['41', '42', '43', '44'], ['44', '43', '42', '41']).size, 3);
+  });
+
+  test('ids on only one side are not moves', () => {
+    // 42 was removed from the file and 99 is being restored into it: neither is a reorder.
+    assert.deepEqual([...movedEntryIds(['41', '42', '43'], ['41', '99', '43'])], []);
   });
 
   test('turn numbers are recomputed from the file, not read out of it', () => {

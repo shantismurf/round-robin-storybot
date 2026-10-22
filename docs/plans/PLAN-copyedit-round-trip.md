@@ -509,6 +509,17 @@ on the line. Listing removals individually rather than counting them is also the
 truncation safeguard: a phone editor that eats the tail of the file arrives as a list of
 entries the editor recognises, which is alarming in a way "9 removed" is not.
 
+**A move is measured against the other turns, not against its own old number** (LeeAnn,
+2026-10-22: "saying the number of turns changed isn't helpful when they all get reordered").
+Dragging one block from turn 20 to turn 2 renumbers every turn behind it, so comparing each
+turn's old number with its new one reports nineteen moves for one drag -- and a count of
+nineteen changes, which is the opposite of reassuring. The turns reported are the fewest whose
+removal would leave the rest in their original sequence: `movedEntryIds` in
+`story/_importPlan.js` takes the complement of the longest run still in ascending old-order
+position (a longest increasing subsequence). One drag is one line and a count of one;
+renumbering behind it is not news. An id on only one side -- a removal, a restoration -- is not
+a move and is left out of the comparison.
+
 Only changed turns are listed, finishing with a count of the rest ("28 unchanged"), since
 the signal is what moved. At roughly forty characters a line, about a hundred turns fit an
 embed description; when the changed list overflows, show the first stretch inline and

@@ -42,9 +42,13 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   way. Everything decidable from the file alone is decided in `story/_importPlan.js`, which has
   no database and no Discord in it, because this is the part that has to be right.
   Nothing is written until a per-turn confirmation -- one line per changed turn
-  (`12. Maria - 1,420 to 1,380 words (moved to turn 9)`), removals listed individually rather
+  (`9. Maria - 1,420 to 1,380 words (moved from turn 12)`), removals listed individually rather
   than counted, since a word processor that eats the tail of a file then arrives as a list of
-  turns the editor recognises. A turn edited in Discord after the file was exported is marked on
+  turns the editor recognises. A move is measured against the other turns rather than against the
+  turn's own old number: dragging one block to the front renumbers everything behind it, so the
+  naive comparison reports a move per turn in the story and a change count to match, where what
+  the editor did was one move. `movedEntryIds` reports the fewest turns whose removal leaves the
+  rest in their original sequence. A turn edited in Discord after the file was exported is marked on
   its line, the one thing in the summary the editor cannot have known about; the embed turns red
   when anything is being removed or overwritten unknowingly. Six things refuse the file outright
   rather than offering a summary to approve: an id that is not a turn of this story, the same id

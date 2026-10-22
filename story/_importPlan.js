@@ -69,6 +69,56 @@ export function splitStoryFile(text, parseDelimiter, parseStamp) {
 }
 
 /**
+ * Which entries actually moved, as opposed to the ones that only got a new number because
+ * something else moved past them.
+ *
+ * Move one block from turn 20 to turn 2 and every turn after it is renumbered, so comparing each
+ * turn's old number against its new one reports nineteen moves for one drag. What the editor did
+ * is the change in **relative** order, so the turns to report are the fewest whose removal leaves
+ * the rest in their original sequence -- the complement of the longest run of entries still in
+ * ascending old-order position, found here as a longest increasing subsequence.
+ *
+ * Entries missing from either side (a removal, a restoration) are not moves and are left out of
+ * the comparison entirely.
+ *
+ * @param {Array<string>} oldOrder confirmed entry ids in their current reading order
+ * @param {Array<string>} newOrder confirmed entry ids in the order the file puts them
+ * @returns {Set<string>} the ids that moved
+ */
+export function movedEntryIds(oldOrder, newOrder) {
+  const rank = new Map();
+  oldOrder.forEach((id, i) => rank.set(String(id), i));
+
+  const ids = [];
+  const seq = [];
+  for (const id of newOrder) {
+    const key = String(id);
+    if (rank.has(key)) { ids.push(key); seq.push(rank.get(key)); }
+  }
+
+  // Longest increasing subsequence over old positions: the largest set of turns still in the same
+  // order relative to each other, which is the set that did not move.
+  const tails = [];
+  const previous = new Array(seq.length).fill(-1);
+  for (let i = 0; i < seq.length; i += 1) {
+    let lo = 0;
+    let hi = tails.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (seq[tails[mid]] < seq[i]) lo = mid + 1; else hi = mid;
+    }
+    if (lo > 0) previous[i] = tails[lo - 1];
+    if (lo === tails.length) tails.push(i); else tails[lo] = i;
+  }
+
+  const stayed = new Set();
+  let at = tails.length > 0 ? tails[tails.length - 1] : -1;
+  while (at !== -1) { stayed.add(ids[at]); at = previous[at]; }
+
+  return new Set(ids.filter(id => !stayed.has(id)));
+}
+
+/**
  * Works out what applying a file would do.
  *
  * `current` is the story's ordered rows — confirmed and deleted, in `entry_order` — each
@@ -148,6 +198,9 @@ export function planStoryImport({ current, blocks, exportedAt, writers, contentB
     }
   }
 
+  // Which turns the editor actually moved, as against the ones the move renumbered behind it.
+  const movedIds = movedEntryIds([...positionsNow.keys()], blocks.map(b => b.entryId));
+
   const rows = [];
 
   for (const block of blocks) {
@@ -157,7 +210,7 @@ export function planStoryImport({ current, blocks, exportedAt, writers, contentB
     const newWriter = block.writerName ? writerByName.get(writerKey(block.writerName)) : null;
 
     const contentChanged = block.content !== entry.content;
-    const moved = fromPosition !== null && fromPosition !== toPosition;
+    const moved = movedIds.has(block.entryId);
     const reassigned = !!newWriter && String(newWriter.id) !== String(entry.writerId);
     // A block for an entry that is currently deleted says the editor wants it back: the file is
     // the story, and it is in the file. Symmetric with removal by omission.

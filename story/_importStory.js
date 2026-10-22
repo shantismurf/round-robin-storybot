@@ -96,7 +96,9 @@ export function buildImportSummaryLines(plan, cfg) {
     const notes = [];
     if (row.removed) notes.push(cfg.txtImportStoryNoteRemoved);
     if (row.restored) notes.push(cfg.txtImportStoryNoteRestored);
+    // Both numbers go in, so the note can read either way round without a code change.
     if (row.moved) notes.push(replaceTemplateVariables(cfg.txtImportStoryNoteMoved, {
+      from_position: String(row.fromPosition),
       to_position: String(row.toPosition),
     }));
     if (row.writerTo) notes.push(replaceTemplateVariables(cfg.txtImportStoryNoteWriter, {
