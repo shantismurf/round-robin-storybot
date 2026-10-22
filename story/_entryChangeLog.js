@@ -57,15 +57,18 @@ export async function logEntryWriterChange(connection, { entryId, editorId, edit
  * active members. Crediting an entry is not a question of who can write next, and it matches
  * the export header, which credits everyone who has an entry in the work.
  *
- * Capped at Discord's 25-option select limit.
+ * Capped at Discord's 25-option select limit by default, because the picker is where this is
+ * read from. The whole-story import passes `{ limit: null }` for the uncapped list: there a name
+ * is matched rather than offered, and a story with more than 25 writers would otherwise refuse
+ * its own unedited export, reporting the 26th writer as somebody the story does not have.
  */
-export async function listStoryWritersForCredit(connection, storyId) {
+export async function listStoryWritersForCredit(connection, storyId, { limit = 25 } = {}) {
+  const limitClause = Number.isInteger(limit) && limit > 0 ? `\n     LIMIT ${limit}` : '';
   const [rows] = await connection.execute(
     `SELECT story_writer_id, discord_display_name, pen_name
      FROM story_writer
      WHERE story_id = ?
-     ORDER BY COALESCE(pen_name, discord_display_name) ASC
-     LIMIT 25`,
+     ORDER BY COALESCE(pen_name, discord_display_name) ASC${limitClause}`,
     [storyId]
   );
   return rows.map(r => ({

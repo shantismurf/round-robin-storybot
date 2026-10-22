@@ -69,6 +69,12 @@ describe('listStoryWritersForCredit', () => {
     assert.match(conn.calls[0].sql, /LIMIT 25/);
   });
 
+  test('drops the cap when asked, so a long story can match its own export', async () => {
+    const conn = makeFakeConnection([[]]);
+    await listStoryWritersForCredit(conn, 7, { limit: null });
+    assert.ok(!conn.calls[0].sql.includes('LIMIT'));
+  });
+
   test('drops a writer with no usable name rather than offering a blank option', async () => {
     const conn = makeFakeConnection([[
       { story_writer_id: 9, discord_display_name: null, pen_name: null },

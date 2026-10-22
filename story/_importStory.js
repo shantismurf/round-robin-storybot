@@ -203,7 +203,7 @@ export async function handleImportStoryModalSubmit(connection, interaction, stor
   const { blocks, exportedAt } = splitStoryFile(text, parseEntryDelimiter, parseExportStamp);
   const [current, writers, storyRows] = await Promise.all([
     readStoryForImport(connection, storyId),
-    listStoryWritersForCredit(connection, storyId),
+    listStoryWritersForCredit(connection, storyId, { limit: null }),
     connection.execute(
       `SELECT guild_story_id, title FROM story WHERE story_id = ?`, [storyId]
     ).then(([rows]) => rows),

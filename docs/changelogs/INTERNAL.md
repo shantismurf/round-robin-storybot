@@ -48,7 +48,10 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   its line, the one thing in the summary the editor cannot have known about; the embed turns red
   when anything is being removed or overwritten unknowingly. Six things refuse the file outright
   rather than offering a summary to approve: an id that is not a turn of this story, the same id
-  twice, a writer name nobody in the story has, a block emptied of its prose (deleting the whole
+  twice, a writer name nobody in the story has (matched against every writer ever joined to the
+  story, uncapped -- the same list feeds the Change Writer picker, where it is capped at Discord's
+  25 options, and a story with more writers than that would otherwise refuse its own unedited
+  export), a block emptied of its prose (deleting the whole
   block is how a turn is removed, and saying so is the difference between an accident the editor
   can fix and one they cannot see), a block too long for the `TEXT` column, and a file with no
   turn lines at all. Applying is one transaction: the history row before the content it replaces,
@@ -252,6 +255,15 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   wording ("the formatting markers will still mean what they mean") that said nothing. It now
   says what to do: keep the markdown intact, and do not remove each turn's first line, because
   that is the id the import matches on.
+- **The export file's legend now explains how to rearrange a story, because now you can.** It
+  told the editor not to renumber, merge or reorder entries, which was true until the whole-story
+  import landed and turned the same paragraph into an instruction not to use it. It now names the
+  `#id` after the `#` as the one thing that must survive unchanged, says the turn number and the
+  writer name are there to be read and are recomputed on import, and gives the three structural
+  edits as block operations: move a whole block to reorder, change the name on a turn line to
+  re-credit, delete a whole block to remove a turn (restorable from Manage Entries). It closes by
+  saying a summary of changes comes back for confirmation before anything is applied. LeeAnn's
+  wording over three passes on 2026-10-22, recorded in full in the plan doc.
 
 ### Removed
 - **`story_entry.order_in_turn` and its `unique_turn_order` index**, dropped by migration 026.

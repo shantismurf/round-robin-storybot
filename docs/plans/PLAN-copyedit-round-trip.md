@@ -767,11 +767,37 @@ themselves are still mine.
 | `txtImportStoryEmptyEntry` | ❌ Turn [file_turn] has no text left in it. To remove a turn, delete its whole block including the turn line. |
 | `txtImportStoryEntryTooLarge` | ❌ Turn [file_turn] is too long to store. The limit is about [limit] characters per turn. |
 
-**The legend inside the export file is now out of date.** It still says "Do not renumber them,
-merge two entries into one, or reorder them", which was true until this step landed. The
-replacement is specified under "Import instructions" above and needs writing in her voice:
-reorder by moving a whole block, reassign by changing the name in the turn line, remove by
-deleting the whole block, and the `#id` must survive unchanged.
+### Approved copy — the export file legend (2026-10-22)
+
+**`txtExportTextLegend`, approved with LeeAnn over three passes on 2026-10-22.** It used to say
+"Do not renumber them, merge two entries into one, or reorder them", which was true until the
+whole-story import landed and became instructions for doing exactly those things once it had.
+The replacement, as it renders at the top of every story export:
+
+```
+--- HOW TO EDIT THIS FILE ---
+This is the entry text exactly as the bot stores it, not the published version. Edit the prose freely.
+
+Each turn begins with a line like [[turn 12 | #4417 | Maria]]. Do not change the number after the #, which is the internal turn ID - it is how the bot matches your edits back to the right turn. The turn number and the writer name are only there for you to read, and the bot works them out again when you import.
+
+You can also rearrange the story from this file. A turn's block is its turn line plus the text under it, so:
+  To move a turn, move its whole block to where you want it. The new turn order will be saved when you import.
+  To make a turn belong to a different writer, change the name on its turn line to another writer who has joined the story.
+  To remove a turn, delete its whole block. You can restore it from Manage Entries.
+When you import the file, you will see a summary of changes for confirmation before being applied.
+```
+
+The formatting and image paragraphs that follow it are unchanged from phase 2. Her edits across
+the three passes: Export and Import rather than download and upload throughout; the move line's
+second sentence is hers verbatim; "Nothing is lost" and "and it comes back in the same place"
+came out of the removal line as over-explaining when Restore is right there in Manage Entries;
+and the closing line is hers verbatim.
+
+The writer name on a turn line is whatever the bot credits that writer as — their pen name if they
+set one, otherwise their Discord display name — which is the same name the file already prints on
+their own turns, so an editor copying a name from elsewhere in the file always has the right one.
+Matching on import ignores case and surrounding space, so a word processor's capitalisation is not
+a reassignment.
 
 ### Export and import copy, and the filename (2026-10-21)
 
