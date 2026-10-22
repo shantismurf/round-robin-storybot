@@ -10,11 +10,12 @@ import { ENTRY_STATUS } from '../constants.js';
 // change there cannot quietly change what these assertions test.
 const cfg = {
   txtImportStoryRow: '[turn_number]. [writer_name] — [from_words] to [to_words] words{? ([notes])?}',
+  txtImportStoryRowRemoved: '[turn_number]. [writer_name] — [from_words] words{? ([notes])?}',
   txtImportStoryNoteMoved: 'moved to turn [to_position]',
   txtImportStoryNoteWriter: 'now [to_writer]',
   txtImportStoryNoteRemoved: 'removed',
   txtImportStoryNoteRestored: 'restored',
-  txtImportStoryNoteConflict: 'also edited in Discord since your download',
+  txtImportStoryNoteConflict: 'edited since you exported it',
   txtImportStoryOverflow: 'The full list is attached.',
 };
 
@@ -29,16 +30,19 @@ describe('buildImportSummaryLines', () => {
     assert.deepEqual(buildImportSummaryLines({ rows: [row()] }, cfg), ['1. Maria — 1,420 to 1,380 words']);
   });
 
-  test('a moved turn says where it went', () => {
-    const lines = buildImportSummaryLines({ rows: [row({ moved: true, toPosition: 9 })] }, cfg);
-    assert.deepEqual(lines, ['9. Maria — 1,420 to 1,380 words (moved to turn 9)']);
+  // The line is numbered as the editor's own file numbers it, so the note is the only place the
+  // new number appears.
+  test('a moved turn is numbered where it was and says where it went', () => {
+    const lines = buildImportSummaryLines({ rows: [row({ moved: true, fromPosition: 20, toPosition: 2 })] }, cfg);
+    assert.deepEqual(lines, ['20. Maria — 1,420 to 1,380 words (moved to turn 2)']);
   });
 
   test('a removal reads as removed, on the line where that turn was', () => {
     const lines = buildImportSummaryLines({
       rows: [row({ removed: true, toPosition: null, fromPosition: 4, toWords: 0, contentChanged: false })],
     }, cfg);
-    assert.deepEqual(lines, ['4. Maria — 1,420 to 0 words (removed)']);
+    // No "to 0 words" on a turn that is going away -- LeeAnn, 2026-10-22.
+    assert.deepEqual(lines, ['4. Maria — 1,420 words (removed)']);
   });
 
   test('a reassignment names the new writer', () => {
@@ -50,7 +54,7 @@ describe('buildImportSummaryLines', () => {
     const lines = buildImportSummaryLines({
       rows: [row({ moved: true, toPosition: 2, writerTo: 'Jun', conflict: true })],
     }, cfg);
-    assert.equal(lines[0], '2. Maria — 1,420 to 1,380 words (moved to turn 2, now Jun, also edited in Discord since your download)');
+    assert.equal(lines[0], '1. Maria — 1,420 to 1,380 words (moved to turn 2, now Jun, edited since you exported it)');
   });
 
   // Only changed turns are listed: the signal is what moved, and the count of the rest closes

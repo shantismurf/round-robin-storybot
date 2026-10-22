@@ -42,7 +42,8 @@ import { pendingImportData } from './_state.js';
 export const IMPORT_STORY_CONFIG_KEYS = [
   'btnManageEntriesImport', 'txtImportStoryModalTitle', 'lblEditImportFile',
   'txtImportStoryConfirmTitle', 'txtImportStoryConfirm',
-  'txtImportStoryRow', 'txtImportStoryNoteMoved', 'txtImportStoryNoteWriter',
+  'txtImportStoryRow', 'txtImportStoryRowRemoved', 'txtImportStoryNoteMoved',
+  'txtImportStoryNoteWriter',
   'txtImportStoryNoteRemoved', 'txtImportStoryNoteRestored', 'txtImportStoryNoteConflict',
   'txtImportStoryOverflow', 'btnImportStoryConfirm', 'txtImportStorySuccess',
   'txtEditImportNoChange', 'txtImportStoryUnreadable', 'txtImportStoryUnknownEntry',
@@ -110,8 +111,15 @@ export function buildImportSummaryLines(plan, cfg) {
     }));
     if (row.conflict) notes.push(cfg.txtImportStoryNoteConflict);
 
-    return replaceTemplateVariables(cfg.txtImportStoryRow, {
-      turn_number: String(row.toPosition ?? row.fromPosition ?? ''),
+    // A removal has no second word count to report, so it reads on a line of its own (LeeAnn,
+    // 2026-10-22: "removals shouldn't say 0 words").
+    const template = row.removed ? cfg.txtImportStoryRowRemoved : cfg.txtImportStoryRow;
+
+    // The number is the one the turn carries in the file the editor just edited, which is its
+    // number before this import: their file still says turn 20, so a line calling it turn 2 would
+    // not match what is in front of them. A restored turn has no old number and uses its new one.
+    return replaceTemplateVariables(template, {
+      turn_number: String(row.fromPosition ?? row.toPosition ?? ''),
       writer_name: row.writerName ?? '',
       from_words: row.fromWords.toLocaleString(),
       to_words: row.toWords.toLocaleString(),

@@ -204,13 +204,16 @@ describe('planStoryImport — order', () => {
   test('turn numbers are recomputed from the file, not read out of it', () => {
     // Every delimiter claims turn 1; the position comes from where the block sits.
     const result = plan([block(42, 1, 'Two.', 'Jun'), block(41, 1, 'One.'), block(43, 1, 'Three.')]);
-    assert.deepEqual(result.rows.map(r => r.toPosition), [1, 2, 3]);
-    assert.deepEqual(result.rows.map(r => r.entryId), ['42', '41', '43']);
+    assert.equal(rowFor(result, 42).toPosition, 1);
+    assert.equal(rowFor(result, 41).toPosition, 2);
+    assert.equal(rowFor(result, 43).toPosition, 3);
   });
 
-  test('the summary reads down the story', () => {
+  // The summary is numbered as the editor's own file numbers each turn, so it is sorted that way
+  // too rather than by where things land -- otherwise the numbers shuffle down the page.
+  test('the summary reads down the file the editor edited', () => {
     const result = plan([block(43, 3, 'Three.'), block(41, 1, 'One, revised.'), block(42, 2, 'Two.', 'Jun')]);
-    const positions = result.rows.map(r => r.toPosition ?? r.fromPosition);
+    const positions = result.rows.map(r => r.fromPosition ?? r.toPosition);
     assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
   });
 

@@ -255,6 +255,9 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('txtImportStoryConfirm', '[changed_count] turn(s) would change, from **[filename]**. All changes can be individually reverted from Manage Entries, if needed.', 'en', 1),
 -- One line per changed turn. The {? ?} block drops out when a turn only changed its text.
 ('txtImportStoryRow', '[turn_number]. [writer_name] — [from_words] to [to_words] words{? ([notes])?}', 'en', 1),
+-- A removed turn has no second word count, so it gets its own line rather than reporting 0
+-- words -- LeeAnn, 2026-10-22.
+('txtImportStoryRowRemoved', '[turn_number]. [writer_name] — [from_words] words{? ([notes])?}', 'en', 1),
 ('txtImportStoryNoteMoved', 'moved to turn [to_position]', 'en', 1),
 ('txtImportStoryNoteWriter', 'now [to_writer]', 'en', 1),
 ('txtImportStoryNoteRemoved', 'removed', 'en', 1),

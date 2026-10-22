@@ -42,7 +42,8 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   way. Everything decidable from the file alone is decided in `story/_importPlan.js`, which has
   no database and no Discord in it, because this is the part that has to be right.
   Nothing is written until a per-turn confirmation -- one line per changed turn
-  (`9. Maria - 1,420 to 1,380 words (moved from turn 12)`), removals listed individually rather
+  (`20. Maria - 1,420 to 1,380 words (moved to turn 2)`, numbered as the editor's own file numbers
+  that turn, with a removal on a line that carries no second word count), removals listed individually rather
   than counted, since a word processor that eats the tail of a file then arrives as a list of
   turns the editor recognises. A move is measured against the other turns rather than against the
   turn's own old number: dragging one block to the front renumbers everything behind it, so the

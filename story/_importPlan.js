@@ -268,9 +268,10 @@ export function planStoryImport({ current, blocks, exportedAt, writers, contentB
     });
   }
 
-  // Sorted by where each turn ends up, so the summary reads down the story. A removal has no
-  // destination, so it sorts by where it was.
-  rows.sort((a, b) => (a.toPosition ?? a.fromPosition ?? 0) - (b.toPosition ?? b.fromPosition ?? 0));
+  // Sorted by the number each line will show, which is the turn's number in the file the editor
+  // edited -- so the summary reads down that file rather than shuffling its numbers. A restored
+  // turn has no number there and sorts by where it lands.
+  rows.sort((a, b) => (a.fromPosition ?? a.toPosition ?? 0) - (b.fromPosition ?? b.toPosition ?? 0));
 
   const changed = rows.filter(r => r.changed);
   return {

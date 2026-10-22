@@ -775,6 +775,7 @@ button reads as the wrong thing twice over.
 | `txtImportStoryConfirmTitle` | Apply this file to the story? |
 | `txtImportStoryConfirm` | [changed_count] turn(s) would change, from **[filename]**. All changes can be individually reverted from Manage Entries, if needed. |
 | `txtImportStoryRow` | [turn_number]. [writer_name] — [from_words] to [to_words] words{? ([notes])?} |
+| `txtImportStoryRowRemoved` | [turn_number]. [writer_name] — [from_words] words{? ([notes])?} |
 | `txtImportStoryNoteMoved` | moved to turn [to_position] |
 | `txtImportStoryNoteWriter` | now [to_writer] |
 | `txtImportStoryNoteRemoved` | removed |
@@ -796,10 +797,19 @@ which says the same thing: in a whole-story file the editor needs to know *which
 limit, and the single-entry string has no token for it because there is only ever one turn in that
 file.
 
-**Still mine, and the one thing in this set that is:** `txtImportStoryNoteMoved`'s direction. The
-code now passes both `[from_position]` and `[to_position]` into it, so "(moved from turn 12)" on a
-line numbered 9 and "(moved to turn 9)" on a line numbered 12 are both available without a code
-change; the value above is the second. See the relative-move rule under "Import confirmation".
+**The move note reads forwards, and the line is numbered as the editor's file numbers it**
+(LeeAnn, 2026-10-22: "'moved to' is what I'd pick if I had to pick to or from"). Which settles
+something the draft had backwards: with "moved to", the line cannot also be numbered by where the
+turn lands, or the number appears twice and says nothing. It is numbered by where the turn is
+*now* -- which is the number their own file still carries on that turn line, since the export
+wrote it before any of this -- and the note is the only place the new number appears:
+`20. Maria — 1,420 to 1,380 words (moved to turn 2)`. The summary sorts by that same number, so it
+reads down the file they edited rather than shuffling its numbers. `[from_position]` is passed in
+as well, so the other direction costs no code change if she ever wants it.
+
+**A removal reads without a word count it no longer has** ("removals shouldn't say 0 words"), so
+it takes `txtImportStoryRowRemoved` rather than the ordinary row with a 0 in it:
+`4. Maria — 1,420 words (removed)`.
 
 ### Approved copy — the export file legend (2026-10-22)
 
