@@ -150,8 +150,7 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 -- the bot already uses. The buttons name the entry, not the turn, because they act on its
 -- content; the numbered thing inside the copy is still a turn.
 --
--- Her wording throughout, except txtEditImportConfirmTitle and lblEditImportFile, which are
--- still drafted -- see docs/plans/PLAN-copyedit-round-trip.md.
+-- Her wording throughout, approved 2026-10-22 -- see docs/plans/PLAN-copyedit-round-trip.md.
 ('btnEditExportFile', '📤 Export for Editing', 'en', 1),
 ('txtEditExportFileInstructions', 'Download the text of turn [turn_number] ([word_count] words) for editing. This is the raw text of the entry, so keep any formatting markdown intact. Do not remove the first line, which contains the internal turn ID, so that the entry can be imported correctly.', 'en', 1),
 ('btnEditImportFile', '📥 Import Edited Entry', 'en', 1),
@@ -160,7 +159,9 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 -- (LeeAnn, 2026-10-22): the export message already says to keep the first line, and
 -- txtEditImportError quotes the exact line back if the wrong file turns up anyway.
 ('lblEditImportFile', 'Attach edited text file', 'en', 1),
-('txtEditImportConfirmTitle', 'Import Edited Entry', 'en', 1),
+-- A question, like the bot's other action confirms (Pause Writer?, Remove Writer?, Delete Turn
+-- N?), rather than a repeat of the modal title above it -- LeeAnn, 2026-10-22.
+('txtEditImportConfirmTitle', 'Replace this entry''s content?', 'en', 1),
 ('txtEditImportConfirm', 'Your edits will change turn [turn_id] from [from_words] to [to_words] words. After saving, this edit can be reverted from the turn''s History.', 'en', 1),
 -- Appended to the same confirmation rather than being a second screen, so [save_label] is the
 -- button already sitting under it. The label is substituted from its own config value rather

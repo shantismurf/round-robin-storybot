@@ -696,6 +696,8 @@ themselves:
 | `btnEditExportFile` | 📤 Export for Editing |
 | `btnEditImportFile` | 📥 Import Edited Entry |
 | `txtEditImportModalTitle` | Import Edited Entry |
+| `txtEditImportConfirmTitle` | Replace this entry's content? |
+| `txtEditImportTooLarge` | ❌ That file is too long to store as one turn. The limit is about [limit] characters. |
 | `lblEditImportFile` | Attach edited text file |
 | `txtEditImportConfirm` | Your edits will change turn [turn_id] from [from_words] to [to_words] words. After saving, this edit can be reverted from the turn's History. |
 | `txtEditImportConflict` | The entry has been edited since this export was saved. Click **[save_label]** to continue. |
@@ -723,10 +725,12 @@ and a file with no turn line at all both mean the first line is wrong, and the f
 `btnEditImportConfirm` was dropped with the Save reuse, and `txtEditImportWrongEntry` /
 `txtEditImportUnreadable` with the merge.
 
-**Still drafted in this set:** `txtEditImportConfirmTitle` ("Import Edited Entry", the
-confirmation embed's title, mirroring the modal). `txtEditImportTooLarge`
-is also still mine; the limit it quotes is about 65,000 characters, which is what
-`story_entry.content`'s `TEXT` column holds (65,535 bytes, measured in bytes because a
+**The whole set is now hers** (the last two approved 2026-10-22, third pass).
+`txtEditImportConfirmTitle` is a question -- "Replace this entry's content?" -- because the
+bot's other action confirms ask one ("⏸️ Pause Writer?", "⚠️ Remove Writer?", "Delete Turn
+[turn_number] -- [writer_name]?"), where the draft had simply repeated the modal's title above it.
+`txtEditImportTooLarge` ships as drafted; the limit it quotes is about 65,000 characters, which is
+what `story_entry.content`'s `TEXT` column holds (65,535 bytes, measured in bytes because a
 non-Latin script would otherwise pass the check and be truncated).
 
 **Settled 2026-10-22:** `txtEditImportConfirm` does *not* say where History is reached -- "we
