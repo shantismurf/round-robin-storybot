@@ -17,7 +17,6 @@ import { STORY_STATUS } from '../constants.js';
 const CFG = {
   txtExportTextHeader: '[title] (story #[story_num])\n[turn_count] turn(s), [entry_count] entr(ies), [word_count] words - status: [status] - exported [exported]{?\nWriters: [authors]?}',
   txtExportTextLegend: '--- HOW TO EDIT THIS FILE ---\nEach entry begins with a line like [[turn 12 | #4417]].\n  [[break]]          a scene break{? (shows as: [divider])?}\n--- END ---',
-  txtExportTextFooter: '--- end of [entry_count] entr(ies) ---',
   txtOpen: 'Open',
   txtClosed: 'Closed',
 };
@@ -154,7 +153,8 @@ describe('generateEntriesTextExport', () => {
     assert.equal(result.turnCount, 4);
     assert.equal(result.wordCount, 5);
     assert.equal(result.writerCount, 2);
-    assert.match(result.filename, /^storybot7_a_test_story_entries\.txt$/);
+    // The visible story number (#3), not the internal story_id (7), and a UTC stamp.
+    assert.match(result.filename, /^storybot3_a_test_story_entries_\d{4}-\d{2}-\d{2}_\d{4}\.txt$/);
 
     const empty = await read(story(), [], []);
     assert.equal(empty.hasEntries, false);

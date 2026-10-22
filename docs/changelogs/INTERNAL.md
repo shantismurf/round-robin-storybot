@@ -105,6 +105,31 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   byte-identical copy of, so adding a third button meant editing it twice.
 
 ### Changed
+- **Export filenames now carry the story number you can see, and the time.** Both exports built
+  their name from the internal `story_id`, so the number in the filename matched nothing visible
+  in the UI, and neither carried a timestamp — exporting the same story twice left `(1)` and `(2)`
+  in a downloads folder with nothing to tell them apart, which matters now that files round-trip
+  for editing. They now share one builder (`buildExportFilename` in `story/_exportData.js`) and
+  come out as `storybot3_a_test_story_entries_2026-10-21_2348.txt`: `guild_story_id`, the
+  sanitized title, an optional part, then the export instant in UTC on a 24-hour clock. No colon,
+  because Windows forbids one in a filename and macOS has historically read it as a path
+  separator; no trailing `Z`, because it reads as jargon to almost everyone who sees the file.
+- **The filename sanitizer stopped mangling titles.** It replaced every non-alphanumeric
+  character, turning "The Dragon's Keep (Part 2)" into `the_dragon_s_keep__part_2_`. It now
+  removes only what a filesystem refuses (`\ / : * ? " < > |` and control characters), collapses
+  whitespace runs to one underscore, and truncates at 60 characters with any dangling separator
+  trimmed.
+- **The plain-text export's download message was rewritten** in the editor's own words, replacing
+  wording ("the formatting markers will still mean what they mean") that said nothing. It now
+  says what to do: keep the markdown intact, and do not remove each turn's first line, because
+  that is the id the import matches on.
+
+### Removed
+- **`txtExportTextFooter`, the plain-text export's last human line.** It reprinted the entry count
+  under the body. Its only real purpose was showing the file wasn't truncated, and the
+  `[[exported-at]]` stamp that follows it does that for the importer — so all it told a reader was
+  that they had reached the end of the file they were already looking at.
+
 - **The edit modal's per-page guidance is a `LabelBuilder` description, not a placeholder.** It sits
   under the field label and is always visible, with 1024 characters of room against a placeholder's
   100. This moves the one modal in this file from the deprecated `addComponents` path to

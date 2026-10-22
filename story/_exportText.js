@@ -12,7 +12,7 @@
 // against what went out without reversing a render. See docs/plans/PLAN-copyedit-round-trip.md.
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
 import { getConfigValue, log, replaceTemplateVariables } from '../utilities.js';
-import { fetchStoryForExport } from './_exportData.js';
+import { fetchStoryForExport, buildExportFilename } from './_exportData.js';
 import { STORY_STATUS } from '../constants.js';
 
 // The per-entry delimiter. Deliberately NOT a config value: it is a structural token the
@@ -93,7 +93,7 @@ export async function generateEntriesTextExport(connection, storyId, guildId, { 
 
   // txtOpen/txtClosed are the existing status words, reused rather than a new pair of keys.
   const cfg = await getConfigValue(connection, [
-    'txtExportTextHeader', 'txtExportTextLegend', 'txtExportTextFooter',
+    'txtExportTextHeader', 'txtExportTextLegend',
     'txtOpen', 'txtClosed',
   ], guildId);
 
@@ -140,15 +140,13 @@ export async function generateEntriesTextExport(connection, storyId, guildId, { 
     return `${delimiter}\n\n${entry.content.replace(/\s+$/, '')}`;
   }).join('\n\n');
 
-  const footer = replaceTemplateVariables(cfg.txtExportTextFooter, {
-    entry_count: String(entries.length),
-  });
-
-  const text = `${header}\n\n${legend}\n\n${body}\n\n${footer}\n${buildExportStamp(exportedAt)}\n`;
+  // No human-readable footer: it reprinted the entry count and told the reader only that they
+  // had reached the end of the file they were looking at. The stamp below is the end marker
+  // that matters, and it is for the importer.
+  const text = `${header}\n\n${legend}\n\n${body}\n\n${buildExportStamp(exportedAt)}\n`;
 
   log(`generateEntriesTextExport: story ${storyId} wrote ${entries.length} entr(ies), ${turnCount} turn(s), ${text.length} chars`, { show: false, guildName });
 
-  const safeTitle = story.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
   return {
     hasEntries: true,
     title: story.title,
@@ -157,7 +155,9 @@ export async function generateEntriesTextExport(connection, storyId, guildId, { 
     writerCount,
     entryCount: entries.length,
     buffer: Buffer.from(text, 'utf8'),
-    filename: `storybot${storyId}_${safeTitle}_entries.txt`,
+    filename: buildExportFilename({
+      guildStoryId: story.guild_story_id, title: story.title, part: 'entries', exportedAt, ext: 'txt',
+    }),
   };
 }
 

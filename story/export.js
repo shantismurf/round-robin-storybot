@@ -7,7 +7,7 @@ import { getActiveThreadId } from '../storybot.js';
 import { STORY_STATUS, STORY_MODE } from '../constants.js';
 import { collectImageUrls, refreshAttachmentUrls, buildImageStore, buildImageDataBlock, emojiUrl } from './_exportImages.js';
 import { ANCHOR_IMAGE_RE, BANG_IMAGE_RE } from './_imageUrls.js';
-import { fetchStoryForExport } from './_exportData.js';
+import { fetchStoryForExport, buildExportFilename } from './_exportData.js';
 
 // Renders an embedded image (data-storybot-img id, filled by the loader script at the
 // bottom of the export) or a visible placeholder span when the image couldn't be embedded.
@@ -191,7 +191,9 @@ export async function generateStoryExport(connection, storyId, guildId, guild = 
   const isClosed = story.story_status === STORY_STATUS.CLOSED;
   const secondDateLabel = isClosed ? cfg.txtExportCompletedLabel : cfg.txtExportUpdatedLabel;
   const secondDate = isClosed && story.closed_at ? fmt(story.closed_at) : fmt(entries[entries.length - 1].created_at);
-  const exportDate = fmt(new Date());
+  // One instant for the in-file date and the filename, so they cannot disagree.
+  const exportedAt = new Date();
+  const exportDate = fmt(exportedAt);
 
   const writersList = writers.map(w => `${w.pen_name || w.discord_display_name} (${w.discord_display_name})`).join(', ');
   const modeLabel = story.mode === STORY_MODE.QUICK ? cfg.txtExportModeQuick : story.mode === STORY_MODE.SLOW ? cfg.txtExportModeSlow : cfg.txtExportModeNormal;
@@ -334,7 +336,9 @@ export async function generateStoryExport(connection, storyId, guildId, guild = 
 </html>`;
 
   const buffer = Buffer.from(html, 'utf8');
-  const filename = `storybot${storyId}_${story.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`;
+  const filename = buildExportFilename({
+    guildStoryId: story.guild_story_id, title: story.title, exportedAt, ext: 'html',
+  });
   return { hasEntries: true, title: story.title, turnCount, wordCount, writerCount, buffer, filename };
 }
 
