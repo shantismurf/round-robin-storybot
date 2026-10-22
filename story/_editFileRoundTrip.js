@@ -22,7 +22,7 @@
 
 import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags,
-  ModalBuilder, LabelBuilder, FileUploadBuilder, TextDisplayBuilder,
+  ModalBuilder, LabelBuilder, FileUploadBuilder,
 } from 'discord.js';
 import { getConfigValue, log, replaceTemplateVariables, chunkEntryContent } from '../utilities.js';
 import { buildEntryDelimiter, parseEntryDelimiter, buildExportStamp, parseExportStamp } from './_exportText.js';
@@ -36,7 +36,7 @@ import { ENTRY_STATUS } from '../constants.js';
 // openEditSession fetches the panel's keys in one query and must not keep a second list.
 export const EDIT_FILE_CONFIG_KEYS = [
   'btnEditExportFile', 'txtEditExportFileInstructions',
-  'btnEditImportFile', 'txtEditImportModalTitle', 'lblEditImportFile', 'txtEditImportModalHint',
+  'btnEditImportFile', 'txtEditImportModalTitle', 'lblEditImportFile',
   'txtEditImportConfirmTitle', 'txtEditImportConfirm', 'txtEditImportConflict',
   'txtEditImportSuccess', 'txtEditImportNoChange',
   // One message covers both ways a file can fail to be this entry's: it is another entry's, or
@@ -215,11 +215,14 @@ export async function handleExportFile(connection, interaction, state) {
   log(`handleExportFile: entry ${state.entryId} (turn ${file.turnNumber}) delivered as ${file.filename} to ${interaction.user.username}`, { show: true, guildName });
 }
 
-// The upload modal. A FileUploadBuilder has to be wrapped in a LabelBuilder and added with
+// The import modal. A FileUploadBuilder has to be wrapped in a LabelBuilder and added with
 // addLabelComponents -- verified against node_modules/@discordjs/builders (LabelBuilderData
-// accepts a FileUploadBuilder, and setFileUploadComponent is its setter). The hint rides as a
-// TextDisplayBuilder, the same way the setup panel's channel modals carry theirs.
-export function buildImportModal(cfg, exportHeader) {
+// accepts a FileUploadBuilder, and setFileUploadComponent is its setter).
+//
+// One line of text, on the field itself. It used to carry a TextDisplayBuilder above it spelling
+// out the turn-ID requirement, dropped on LeeAnn's call: the export message already says to keep
+// the first line, and txtEditImportError quotes the exact line back if the wrong file turns up.
+export function buildImportModal(cfg) {
   const upload = new FileUploadBuilder()
     .setCustomId('entry_file')
     .setMinValues(1)
@@ -229,9 +232,6 @@ export function buildImportModal(cfg, exportHeader) {
   return new ModalBuilder()
     .setCustomId('story_edit_import_submit')
     .setTitle(cfg.txtEditImportModalTitle)
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-      replaceTemplateVariables(cfg.txtEditImportModalHint, { export_header: exportHeader })
-    ))
     .addLabelComponents(
       new LabelBuilder().setLabel(cfg.lblEditImportFile).setFileUploadComponent(upload)
     );
@@ -334,9 +334,11 @@ export async function handleImportModalSubmit(connection, interaction, state) {
     from_words: wordCount(state.currentContent).toLocaleString(),
     to_words: wordCount(resolved).toLocaleString(),
   });
-  // The conflict line rides on the same confirmation rather than opening a second one: the
-  // question it asks ("do you want to continue?") is what the Save button already answers.
-  const conflictNote = conflictAt ? `\n\n${cfg.txtEditImportConflict}` : '';
+  // The conflict line rides on the same confirmation rather than opening a second one, and names
+  // the button under it by substituting that button's own label -- so the two cannot disagree.
+  const conflictNote = conflictAt
+    ? `\n\n${replaceTemplateVariables(cfg.txtEditImportConflict, { save_label: cfg.btnAdminConfigSave })}`
+    : '';
 
   const embed = new EmbedBuilder()
     .setTitle(cfg.txtEditImportConfirmTitle)

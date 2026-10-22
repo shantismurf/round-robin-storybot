@@ -156,17 +156,17 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('txtEditExportFileInstructions', 'Download the text of turn [turn_number] ([word_count] words) for editing. This is the raw text of the entry, so keep any formatting markdown intact. Do not remove the first line, which contains the internal turn ID, so that the entry can be imported correctly.', 'en', 1),
 ('btnEditImportFile', '📥 Import Edited Entry', 'en', 1),
 ('txtEditImportModalTitle', 'Import Edited Entry', 'en', 1),
--- The label above the file field inside the modal. Discord renders it as the field's own
--- heading, with txtEditImportModalHint as the instructions above it.
-('lblEditImportFile', 'Your edited text file', 'en', 1),
--- [export_header] is the entry's own turn line, exactly as the export file carries it, e.g.
--- [[turn 12 | #4417 | Maria]] -- so the editor can compare it against the file in front of them.
-('txtEditImportModalHint', 'Upload your edited text file. Ensure the first line of the file has the correct turn ID:  `[export_header]`', 'en', 1),
+-- The modal's only text, on the file field itself. The instructions line above it was dropped
+-- (LeeAnn, 2026-10-22): the export message already says to keep the first line, and
+-- txtEditImportError quotes the exact line back if the wrong file turns up anyway.
+('lblEditImportFile', 'Attach edited text file', 'en', 1),
 ('txtEditImportConfirmTitle', 'Import Edited Entry', 'en', 1),
 ('txtEditImportConfirm', 'Your edits will change turn [turn_id] from [from_words] to [to_words] words. After saving, this edit can be reverted from the turn''s History.', 'en', 1),
--- Appended to the same confirmation rather than being a second screen: the question it asks is
--- answered by the Save button already there.
-('txtEditImportConflict', 'The entry has been edited since this export was saved. Do you want to continue?', 'en', 1),
+-- Appended to the same confirmation rather than being a second screen, so [save_label] is the
+-- button already sitting under it. The label is substituted from its own config value rather
+-- than spelled out here, the same way txtUnsavedChangesBody does it in story/manage.js, so
+-- renaming the button cannot leave this sentence pointing at a button that no longer exists.
+('txtEditImportConflict', 'The entry has been edited since this export was saved. Click **[save_label]** to continue.', 'en', 1),
 ('txtEditImportSuccess', '✅ Turn [turn_number] updated from your file.', 'en', 1),
 ('txtEditImportNoChange', 'No changes were detected or applied.', 'en', 1),
 -- One message for both "that file is for another entry" and "that file has no turn line at

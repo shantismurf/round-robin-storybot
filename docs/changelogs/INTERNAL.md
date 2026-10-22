@@ -69,11 +69,11 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   trailer. It keeps the delimiter even with one entry in it, because the id is what makes "this
   is the wrong file" and "this entry changed in Discord since you exported it" answerable. Import
   goes through a modal file field (`FileUploadBuilder` wrapped in a `LabelBuilder`, verified
-  against the installed builders) whose instructions quote this entry's own turn line, so the
-  editor can compare it against the file in front of them. Nothing is written until a confirm
-  that states the word count either side and says the current text goes to the entry's history
-  first; the conflict warning rides on that same confirm rather than opening a second one, since
-  the question it asks is what the Save button there answers. One message covers both ways a file
+  against the installed builders) carrying one line of text on the field itself. Nothing is
+  written until a confirm that states the word count either side and says the current text goes
+  to the entry's history first; the conflict warning rides on that same confirm rather than
+  opening a second one, and names the Save button under it by substituting that button's own
+  label, so the two cannot disagree. One message covers both ways a file
   can fail to be this entry's -- it is another entry's, or it has no turn line at all -- because
   either way the first line is wrong and the fix is the same. A file matching the entry as it
   stands changes nothing and says so, and content over 65,000 bytes is refused rather than

@@ -11,7 +11,7 @@ import { ENTRY_STATUS } from '../constants.js';
 import { turnNumberSubquery, readEntryPosition, moveEntryToPosition } from './_entryOrder.js';
 import { logEntryReorder, logEntryWriterChange, listStoryWritersForCredit, readEntryWriter } from './_entryChangeLog.js';
 import {
-  EDIT_FILE_CONFIG_KEYS, buildFileRoundTripButtons, buildImportModal, readExportHeader,
+  EDIT_FILE_CONFIG_KEYS, buildFileRoundTripButtons, buildImportModal,
   handleExportFile, handleImportModalSubmit, handleImportConfirm,
 } from './_editFileRoundTrip.js';
 
@@ -731,11 +731,9 @@ async function handleEditButton(connection, interaction) {
     await handleExportFile(connection, interaction, state);
 
   } else if (customId === 'story_edit_import_file') {
-    // No defer -- showModal must be the first response. The header is read first so the modal's
-    // instructions can quote this entry's own turn line.
-    const exportHeader = await readExportHeader(connection, state.entryId);
-    log(`story_edit_import_file: entry ${state.entryId} opening import modal (header ${exportHeader})`, { show: false, guildName: interaction?.guild?.name });
-    await interaction.showModal(buildImportModal(state.editCfg, exportHeader));
+    // No defer -- showModal must be the first response.
+    log(`story_edit_import_file: entry ${state.entryId} opening import modal`, { show: false, guildName: interaction?.guild?.name });
+    await interaction.showModal(buildImportModal(state.editCfg));
 
   } else if (customId === 'story_edit_import_confirm') {
     await interaction.deferUpdate();

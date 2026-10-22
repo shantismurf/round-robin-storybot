@@ -696,17 +696,27 @@ themselves:
 | `btnEditExportFile` | 📤 Export for Editing |
 | `btnEditImportFile` | 📥 Import Edited Entry |
 | `txtEditImportModalTitle` | Import Edited Entry |
-| `txtEditImportModalHint` | Upload your edited text file. Ensure the first line of the file has the correct turn ID:  `[export_header]` |
+| `lblEditImportFile` | Attach edited text file |
 | `txtEditImportConfirm` | Your edits will change turn [turn_id] from [from_words] to [to_words] words. After saving, this edit can be reverted from the turn's History. |
-| `txtEditImportConflict` | The entry has been edited since this export was saved. Do you want to continue? |
+| `txtEditImportConflict` | The entry has been edited since this export was saved. Click **[save_label]** to continue. |
 | `txtEditImportNoChange` | No changes were detected or applied. |
 | `txtEditImportError` | Turn ID Mismatch: The file does not match the current turn. The first line of the file must read `[export_header]` to match the current turn. |
 | `txtEditExportFileInstructions` | (her 2026-10-21 wording, unchanged) |
 
 `[export_header]` is the entry's own turn line, read fresh and rendered exactly as the export
 file carries it (`[[turn 12 | #4417 | Maria]]`, or without the name when `show_authors` is off),
-so the editor can compare it against the file in front of them. It is deliberately the same
-token in the modal hint and in the mismatch message.
+so the editor can compare it against what is in front of them.
+
+**The modal's instructions line is gone** (2026-10-22, second pass). It had spelled out the
+turn-ID requirement with `[export_header]` in it; she did not like it, and the one line on the
+file field says enough. The export message already tells the editor to keep the first line, and
+`txtEditImportError` quotes the exact line back if the wrong file turns up, so nothing is lost by
+asking less of them up front.
+
+**`txtEditImportConflict` names the Save button**, through a `[save_label]` token fed from
+`btnAdminConfigSave` -- her question ("should it say click save changes to continue?"), answered
+with the substitution pattern `txtUnsavedChangesBody` already uses in `story/manage.js`, so
+renaming the button cannot leave this sentence pointing at one that no longer exists.
 
 `txtEditImportError` replaced two separate strings at her instruction: a file for another entry
 and a file with no turn line at all both mean the first line is wrong, and the fix is the same.
@@ -714,15 +724,16 @@ and a file with no turn line at all both mean the first line is wrong, and the f
 `txtEditImportUnreadable` with the merge.
 
 **Still drafted in this set:** `txtEditImportConfirmTitle` ("Import Edited Entry", the
-confirmation embed's title, mirroring the modal) and `lblEditImportFile` ("Your edited text
-file", the label on the file field *inside* the modal, under the hint). `txtEditImportTooLarge`
+confirmation embed's title, mirroring the modal). `txtEditImportTooLarge`
 is also still mine; the limit it quotes is about 65,000 characters, which is what
 `story_entry.content`'s `TEXT` column holds (65,535 bytes, measured in bytes because a
 non-Latin script would otherwise pass the check and be truncated).
 
-**Open question from her, unanswered as of this writing:** whether
-`txtEditImportConfirm` should say where History is reached. It is the **History** button on the
-same edit panel the confirmation is sitting on top of.
+**Settled 2026-10-22:** `txtEditImportConfirm` does *not* say where History is reached -- "we
+don't need to be so pedantic, if the History button is right there", and it is, on the panel the
+confirmation sits on top of. The `[turn_id]` token keeps her name and carries the turn number the
+reader knows: "the token name isn't important as long as it's showing the turn number the user
+knows".
 
 ### Drafted copy — the whole-story import (step 6, 2026-10-22)
 
