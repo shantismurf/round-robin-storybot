@@ -22,7 +22,7 @@
 
 import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags,
-  ModalBuilder, LabelBuilder, FileUploadBuilder, TextDisplayBuilder,
+  ModalBuilder, LabelBuilder, FileUploadBuilder,
 } from 'discord.js';
 import { getConfigValue, log, replaceTemplateVariables } from '../utilities.js';
 import { parseEntryDelimiter, parseExportStamp } from './_exportText.js';
@@ -35,13 +35,17 @@ import { resolveMentionsToPlainText } from './_entryMarkup.js';
 import { ENTRY_STATUS } from '../constants.js';
 import { pendingImportData } from './_state.js';
 
+// Two of these belong to the single-entry round trip rather than to this flow: the file field's
+// label and the nothing-changed line are text LeeAnn had already written there, and she asked for
+// that text here rather than a second wording of it (2026-10-22). This modal also does without an
+// instructions line, for the reason the entry one does: the label says enough.
 export const IMPORT_STORY_CONFIG_KEYS = [
-  'btnManageEntriesImport', 'txtImportStoryModalTitle', 'lblImportStoryFile',
-  'txtImportStoryModalHint', 'txtImportStoryConfirmTitle', 'txtImportStoryConfirm',
+  'btnManageEntriesImport', 'txtImportStoryModalTitle', 'lblEditImportFile',
+  'txtImportStoryConfirmTitle', 'txtImportStoryConfirm',
   'txtImportStoryRow', 'txtImportStoryNoteMoved', 'txtImportStoryNoteWriter',
   'txtImportStoryNoteRemoved', 'txtImportStoryNoteRestored', 'txtImportStoryNoteConflict',
   'txtImportStoryOverflow', 'btnImportStoryConfirm', 'txtImportStorySuccess',
-  'txtImportStoryNoChange', 'txtImportStoryUnreadable', 'txtImportStoryUnknownEntry',
+  'txtEditImportNoChange', 'txtImportStoryUnreadable', 'txtImportStoryUnknownEntry',
   'txtImportStoryDuplicateEntry', 'txtImportStoryUnknownWriter', 'txtImportStoryEmptyEntry',
   'txtImportStoryEntryTooLarge', 'txtImportStoryUnchangedCount',
 ];
@@ -158,9 +162,8 @@ export function buildImportStoryModal(cfg, storyId) {
   return new ModalBuilder()
     .setCustomId(`story_import_story_submit_${storyId}`)
     .setTitle(cfg.txtImportStoryModalTitle)
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(cfg.txtImportStoryModalHint))
     .addLabelComponents(
-      new LabelBuilder().setLabel(cfg.lblImportStoryFile).setFileUploadComponent(upload)
+      new LabelBuilder().setLabel(cfg.lblEditImportFile).setFileUploadComponent(upload)
     );
 }
 
@@ -241,7 +244,7 @@ export async function handleImportStoryModalSubmit(connection, interaction, stor
 
   if (plan.changedCount === 0) {
     log(`handleImportStoryModalSubmit: ${attachment.name} matches story ${storyId} as it stands`, { show: true, guildName });
-    return await interaction.followUp({ content: cfg.txtImportStoryNoChange, flags: MessageFlags.Ephemeral });
+    return await interaction.followUp({ content: cfg.txtEditImportNoChange, flags: MessageFlags.Ephemeral });
   }
 
   const lines = buildImportSummaryLines(plan, cfg);

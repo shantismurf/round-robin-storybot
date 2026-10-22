@@ -244,25 +244,27 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 -- writer name re-credits a turn, and a block the editor deleted removes that turn -- which is why
 -- applying needs a confirmation that lists removals one by one rather than counting them.
 --
--- DRAFTED, pending LeeAnn's approval -- see docs/plans/PLAN-copyedit-round-trip.md.
+-- Her wording, approved 2026-10-22 -- see docs/plans/PLAN-copyedit-round-trip.md.
 ('btnManageEntriesImport', '📥 Import Edited Story', 'en', 1),
 ('txtImportStoryModalTitle', 'Import Edited Story', 'en', 1),
-('lblImportStoryFile', 'Your edited text file', 'en', 1),
-('txtImportStoryModalHint', 'Upload your edited text file. Keep each turn line, the one with the turn ID, exactly as it is.', 'en', 1),
+-- No label or hint of its own: the modal reuses lblEditImportFile ("Attach edited text file")
+-- from the single-entry round trip, at her instruction -- "use the text from the single import"
+-- (2026-10-22) -- and the hint line above it was dropped there for the same reason it is dropped
+-- here, that the label says enough on its own.
 ('txtImportStoryConfirmTitle', 'Apply this file to the story?', 'en', 1),
-('txtImportStoryConfirm', '[changed_count] turn(s) would change, from **[filename]**. The current text of each one is saved to its history first, so you can put any of them back from Manage Entries.', 'en', 1),
+('txtImportStoryConfirm', '[changed_count] turn(s) would change, from **[filename]**. All changes can be individually reverted from Manage Entries, if needed.', 'en', 1),
 -- One line per changed turn. The {? ?} block drops out when a turn only changed its text.
 ('txtImportStoryRow', '[turn_number]. [writer_name] — [from_words] to [to_words] words{? ([notes])?}', 'en', 1),
 ('txtImportStoryNoteMoved', 'moved to turn [to_position]', 'en', 1),
 ('txtImportStoryNoteWriter', 'now [to_writer]', 'en', 1),
 ('txtImportStoryNoteRemoved', 'removed', 'en', 1),
 ('txtImportStoryNoteRestored', 'restored', 'en', 1),
-('txtImportStoryNoteConflict', 'also edited in Discord since your download', 'en', 1),
+('txtImportStoryNoteConflict', 'edited since you exported it', 'en', 1),
 ('txtImportStoryUnchangedCount', '[unchanged_count] turn(s) stay as they are.', 'en', 1),
 ('txtImportStoryOverflow', 'The full list is attached.', 'en', 1),
 ('btnImportStoryConfirm', 'Apply These Changes', 'en', 1),
 ('txtImportStorySuccess', '✅ Story updated from your file: [changed_count] turn(s) changed.', 'en', 1),
-('txtImportStoryNoChange', 'That file matches the story exactly as it is now, so nothing changed.', 'en', 1),
+-- No nothing-changed line of its own either: txtEditImportNoChange says it for both flows.
 ('txtImportStoryUnreadable', '❌ That file has no turn lines like [[turn 12 | #4417]] in it, so there is nothing to match it to. Upload the file you exported for editing.', 'en', 1),
 ('txtImportStoryUnknownEntry', '❌ That file has a turn line with ID [file_id], which is not a turn in this story. Export the story again and edit that file.', 'en', 1),
 ('txtImportStoryDuplicateEntry', '❌ That file has turn ID [file_id] in it twice. Each turn can only appear once, so one of them needs deleting.', 'en', 1),

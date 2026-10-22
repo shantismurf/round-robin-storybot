@@ -750,37 +750,56 @@ confirmation sits on top of. The `[turn_id]` token keeps her name and carries th
 reader knows: "the token name isn't important as long as it's showing the turn number the user
 knows".
 
-### Drafted copy — the whole-story import (step 6, 2026-10-22)
+### Approved copy — the whole-story import (step 6, 2026-10-22)
 
-**Not approved.** In `config_storyadmin.sql` so the code runs on the branch. The Export/Import
-naming and the dropped Cancel button from step 5's review are already applied here; the strings
-themselves are still mine.
+Reviewed in the doc she asked for rather than in this file -- "rather than pull up the plan file
+from github and copy and paste, give me the 23 values in a Claude document and I'll edit as
+needed" -- and approved there on 2026-10-22. The table below is what the config file now carries.
 
-| Key | Drafted value |
+**Three of the twenty-three drafts are gone, not rewritten.** They were second wordings of text
+she had already approved for the single-entry round trip, which the reuse rule in CLAUDE.md says
+to look for before making a key: `lblImportStoryFile` and `txtImportStoryNoChange` are now
+`lblEditImportFile` and `txtEditImportNoChange`, and `txtImportStoryModalHint` is dropped the way
+the entry modal's instructions line was dropped, because the label says enough on its own. Her
+instruction: "use the text from the single import".
+
+`btnImportStoryConfirm` keeps a label of its own rather than reusing `btnAdminConfigSave` the way
+the single-entry confirm does. That button is `ButtonStyle.Success` under a plain edit; this one
+is `Danger`, because applying can remove turns and overwrite prose, and "✅ Save Changes" on a red
+button reads as the wrong thing twice over.
+
+| Key | Value |
 | --- | --- |
 | `btnManageEntriesImport` | 📥 Import Edited Story |
 | `txtImportStoryModalTitle` | Import Edited Story |
-| `lblImportStoryFile` | Your edited text file |
-| `txtImportStoryModalHint` | Upload your edited text file. Keep each turn line, the one with the turn ID, exactly as it is. |
 | `txtImportStoryConfirmTitle` | Apply this file to the story? |
-| `txtImportStoryConfirm` | [changed_count] turn(s) would change, from **[filename]**. The current text of each one is saved to its history first, so you can put any of them back from Manage Entries. |
+| `txtImportStoryConfirm` | [changed_count] turn(s) would change, from **[filename]**. All changes can be individually reverted from Manage Entries, if needed. |
 | `txtImportStoryRow` | [turn_number]. [writer_name] — [from_words] to [to_words] words{? ([notes])?} |
 | `txtImportStoryNoteMoved` | moved to turn [to_position] |
 | `txtImportStoryNoteWriter` | now [to_writer] |
 | `txtImportStoryNoteRemoved` | removed |
 | `txtImportStoryNoteRestored` | restored |
-| `txtImportStoryNoteConflict` | also edited in Discord since your download |
+| `txtImportStoryNoteConflict` | edited since you exported it |
 | `txtImportStoryUnchangedCount` | [unchanged_count] turn(s) stay as they are. |
 | `txtImportStoryOverflow` | The full list is attached. |
 | `btnImportStoryConfirm` | Apply These Changes |
 | `txtImportStorySuccess` | ✅ Story updated from your file: [changed_count] turn(s) changed. |
-| `txtImportStoryNoChange` | That file matches the story exactly as it is now, so nothing changed. |
 | `txtImportStoryUnreadable` | ❌ That file has no turn lines like [[turn 12 \| #4417]] in it, so there is nothing to match it to. Upload the file you exported for editing. |
 | `txtImportStoryUnknownEntry` | ❌ That file has a turn line with ID [file_id], which is not a turn in this story. Export the story again and edit that file. |
 | `txtImportStoryDuplicateEntry` | ❌ That file has turn ID [file_id] in it twice. Each turn can only appear once, so one of them needs deleting. |
 | `txtImportStoryUnknownWriter` | ❌ "[writer_name]" on turn [file_turn] is not a writer in this story. Use the name of a writer who has already joined. |
 | `txtImportStoryEmptyEntry` | ❌ Turn [file_turn] has no text left in it. To remove a turn, delete its whole block including the turn line. |
 | `txtImportStoryEntryTooLarge` | ❌ Turn [file_turn] is too long to store. The limit is about [limit] characters per turn. |
+
+`txtImportStoryEntryTooLarge` stays a key of its own rather than reusing `txtEditImportTooLarge`,
+which says the same thing: in a whole-story file the editor needs to know *which* turn is over the
+limit, and the single-entry string has no token for it because there is only ever one turn in that
+file.
+
+**Still mine, and the one thing in this set that is:** `txtImportStoryNoteMoved`'s direction. The
+code now passes both `[from_position]` and `[to_position]` into it, so "(moved from turn 12)" on a
+line numbered 9 and "(moved to turn 9)" on a line numbered 12 are both available without a code
+change; the value above is the second. See the relative-move rule under "Import confirmation".
 
 ### Approved copy — the export file legend (2026-10-22)
 
