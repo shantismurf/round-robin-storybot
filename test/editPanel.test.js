@@ -26,6 +26,8 @@ const cfg = {
 // Manage Entries panel, and story/read.js never renders those rows. Only needed by the
 // full-panel row-budget test below.
 const manageCfg = {
+  btnEditExportFile: '📝 Download This Turn',
+  btnEditImportFile: '📤 Upload Edited Turn',
   btnManageEntriesDelete: 'Delete',
   btnManageEntriesRestore: 'Restore',
   btnManageEntriesChangeOrder: 'Change Order',
@@ -92,9 +94,11 @@ describe('buildEditMessage', () => {
 
   test('no action row exceeds Discord 5-component limit, with every button shown', () => {
     // Prev + Next + Edit + Add Page + History is exactly 5 — the row is full. The manage row is
-    // at 4 of 5 (Delete, Restore, Change Order, Change Writer), so the worst case is 4 rows:
-    // page-jump select, nav row, manage row, Back to List.
-    const msg = buildEditMessage(multiPage(), 0, true, 7, 'My Story', 42, { ...cfg, ...manageCfg }, { manageMode: true, hasPicker: true });
+    // at 4 of 5 (Delete, Restore, Change Order, Change Writer), and the last row carries the two
+    // file buttons plus Back to List, so the worst case is 4 rows: page-jump select, nav row,
+    // manage row, that tail row. A fifth row would sit on Discord's hard limit.
+    const msg = buildEditMessage(multiPage(), 0, true, 7, 'My Story', 42, { ...cfg, ...manageCfg }, { manageMode: true, hasPicker: true, fileRoundTrip: true });
+    assert.ok(msg.components.length <= 4, 'the worst-case panel left no spare action row');
     for (const row of msg.components) {
       assert.ok(row.toJSON().components.length <= 5, 'an action row went over 5 components');
     }
@@ -127,6 +131,29 @@ describe('buildEditMessage', () => {
     const ids = customIds(buildEditMessage(singlePage(), 0, false, 7, 'My Story', 42, cfg));
     assert.ok(!ids.includes('story_edit_manage_order'));
     assert.ok(!ids.includes('story_edit_manage_writer'));
+  });
+
+  // The file round trip is for the writer with a long entry as much as for an admin, so it is
+  // not gated on manage mode.
+  test('the file round trip is offered to an author too', () => {
+    const ids = customIds(buildEditMessage(singlePage(), 0, false, 7, 'My Story', 42, { ...cfg, ...manageCfg }, { fileRoundTrip: true }));
+    assert.ok(ids.includes('story_edit_export_file'));
+    assert.ok(ids.includes('story_edit_import_file'));
+  });
+
+  // story/read.js renders this panel inline from its own Edit button with EDIT_PANEL_CONFIG_KEYS
+  // alone, so the file buttons must not appear there — they would render with no label and throw.
+  test('the read path gets no file buttons, and needs no keys for them', () => {
+    const ids = customIds(buildEditMessage(singlePage(), 0, false, 7, 'My Story', 42, cfg));
+    assert.ok(!ids.includes('story_edit_export_file'));
+    assert.ok(!ids.includes('story_edit_import_file'));
+  });
+
+  test('Back to List stays last in the tail row', () => {
+    const msg = buildEditMessage(singlePage(), 0, false, 7, 'My Story', 42, { ...cfg, ...manageCfg }, { fileRoundTrip: true, hasPicker: true });
+    const tail = msg.components.at(-1).toJSON().components;
+    assert.deepEqual(tail.map(c => c.custom_id),
+      ['story_edit_export_file', 'story_edit_import_file', 'story_edit_backlist']);
   });
 });
 

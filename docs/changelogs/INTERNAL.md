@@ -33,6 +33,27 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
 2026-10-20. Design: docs/plans/PLAN-copyedit-round-trip.md.
 
 ### Added
+- **The single-turn file round trip on the edit panel.** Download one turn as plain text, edit it
+  anywhere with no page boundaries, upload it back. This is the actual fix for the page problem:
+  the edit modal splits an entry into 3800-character pages because Discord's text input cannot
+  hold more, so a change across a page seam has to be made twice and a find-and-replace over a
+  whole entry cannot be made at all. Two buttons rather than one framing it as a single "edit as
+  file" action -- LeeAnn, 2026-10-21: the gap between downloading and uploading is "several
+  minutes, if not hours or days", and an interaction token on the download message is dead in
+  about fifteen minutes, so the upload has to start from the panel. The file is the whole-story
+  export's format narrowed to one entry: the `[[turn N | #id | writer]]` delimiter first, the
+  prose verbatim, then the `[[exported-at]]` trailer. It keeps the delimiter even with one entry
+  in it, because the id is what makes "this is the wrong file" and "this entry changed in Discord
+  since you downloaded it" answerable. Upload goes through a modal file field
+  (`FileUploadBuilder` wrapped in a `LabelBuilder`, verified against the installed builders), and
+  nothing is written until a confirm that states the word count either side, names the file, and
+  says the current text is saved to history first. A file for another entry is refused by id; a
+  file with no turn line is refused with what a turn line looks like; a file matching the entry
+  as it stands changes nothing and says so; and content over 65,000 bytes is refused rather than
+  silently truncated by the `TEXT` column. An import is a new submission of the whole entry, so
+  it goes through the same mention resolution a modal save does. `story/_editFileRoundTrip.js`
+  holds all of it; the two buttons share the panel's last row with Back to List, which keeps the
+  worst-case panel at four of Discord's five action rows.
 - **Change Order and Change Writer on the Manage Entries edit panel** (migration 027). Two
   buttons on the manage row, so a story can be reordered and an entry re-credited without
   touching the database by hand. Change Order asks for a turn number -- the number an editor

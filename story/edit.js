@@ -10,6 +10,10 @@ import { handleEditHistoryButton } from './_editHistory.js';
 import { ENTRY_STATUS } from '../constants.js';
 import { turnNumberSubquery, readEntryPosition, moveEntryToPosition } from './_entryOrder.js';
 import { logEntryReorder, logEntryWriterChange, listStoryWritersForCredit, readEntryWriter } from './_entryChangeLog.js';
+import {
+  EDIT_FILE_CONFIG_KEYS, buildFileRoundTripButtons, buildImportModal,
+  handleExportFile, handleImportModalSubmit, handleImportConfirm,
+} from './_editFileRoundTrip.js';
 
 export { pendingEditData };
 
@@ -173,6 +177,7 @@ async function openEditSession(connection, interaction, guildId, storyId, turnNu
     'txtManageEntryDeleteSuccess', 'txtManageEntryRestoreSuccess',
     'txtManageEntryAlreadyDeleted', 'txtManageEntryAlreadyConfirmed',
     ...MANAGE_CHANGE_CONFIG_KEYS,
+    ...EDIT_FILE_CONFIG_KEYS,
   ], guildId);
 
   const state = pendingEditData.get(interaction.user.id);
@@ -201,6 +206,21 @@ export async function handleChangeOrderModalSubmit(connection, interaction) {
   }
   const raw = interaction.fields.getTextInputValue('target_turn');
   await applyOrderChange(connection, interaction, state, raw);
+}
+
+/**
+ * Entry point for the upload modal's submit, routed from commands/story.js alongside the move
+ * modal's. The file round trip lives in story/_editFileRoundTrip.js; this is only the session
+ * lookup, which is what every modal submit on this panel has to do first.
+ */
+export async function handleImportFileModalSubmit(connection, interaction) {
+  await interaction.deferUpdate();
+  const state = pendingEditData.get(interaction.user.id);
+  if (!state) {
+    log(`handleImportFileModalSubmit: no session for ${interaction.user.username}`, { show: true, guildName: interaction?.guild?.name });
+    return;
+  }
+  await handleImportModalSubmit(connection, interaction, state);
 }
 
 // The move modal. The turn number is what the editor sees everywhere else, so that is what the
@@ -373,12 +393,20 @@ export function buildEditMessageForState(state) {
   return buildEditMessage(
     state.chunks, state.chunkPage, state.hasHistory, state.turnNumber,
     state.storyTitle, state.guildStoryId, state.editCfg ?? {},
-    { manageMode: state.manageMode, entryStatus: state.entryStatus, hasPicker: !!state.pickerContext }
+    {
+      manageMode: state.manageMode, entryStatus: state.entryStatus,
+      hasPicker: !!state.pickerContext,
+      // Only a real edit session gets the file round trip. story/read.js renders this same panel
+      // inline from its own Edit button with EDIT_PANEL_CONFIG_KEYS alone, and an import there
+      // would replace the read view it is sitting in -- see the read-path branch in
+      // handleEditModalSubmit for the same distinction.
+      fileRoundTrip: !state.fromReadPath,
+    }
   );
 }
 
 function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle, guildStoryId, editCfg, pickerOpts = {}) {
-  const { manageMode = false, entryStatus = null, hasPicker = false } = pickerOpts;
+  const { manageMode = false, entryStatus = null, hasPicker = false, fileRoundTrip = false } = pickerOpts;
   const chunk = chunks[chunkPage];
   const isMultiPage = chunks.length > 1;
 
@@ -519,14 +547,20 @@ function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle,
 
   // Shown whenever this session was reached via either entry picker (admin or author), so there's
   // a way back to it — not shown when reached directly by turn number or Read's Edit button.
+  // The file round trip and Back to List share the last row. They are separate concerns, but
+  // the manage-mode panel is at four rows already (page-jump select, nav, admin actions, this
+  // one) and a fifth would sit on Discord's hard limit with nothing left for the next addition.
+  // Back to List goes last, where it reads as the way out.
+  const tailButtons = fileRoundTrip ? buildFileRoundTripButtons(editCfg) : [];
   if (hasPicker) {
-    components.push(new ActionRowBuilder().addComponents(
+    tailButtons.push(
       new ButtonBuilder()
         .setCustomId('story_edit_backlist')
         .setLabel(editCfg.btnEditBackToList)
         .setStyle(ButtonStyle.Secondary)
-    ));
+    );
   }
+  if (tailButtons.length > 0) components.push(new ActionRowBuilder().addComponents(...tailButtons));
 
   return { embeds: [embed], components };
 }
@@ -682,6 +716,24 @@ async function handleEditButton(connection, interaction) {
       components: [new ActionRowBuilder().addComponents(select)],
       flags: MessageFlags.Ephemeral,
     });
+
+  } else if (customId === 'story_edit_export_file') {
+    await interaction.deferUpdate();
+    await handleExportFile(connection, interaction, state);
+
+  } else if (customId === 'story_edit_import_file') {
+    // No defer -- showModal must be the first response.
+    await interaction.showModal(buildImportModal(state.editCfg));
+
+  } else if (customId === 'story_edit_import_confirm') {
+    await interaction.deferUpdate();
+    await handleImportConfirm(connection, interaction, state);
+
+  } else if (customId === 'story_edit_import_cancel') {
+    await interaction.deferUpdate();
+    state.pendingImport = null;
+    await state.originalInteraction.deleteReply(state.importMessage).catch(() => {});
+    state.importMessage = null;
 
   } else if (customId === 'story_edit_writer_select') {
     await interaction.deferUpdate();

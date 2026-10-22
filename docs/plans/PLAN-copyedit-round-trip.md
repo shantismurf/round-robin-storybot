@@ -1,8 +1,8 @@
 # Copyedit Round Trip (Export → Edit → Import)
 
-Status: In progress — steps 1-4 built (held under Unreleased for 3.10.0), steps 5-6 open
+Status: In progress — steps 1-5 built (held under Unreleased for 3.10.0), step 6 open
 Created: 2026-09-22
-Last Updated: 2026-10-22 (steps 3 and 4 built)
+Last Updated: 2026-10-22 (steps 3, 4 and 5 built)
 
 ## Problem
 
@@ -589,9 +589,16 @@ Sequence set by LeeAnn on 2026-10-21; this is the order to build in, not a menu.
    (`story/edit.js:401`). The change log is `story_entry_edit` gaining `change_type`
    and the previous/new columns, `content` going nullable, the history panel branching
    per row type, and Restore refusing non-content rows.
-5. **Small/medium** — single-entry export + import on the edit panel. The real fix for
-   cross-page editing. Main open question is how to present it: framing it as one round
-   trip ("edit as file") likely reads more clearly than two separate download/upload
+5. ~~**Small/medium** — single-entry export + import on the edit panel.~~ **Built 2026-10-22**,
+   under Unreleased, in `story/_editFileRoundTrip.js`. Two buttons, settled by her argument
+   against the one-button framing (an interaction token on the download message is dead long
+   before the file comes back). The file is this plan's format narrowed to one entry; the id in
+   the delimiter is what powers the wrong-file and stale-file checks; the confirm states the word
+   count either side and names the file; the apply writes the history row before the content, the
+   same order the modal save uses. The copy is drafted and **awaiting her approval** except
+   `txtEditExportFileInstructions`, which is hers verbatim. The original description follows.
+   The real fix for cross-page editing. Main open question is how to present it: framing it as
+   one round trip ("edit as file") likely reads more clearly than two separate download/upload
    buttons.
 6. **Medium** — whole-story import with the per-turn confirm. Generalises (5)'s
    machinery over the file (2) already produces.
@@ -661,6 +668,32 @@ One case has no approved string and reuses one: a story whose only writer is the
 current writer has nobody to offer in the picker, so Change Writer answers with
 `txtManageEntriesChangeWriterSame` ("This entry already belongs to [to_writer]"), which is
 true but was written for a different path. Worth a string of its own if it ever reads wrong.
+
+### Drafted copy — the single-turn file round trip (step 5, 2026-10-22)
+
+**Not approved.** Drafted against the built mechanics, as this plan said to do, and in the config
+file so the code runs on the branch. `txtEditExportFileInstructions` is the exception: it is
+LeeAnn's own wording from 2026-10-21 and shipped as written.
+
+| Key | Drafted value |
+| --- | --- |
+| `btnEditExportFile` | 📝 Download This Turn |
+| `btnEditImportFile` | 📤 Upload Edited Turn |
+| `txtEditImportModalTitle` | Upload Edited Turn |
+| `lblEditImportFile` | Your edited text file |
+| `txtEditImportModalHint` | Upload the .txt file you downloaded, with your edits in it. Keep the first line, the one with the turn ID, exactly as it was. |
+| `txtEditImportConfirmTitle` | Replace this turn's text? |
+| `txtEditImportConfirm` | Turn [turn_number] goes from [from_words] words to [to_words] words, from **[filename]**. Your current text is saved to this entry's history first, so you can put it back with the History button. |
+| `txtEditImportConflict` | ⚠️ This entry was also edited here in Discord after you downloaded that file ([edited_at]). Uploading replaces that newer text too. |
+| `btnEditImportConfirm` | Replace Text |
+| `txtEditImportSuccess` | ✅ Turn [turn_number] updated from your file. |
+| `txtEditImportNoChange` | That file matches this turn exactly as it is now, so nothing changed. |
+| `txtEditImportWrongEntry` | ❌ That file is turn [file_turn] (ID [file_id]), not this one. Download this turn and edit that file, or open turn [file_turn] to upload this one. |
+| `txtEditImportUnreadable` | ❌ That file does not start with a turn line like [[turn 12 \| #4417]], so there is no way to tell which entry it belongs to. Upload the file you downloaded here, edits and all. |
+| `txtEditImportTooLarge` | ❌ That file is too long to store as one turn. The limit is about [limit] characters. |
+
+Cancel on the confirm reuses `btnEditRestoreCancel`, and an emptied file reuses
+`txtEditEntryEmpty` ("Entry content cannot be empty."), rather than adding two more keys.
 
 ### Export and import copy, and the filename (2026-10-21)
 

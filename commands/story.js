@@ -8,7 +8,7 @@ import { handleJoin, handleJoinSetAO3Button, handleJoinAO3ModalSubmit, handleJoi
 import { handleWrite, handleWriteModalSubmit, handleEntryConfirmation, handleViewLastEntry, handleFinalizeEntry, handleFinalizeConfirm, handleFinalizeImageConfirm, handlePreviewNav, handleSkipTurn, handleSkipConfirm, handleThreadDeleteNow } from '../story/write.js';
 import { pendingPreviewData } from '../story/_state.js';
 import { handleRead, handleReadNav } from '../story/read.js';
-import { handleEdit, handleEditButton, handleEditModalSubmit, handleChangeOrderModalSubmit, handleRepostEntry } from '../story/edit.js';
+import { handleEdit, handleEditButton, handleEditModalSubmit, handleChangeOrderModalSubmit, handleImportFileModalSubmit, handleRepostEntry } from '../story/edit.js';
 import { handleListStories, handleListNavigation, handleFilterButton, renderStoryListReply } from '../story/list.js';
 import { handleManage, handleManageButton, handleTurnActionSelectMenu, handleTagReviewButton, handleManageModalSubmit } from '../story/manage.js';
 import { handleManageEntriesButton, handleManageEntriesSelectMenu } from '../story/_manageEntries.js';
@@ -205,6 +205,9 @@ async function handleModalSubmit(connection, interaction) {
     await handleManageModalSubmit(connection, interaction);
   } else if (interaction.customId === 'story_edit_order_submit') {
     await handleChangeOrderModalSubmit(connection, interaction);
+
+  } else if (interaction.customId === 'story_edit_import_submit') {
+    await handleImportFileModalSubmit(connection, interaction);
   } else if (interaction.customId.startsWith('story_edit_modal_')) {
     await handleEditModalSubmit(connection, interaction);
   } else if (interaction.customId.startsWith('story_tag_submit_modal_')) {
