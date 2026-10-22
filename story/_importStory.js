@@ -46,14 +46,19 @@ export const IMPORT_STORY_CONFIG_KEYS = [
   'txtImportStoryNoteWriter',
   'txtImportStoryNoteRemoved', 'txtImportStoryNoteRestored', 'txtImportStoryNoteConflict',
   'txtImportStoryOverflow', 'btnImportStoryConfirm', 'txtImportStorySuccess',
-  'txtEditImportNoChange', 'txtImportStoryUnreadable', 'txtImportStoryUnknownEntry',
-  'txtImportStoryDuplicateEntry', 'txtImportStoryUnknownWriter', 'txtImportStoryEmptyEntry',
-  'txtImportStoryEntryTooLarge', 'txtImportStoryUnchangedCount',
+  'txtEditImportNoChange', 'txtImportStoryUnchangedCount',
+  'txtImportStoryErrorHeader', 'txtImportStoryErrorUnreadable', 'txtImportStoryErrorNoTurnLines',
+  'txtImportStoryErrorUnknownId', 'txtImportStoryErrorDuplicateId',
+  'txtImportStoryErrorUnknownWriter', 'txtImportStoryErrorEmptyTurn',
+  'txtImportStoryErrorTooLong',
 ];
 
 // A whole story, not one entry, so the ceiling is higher -- but still a ceiling, because this is
 // read into memory before anything is known about it.
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+
+// Discord's message content limit, with room to spare, for the error report.
+const MESSAGE_BUDGET = 1900;
 
 // Discord's embed description limit. The summary is one line per changed turn, and a story long
 // enough to overflow it gets the first stretch inline and the whole list as an attachment.
@@ -175,16 +180,31 @@ export function buildImportStoryModal(cfg, storyId) {
     );
 }
 
-// Each refusal names the thing in the file that caused it, because the editor has the file open
-// and can only fix what they can find.
-const ERROR_KEYS = {
-  no_blocks: 'txtImportStoryUnreadable',
-  unknown_entry: 'txtImportStoryUnknownEntry',
-  duplicate_entry: 'txtImportStoryDuplicateEntry',
-  unknown_writer: 'txtImportStoryUnknownWriter',
-  empty_entry: 'txtImportStoryEmptyEntry',
-  entry_too_large: 'txtImportStoryEntryTooLarge',
+// One line per kind of problem, each naming everything in the file that caused it, because the
+// editor has the file open and can only fix what they can find.
+const PROBLEM_KEYS = {
+  no_blocks: 'txtImportStoryErrorNoTurnLines',
+  unknown_entry: 'txtImportStoryErrorUnknownId',
+  duplicate_entry: 'txtImportStoryErrorDuplicateId',
+  unknown_writer: 'txtImportStoryErrorUnknownWriter',
+  empty_entry: 'txtImportStoryErrorEmptyTurn',
+  entry_too_large: 'txtImportStoryErrorTooLong',
 };
+
+/**
+ * Every problem in the file as one report: a header line, then a bullet per kind listing all of
+ * its turns or names. LeeAnn's shape, 2026-10-22. The lists go in whole rather than being capped,
+ * and the caller attaches the report as a file if it outgrows a message.
+ */
+export function buildImportErrorReport(problems, cfg, limit) {
+  const lines = problems.map(problem => replaceTemplateVariables(cfg[PROBLEM_KEYS[problem.kind]], {
+    file_ids: problem.items.join(', '),
+    file_turns: problem.items.join(', '),
+    writer_names: problem.items.join(', '),
+    limit: limit.toLocaleString(),
+  }));
+  return [cfg.txtImportStoryErrorHeader, ...lines].join('\n');
+}
 
 /**
  * Reads the uploaded file, plans the import, and shows the confirmation. Writes nothing.
@@ -200,7 +220,7 @@ export async function handleImportStoryModalSubmit(connection, interaction, stor
   const attachment = files?.first?.() ?? null;
   if (!attachment || attachment.size > MAX_UPLOAD_BYTES) {
     log(`handleImportStoryModalSubmit: rejected upload on story ${storyId} (${attachment ? `${attachment.size} bytes` : 'no attachment'})`, { show: true, guildName });
-    return await interaction.followUp({ content: cfg.txtImportStoryUnreadable, flags: MessageFlags.Ephemeral });
+    return await interaction.followUp({ content: cfg.txtImportStoryErrorUnreadable, flags: MessageFlags.Ephemeral });
   }
 
   let text;
@@ -210,7 +230,7 @@ export async function handleImportStoryModalSubmit(connection, interaction, stor
     text = await response.text();
   } catch (err) {
     log(`handleImportStoryModalSubmit: could not read ${attachment.name} for story ${storyId}: ${err?.stack ?? err}`, { show: true, guildName });
-    return await interaction.followUp({ content: cfg.txtImportStoryUnreadable, flags: MessageFlags.Ephemeral });
+    return await interaction.followUp({ content: cfg.txtImportStoryErrorUnreadable, flags: MessageFlags.Ephemeral });
   }
 
   const { blocks, exportedAt } = splitStoryFile(text, parseEntryDelimiter, parseExportStamp);
@@ -237,15 +257,24 @@ export async function handleImportStoryModalSubmit(connection, interaction, stor
     current, blocks, exportedAt, writers, contentByteLimit: ENTRY_CONTENT_BYTE_LIMIT,
   });
 
-  if (plan.error) {
-    log(`handleImportStoryModalSubmit: ${attachment.name} rejected for story ${storyId}: ${plan.error} (entry ${plan.entryId ?? '-'}, turn ${plan.turnNumber ?? '-'})`, { show: true, guildName });
+  if (plan.problems) {
+    const report = buildImportErrorReport(plan.problems, cfg, ENTRY_CONTENT_BYTE_LIMIT);
+    log(`handleImportStoryModalSubmit: ${attachment.name} rejected for story ${storyId} -- ${plan.problems.map(p => `${p.kind} (${p.items.length})`).join(', ')}`, { show: true, guildName });
+
+    // A file with hundreds of bad lines would be a report longer than a message, so it goes over
+    // as a file the same way a long summary does.
+    if (report.length <= MESSAGE_BUDGET) {
+      return await interaction.followUp({ content: report, flags: MessageFlags.Ephemeral });
+    }
     return await interaction.followUp({
-      content: replaceTemplateVariables(cfg[ERROR_KEYS[plan.error]], {
-        file_id: String(plan.entryId ?? ''),
-        file_turn: String(plan.turnNumber ?? ''),
-        writer_name: plan.writerName ?? '',
-        limit: ENTRY_CONTENT_BYTE_LIMIT.toLocaleString(),
-      }),
+      content: `${cfg.txtImportStoryErrorHeader}\n${cfg.txtImportStoryOverflow}`,
+      files: [{
+        attachment: Buffer.from(`${report}\n`, 'utf8'),
+        name: buildExportFilename({
+          guildStoryId: story.guild_story_id, title: story.title,
+          part: 'import_errors', exportedAt: new Date(), ext: 'txt',
+        }),
+      }],
       flags: MessageFlags.Ephemeral,
     });
   }

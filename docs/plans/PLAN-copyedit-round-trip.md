@@ -773,29 +773,54 @@ button reads as the wrong thing twice over.
 | `btnManageEntriesImport` | 📥 Import Edited Story |
 | `txtImportStoryModalTitle` | Import Edited Story |
 | `txtImportStoryConfirmTitle` | Apply this file to the story? |
-| `txtImportStoryConfirm` | [changed_count] turn(s) would change, from **[filename]**. All changes can be individually reverted from Manage Entries, if needed. |
+| `txtImportStoryConfirm` | [changed_count] turn(s) would change from **[filename]**. All changes can be individually reverted from Manage Entries, if needed. |
 | `txtImportStoryRow` | [turn_number]. [writer_name] — [from_words] to [to_words] words{? ([notes])?} |
 | `txtImportStoryRowRemoved` | [turn_number]. [writer_name] — [from_words] words{? ([notes])?} |
 | `txtImportStoryNoteMoved` | moved to turn [to_position] |
 | `txtImportStoryNoteWriter` | now [to_writer] |
 | `txtImportStoryNoteRemoved` | removed |
 | `txtImportStoryNoteRestored` | restored |
-| `txtImportStoryNoteConflict` | edited since you exported it |
-| `txtImportStoryUnchangedCount` | [unchanged_count] turn(s) stay as they are. |
+| `txtImportStoryNoteConflict` | edited since exported |
+| `txtImportStoryUnchangedCount` | [unchanged_count] turn(s) were unchanged. |
 | `txtImportStoryOverflow` | The full list is attached. |
 | `btnImportStoryConfirm` | Apply These Changes |
-| `txtImportStorySuccess` | ✅ Story updated from your file: [changed_count] turn(s) changed. |
-| `txtImportStoryUnreadable` | ❌ That file has no turn lines like [[turn 12 \| #4417]] in it, so there is nothing to match it to. Upload the file you exported for editing. |
-| `txtImportStoryUnknownEntry` | ❌ That file has a turn line with ID [file_id], which is not a turn in this story. Export the story again and edit that file. |
-| `txtImportStoryDuplicateEntry` | ❌ That file has turn ID [file_id] in it twice. Each turn can only appear once, so one of them needs deleting. |
-| `txtImportStoryUnknownWriter` | ❌ "[writer_name]" on turn [file_turn] is not a writer in this story. Use the name of a writer who has already joined. |
-| `txtImportStoryEmptyEntry` | ❌ Turn [file_turn] has no text left in it. To remove a turn, delete its whole block including the turn line. |
-| `txtImportStoryEntryTooLarge` | ❌ Turn [file_turn] is too long to store. The limit is about [limit] characters per turn. |
+| `txtImportStorySuccess` | ✅ Story updated from file: [changed_count] turn(s) changed. |
+| `txtImportStoryErrorHeader` | The uploaded file encountered the following errors: |
+| `txtImportStoryErrorNoTurnLines` | - No Turn Lines: the file has no turn lines in it |
+| `txtImportStoryErrorUnknownId` | - Turn ID Mismatch: [file_ids] not found in story |
+| `txtImportStoryErrorDuplicateId` | - Duplicate Turn ID: [file_ids] found more than once |
+| `txtImportStoryErrorUnknownWriter` | - Unknown Writer: [writer_names] not joined to this story |
+| `txtImportStoryErrorEmptyTurn` | - Empty Turn: [file_turns] missing text under the turn line |
+| `txtImportStoryErrorTooLong` | - Turn Too Long: [file_turns] over the [limit] character limit |
+| `txtImportStoryErrorUnreadable` | The uploaded file could not be read. |
 
-`txtImportStoryEntryTooLarge` stays a key of its own rather than reusing `txtEditImportTooLarge`,
-which says the same thing: in a whole-story file the editor needs to know *which* turn is over the
-limit, and the single-entry string has no token for it because there is only ever one turn in that
-file.
+**One error report, not a refusal per problem** (LeeAnn, 2026-10-22: "a full error report is
+nice. Can we make these bulleted lists, perhaps?", with the header line hers verbatim). The
+planner used to return on the first bad block, which meant one upload per typo on a file the
+editor is working through in a word processor. It now collects every problem and returns
+`{ problems: [{ kind, items }] }`, in one fixed order, each kind naming every turn or writer that
+hit it:
+
+```
+The uploaded file encountered the following errors:
+- Turn ID Mismatch: 22, 49, 27 not found in story
+- Empty Turn: 8 missing text under the turn line
+```
+
+Her two merges are both in it. "No Turn Lines" and the unknown-ID case are separate bullets rather
+than the one `{? ?}` string an earlier pass proposed, because in a report they can simply both be
+lines. And the wording avoids *is* and *are* throughout -- "not found in story", "found more than
+once" -- so one item and twenty read the same with no plural forms to keep.
+
+The refusals also no longer reuse the single-entry round trip's own error string, which was the
+other thing she asked about: it quotes back the one turn line a single-entry file must have, and a
+whole-story file has one per turn, so there is nothing to quote. `txtImportStoryErrorTooLong`
+likewise stays separate from `txtEditImportTooLarge`, because only this flow can say *which* turn
+is over the limit.
+
+A report longer than a Discord message goes over as a `.txt` attachment, the same way a long
+confirmation summary does; `txtImportStoryErrorUnreadable` sits outside the report entirely, for
+an upload that never arrived or could not be fetched.
 
 **The move note reads forwards, and the line is numbered as the editor's file numbers it**
 (LeeAnn, 2026-10-22: "'moved to' is what I'd pick if I had to pick to or from"). Which settles

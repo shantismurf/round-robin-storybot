@@ -15,6 +15,9 @@
  *    unique.
  *  - **Removal is by omission**, which is why applying needs a confirm. It is a soft delete, so
  *    the entry keeps its slot and Restore brings it back where it was.
+ *
+ * A file that cannot be applied comes back with every problem found in it rather than the first,
+ * because the editor fixes them in the word processor and uploads again.
  */
 
 import { ENTRY_STATUS } from '../constants.js';
@@ -118,6 +121,12 @@ export function movedEntryIds(oldOrder, newOrder) {
   return new Set(ids.filter(id => !stayed.has(id)));
 }
 
+// The order the problems are reported in: what the file is, then what is in it twice, then the
+// three things wrong inside a block.
+const PROBLEM_ORDER = [
+  'unknown_entry', 'duplicate_entry', 'unknown_writer', 'empty_entry', 'entry_too_large',
+];
+
 /**
  * Works out what applying a file would do.
  *
@@ -125,7 +134,8 @@ export function movedEntryIds(oldOrder, newOrder) {
  * `{ entryId, content, entryStatus, writerId, writerName, lastEditedAt }`. `writers` is every
  * writer who could be credited, `{ id, name }`.
  *
- * Returns either `{ error, ...context }` for a file that cannot be applied at all, or a plan:
+ * Returns either `{ problems }` for a file that cannot be applied at all -- every problem in it,
+ * each `{ kind, items }` -- or a plan:
  * `{ rows, order, removals, restorations, changedCount, unchangedCount }`. `order` is every
  * ordered entry id in its new sequence, which is what the renumber writes.
  *
@@ -137,35 +147,45 @@ export function movedEntryIds(oldOrder, newOrder) {
  * @param {number} args.contentByteLimit
  */
 export function planStoryImport({ current, blocks, exportedAt, writers, contentByteLimit }) {
-  if (!blocks || blocks.length === 0) return { error: 'no_blocks' };
+  if (!blocks || blocks.length === 0) return { problems: [{ kind: 'no_blocks', items: [] }] };
 
   const byId = new Map(current.map(e => [String(e.entryId), e]));
   const writerByName = new Map(writers.map(w => [writerKey(w.name), w]));
 
+  // Every problem in the file, not the first one (LeeAnn, 2026-10-22: "a full error report is
+  // nice"). The editor is working on a whole story in a word processor, and one upload per typo
+  // is the difference between a tool and a chore.
+  const found = {
+    unknown_entry: [], duplicate_entry: [], unknown_writer: [], empty_entry: [], entry_too_large: [],
+  };
+
   const seen = new Set();
   for (const block of blocks) {
-    if (seen.has(block.entryId)) {
-      return { error: 'duplicate_entry', entryId: block.entryId, turnNumber: block.turnNumber };
-    }
+    if (seen.has(block.entryId)) found.duplicate_entry.push(block.entryId);
     seen.add(block.entryId);
 
-    if (!byId.has(block.entryId)) {
-      return { error: 'unknown_entry', entryId: block.entryId, turnNumber: block.turnNumber };
-    }
+    // Nothing else can be judged about a block whose turn is not this story's, so it stops here.
+    if (!byId.has(block.entryId)) { found.unknown_entry.push(block.entryId); continue; }
+
     // An emptied block is not how a turn is removed: deleting the whole block is. Saying so is
     // the difference between an accident the editor can fix and one they cannot see.
-    if (block.content === '') {
-      return { error: 'empty_entry', entryId: block.entryId, turnNumber: block.turnNumber };
+    if (block.content === '') found.empty_entry.push(block.turnNumber);
+    else if (Buffer.byteLength(block.content, 'utf8') > contentByteLimit) {
+      found.entry_too_large.push(block.turnNumber);
     }
-    if (Buffer.byteLength(block.content, 'utf8') > contentByteLimit) {
-      return { error: 'entry_too_large', entryId: block.entryId, turnNumber: block.turnNumber };
-    }
+
     // A name the story does not know is a typo, not an instruction. Reassignment can only point
     // at a writer who has already joined, so there is nobody to invent.
     if (block.writerName && !writerByName.has(writerKey(block.writerName))) {
-      return { error: 'unknown_writer', writerName: block.writerName, turnNumber: block.turnNumber };
+      found.unknown_writer.push(block.writerName);
     }
   }
+
+  // One fixed order, so the report reads the same way every time.
+  const problems = PROBLEM_ORDER
+    .filter(kind => found[kind].length > 0)
+    .map(kind => ({ kind, items: [...new Set(found[kind].map(String))] }));
+  if (problems.length > 0) return { problems };
 
   // The new sequence: the file's blocks in file order, then every ordered entry the file does
   // not mention, each put back immediately after the entry that currently precedes it. That is

@@ -252,7 +252,7 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 -- (2026-10-22) -- and the hint line above it was dropped there for the same reason it is dropped
 -- here, that the label says enough on its own.
 ('txtImportStoryConfirmTitle', 'Apply this file to the story?', 'en', 1),
-('txtImportStoryConfirm', '[changed_count] turn(s) would change, from **[filename]**. All changes can be individually reverted from Manage Entries, if needed.', 'en', 1),
+('txtImportStoryConfirm', '[changed_count] turn(s) would change from **[filename]**. All changes can be individually reverted from Manage Entries, if needed.', 'en', 1),
 -- One line per changed turn. The {? ?} block drops out when a turn only changed its text.
 ('txtImportStoryRow', '[turn_number]. [writer_name] — [from_words] to [to_words] words{? ([notes])?}', 'en', 1),
 -- A removed turn has no second word count, so it gets its own line rather than reporting 0
@@ -262,18 +262,27 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('txtImportStoryNoteWriter', 'now [to_writer]', 'en', 1),
 ('txtImportStoryNoteRemoved', 'removed', 'en', 1),
 ('txtImportStoryNoteRestored', 'restored', 'en', 1),
-('txtImportStoryNoteConflict', 'edited since you exported it', 'en', 1),
-('txtImportStoryUnchangedCount', '[unchanged_count] turn(s) stay as they are.', 'en', 1),
+('txtImportStoryNoteConflict', 'edited since exported', 'en', 1),
+('txtImportStoryUnchangedCount', '[unchanged_count] turn(s) were unchanged.', 'en', 1),
 ('txtImportStoryOverflow', 'The full list is attached.', 'en', 1),
 ('btnImportStoryConfirm', 'Apply These Changes', 'en', 1),
-('txtImportStorySuccess', '✅ Story updated from your file: [changed_count] turn(s) changed.', 'en', 1),
+('txtImportStorySuccess', '✅ Story updated from file: [changed_count] turn(s) changed.', 'en', 1),
 -- No nothing-changed line of its own either: txtEditImportNoChange says it for both flows.
-('txtImportStoryUnreadable', '❌ That file has no turn lines like [[turn 12 | #4417]] in it, so there is nothing to match it to. Upload the file you exported for editing.', 'en', 1),
-('txtImportStoryUnknownEntry', '❌ That file has a turn line with ID [file_id], which is not a turn in this story. Export the story again and edit that file.', 'en', 1),
-('txtImportStoryDuplicateEntry', '❌ That file has turn ID [file_id] in it twice. Each turn can only appear once, so one of them needs deleting.', 'en', 1),
-('txtImportStoryUnknownWriter', '❌ "[writer_name]" on turn [file_turn] is not a writer in this story. Use the name of a writer who has already joined.', 'en', 1),
-('txtImportStoryEmptyEntry', '❌ Turn [file_turn] has no text left in it. To remove a turn, delete its whole block including the turn line.', 'en', 1),
-('txtImportStoryEntryTooLarge', '❌ Turn [file_turn] is too long to store. The limit is about [limit] characters per turn.', 'en', 1),
+-- One report for the whole file rather than a refusal per problem -- LeeAnn, 2026-10-22: "a full
+-- error report is nice". The header is hers verbatim. Each line below is a bullet naming every
+-- turn or writer of its kind, so the editor fixes the lot in one pass, and the wording is kept
+-- free of is/are so one item and twenty read the same. DRAFTED below the header, pending her
+-- review.
+('txtImportStoryErrorHeader', 'The uploaded file encountered the following errors:', 'en', 1),
+('txtImportStoryErrorNoTurnLines', '- No Turn Lines: the file has no turn lines in it', 'en', 1),
+('txtImportStoryErrorUnknownId', '- Turn ID Mismatch: [file_ids] not found in story', 'en', 1),
+('txtImportStoryErrorDuplicateId', '- Duplicate Turn ID: [file_ids] found more than once', 'en', 1),
+('txtImportStoryErrorUnknownWriter', '- Unknown Writer: [writer_names] not joined to this story', 'en', 1),
+('txtImportStoryErrorEmptyTurn', '- Empty Turn: [file_turns] missing text under the turn line', 'en', 1),
+('txtImportStoryErrorTooLong', '- Turn Too Long: [file_turns] over the [limit] character limit', 'en', 1),
+-- Not part of the report: the upload itself never arrived or could not be fetched, so there is
+-- nothing in it to list.
+('txtImportStoryErrorUnreadable', 'The uploaded file could not be read.', 'en', 1),
 -- Added Silo 3: storyadmin.js setup
 ('txtSetupAgeRestrictNote', '*(Age-restrict this channel if the server is not already 18+)*', 'en', 1),
 ('txtSetupNoMediaNote', 'ℹ️ No media channel set — images will not be processed.', 'en', 1),

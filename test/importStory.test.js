@@ -1,7 +1,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildImportSummaryLines, fitSummary, readStoryForImport, IMPORT_STORY_CONFIG_KEYS,
+  buildImportSummaryLines, buildImportErrorReport, fitSummary, readStoryForImport,
+  IMPORT_STORY_CONFIG_KEYS,
 } from '../story/_importStory.js';
 import { makeFakeConnection } from './_fakeConnection.js';
 import { ENTRY_STATUS } from '../constants.js';
@@ -23,6 +24,42 @@ const row = (over = {}) => ({
   entryId: '41', fromPosition: 1, toPosition: 1, writerName: 'Maria',
   fromWords: 1420, toWords: 1380, contentChanged: true, moved: false, restored: false,
   removed: false, writerTo: null, conflict: false, changed: true, ...over,
+});
+
+describe('buildImportErrorReport', () => {
+  const errCfg = {
+    txtImportStoryErrorHeader: 'The uploaded file encountered the following errors:',
+    txtImportStoryErrorNoTurnLines: '- No Turn Lines: the file has no turn lines in it',
+    txtImportStoryErrorUnknownId: '- Turn ID Mismatch: [file_ids] not found in story',
+    txtImportStoryErrorDuplicateId: '- Duplicate Turn ID: [file_ids] found more than once',
+    txtImportStoryErrorEmptyTurn: '- Empty Turn: [file_turns] missing text under the turn line',
+    txtImportStoryErrorTooLong: '- Turn Too Long: [file_turns] over the [limit] character limit',
+  };
+
+  test('one bullet per kind, with every turn named on its line', () => {
+    const report = buildImportErrorReport([
+      { kind: 'unknown_entry', items: ['22', '49', '27'] },
+      { kind: 'empty_entry', items: ['8'] },
+    ], errCfg, 65000);
+    assert.equal(report, [
+      'The uploaded file encountered the following errors:',
+      '- Turn ID Mismatch: 22, 49, 27 not found in story',
+      '- Empty Turn: 8 missing text under the turn line',
+    ].join('\n'));
+  });
+
+  test('the character limit is rendered on the too-long line', () => {
+    const report = buildImportErrorReport([{ kind: 'entry_too_large', items: ['14'] }], errCfg, 65000);
+    assert.ok(report.includes('over the 65,000 character limit'));
+  });
+
+  test('a file with nothing in it is its own one-line report', () => {
+    const report = buildImportErrorReport([{ kind: 'no_blocks', items: [] }], errCfg, 65000);
+    assert.equal(report, [
+      'The uploaded file encountered the following errors:',
+      '- No Turn Lines: the file has no turn lines in it',
+    ].join('\n'));
+  });
 });
 
 describe('buildImportSummaryLines', () => {

@@ -59,7 +59,12 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   export), a block emptied of its prose (deleting the whole
   block is how a turn is removed, and saying so is the difference between an accident the editor
   can fix and one they cannot see), a block too long for the `TEXT` column, and a file with no
-  turn lines at all. Applying is one transaction: the history row before the content it replaces,
+  turn lines at all. A refusal reports **every** problem in the file rather than the first, as one
+  bulleted report -- a header line, then a bullet per kind naming every turn or writer that hit it
+  (`- Turn ID Mismatch: 22, 49, 27 not found in story`) -- because the editor fixes them in the
+  word processor and uploads again, and one upload per typo on a 50,000-word file is a chore. The
+  bullet wording carries no *is* or *are*, so one item and twenty read the same with no plural
+  forms to maintain. A report too long for a message goes over as a `.txt` attachment. Applying is one transaction: the history row before the content it replaces,
   the status flips, the writer repointed with its own log row, then the whole reading order
   rewritten from the plan's sequence. The upload modal carries no instructions line, and no file
   label or nothing-changed string of its own: it reuses `lblEditImportFile` and

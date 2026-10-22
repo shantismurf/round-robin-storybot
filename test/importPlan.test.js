@@ -87,39 +87,70 @@ describe('splitStoryFile', () => {
 });
 
 describe('planStoryImport — refusals', () => {
+  const kinds = result => result.problems.map(p => p.kind);
+  const itemsOf = (result, kind) => result.problems.find(p => p.kind === kind)?.items;
+
   test('a file with no blocks', () => {
-    assert.deepEqual(plan([]), { error: 'no_blocks' });
+    assert.deepEqual(plan([]), { problems: [{ kind: 'no_blocks', items: [] }] });
   });
 
   test('an id that is not a turn in this story', () => {
     const result = plan([block(41, 1, 'One.'), block(999, 2, 'Two.', 'Jun')]);
-    assert.equal(result.error, 'unknown_entry');
-    assert.equal(result.entryId, '999');
+    assert.deepEqual(kinds(result), ['unknown_entry']);
+    assert.deepEqual(itemsOf(result, 'unknown_entry'), ['999']);
   });
 
   test('the same id twice', () => {
     const result = plan([block(41, 1, 'One.'), block(41, 2, 'Again.')]);
-    assert.equal(result.error, 'duplicate_entry');
-    assert.equal(result.entryId, '41');
+    assert.deepEqual(kinds(result), ['duplicate_entry']);
+    assert.deepEqual(itemsOf(result, 'duplicate_entry'), ['41']);
   });
 
   // A name the story does not know is a typo, not an instruction to invent a writer.
   test('a writer name nobody in the story has', () => {
     const result = plan([block(41, 1, 'One.', 'Marai')]);
-    assert.equal(result.error, 'unknown_writer');
-    assert.equal(result.writerName, 'Marai');
+    assert.deepEqual(kinds(result), ['unknown_writer']);
+    assert.deepEqual(itemsOf(result, 'unknown_writer'), ['Marai']);
   });
 
   // The distinction that matters: emptying a block is not how a turn is removed.
   test('a block emptied of its prose', () => {
     const result = plan([block(41, 1, ''), block(42, 2, 'Two.', 'Jun'), block(43, 3, 'Three.')]);
-    assert.equal(result.error, 'empty_entry');
-    assert.equal(result.entryId, '41');
+    assert.deepEqual(kinds(result), ['empty_entry']);
+    assert.deepEqual(itemsOf(result, 'empty_entry'), ['1']);
   });
 
   test('a block too long for the column', () => {
     const result = plan([block(41, 1, 'x'.repeat(LIMIT + 1))]);
-    assert.equal(result.error, 'entry_too_large');
+    assert.deepEqual(kinds(result), ['entry_too_large']);
+  });
+
+  // The point of the report: the editor fixes everything in one pass -- LeeAnn, 2026-10-22.
+  test('every problem in the file comes back at once, in one order', () => {
+    const result = plan([
+      block(999, 1, 'Unknown.'),
+      block(41, 2, 'One.'),
+      block(41, 3, 'One again.'),
+      block(42, 4, '', 'Jun'),
+      block(43, 5, 'x'.repeat(LIMIT + 1), 'Marai'),
+    ]);
+    assert.deepEqual(kinds(result), [
+      'unknown_entry', 'duplicate_entry', 'unknown_writer', 'empty_entry', 'entry_too_large',
+    ]);
+    assert.deepEqual(itemsOf(result, 'empty_entry'), ['4']);
+    assert.deepEqual(itemsOf(result, 'entry_too_large'), ['5']);
+    assert.deepEqual(itemsOf(result, 'unknown_writer'), ['Marai']);
+  });
+
+  test('the same problem twice is listed once per turn, not once per kind', () => {
+    const result = plan([block(999, 1, 'One.'), block(998, 2, 'Two.'), block(43, 3, 'Three.')]);
+    assert.deepEqual(itemsOf(result, 'unknown_entry'), ['999', '998']);
+  });
+
+  // A turn id repeated three times is one thing to fix, so it is named once.
+  test('a repeated id is named once', () => {
+    const result = plan([block(41, 1, 'One.'), block(41, 2, 'Again.'), block(41, 3, 'And again.')]);
+    assert.deepEqual(itemsOf(result, 'duplicate_entry'), ['41']);
   });
 });
 
