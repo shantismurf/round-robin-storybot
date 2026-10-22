@@ -9,6 +9,7 @@ import { handleWrite, handleWriteModalSubmit, handleEntryConfirmation, handleVie
 import { pendingPreviewData } from '../story/_state.js';
 import { handleRead, handleReadNav } from '../story/read.js';
 import { handleEdit, handleEditButton, handleEditModalSubmit, handleChangeOrderModalSubmit, handleImportFileModalSubmit, handleRepostEntry } from '../story/edit.js';
+import { handleImportStoryButton, handleImportStoryModalSubmit } from '../story/_importStory.js';
 import { handleListStories, handleListNavigation, handleFilterButton, renderStoryListReply } from '../story/list.js';
 import { handleManage, handleManageButton, handleTurnActionSelectMenu, handleTagReviewButton, handleManageModalSubmit } from '../story/manage.js';
 import { handleManageEntriesButton, handleManageEntriesSelectMenu } from '../story/_manageEntries.js';
@@ -208,6 +209,13 @@ async function handleModalSubmit(connection, interaction) {
 
   } else if (interaction.customId === 'story_edit_import_submit') {
     await handleImportFileModalSubmit(connection, interaction);
+
+  } else if (interaction.customId.startsWith('story_import_story_submit_')) {
+    await interaction.deferUpdate();
+    await handleImportStoryModalSubmit(
+      connection, interaction,
+      parseInt(interaction.customId.replace('story_import_story_submit_', ''), 10)
+    );
   } else if (interaction.customId.startsWith('story_edit_modal_')) {
     await handleEditModalSubmit(connection, interaction);
   } else if (interaction.customId.startsWith('story_tag_submit_modal_')) {
@@ -256,6 +264,8 @@ async function handleButtonInteraction(connection, interaction) {
     await handleCloseCancel(connection, interaction);
   } else if (interaction.customId.startsWith('story_export_close_')) {
     await handleCloseExportButton(connection, interaction);
+  } else if (interaction.customId.startsWith('story_import_story_')) {
+    await handleImportStoryButton(connection, interaction);
   } else if (interaction.customId.startsWith('story_manage_review_tags_read_')) {
     await handleEditTagsButton(connection, interaction);
   } else if (interaction.customId.startsWith('story_manage_')) {

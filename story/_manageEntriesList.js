@@ -7,6 +7,7 @@
 // between edit.js and _manageEntries.js.
 
 import { StringSelectMenuBuilder, ActionRowBuilder, MessageFlags } from 'discord.js';
+import { buildImportStoryButton } from './_importStory.js';
 import { getConfigValue, replaceTemplateVariables } from '../utilities.js';
 import { ENTRY_STATUS } from '../constants.js';
 import { turnNumberSubquery, entryOrderSort, ORDERED_STATUSES } from './_entryOrder.js';
@@ -20,6 +21,9 @@ const PICKER_CFG_KEYS = [
   'txtManageEntriesSelectEntry', 'txtEditMyEntriesSelect',
   'txtManageEntriesNoEntries', 'txtEditMyEntriesNone',
   'txtManageEntriesEntryPlaceholder', 'txtManageEntriesMoreEntries', 'txtManageEntriesDeletedFlag',
+  // The whole-story upload lives on the admin picker: it acts on every entry at once, so it does
+  // not belong on a panel scoped to one of them.
+  'btnManageEntriesImport',
 ];
 
 /**
@@ -111,9 +115,16 @@ export function renderEntryListPage(cfg, entries, hasMore, offset, role, storyId
     .setPlaceholder(cfg.txtManageEntriesEntryPlaceholder)
     .addOptions(options);
 
+  const components = [new ActionRowBuilder().addComponents(select)];
+  // Admins only, and only here: the whole-story upload rewrites order, credits and existence
+  // across every entry, which is a story-level action however it is reached.
+  if (isAdmin) {
+    components.push(new ActionRowBuilder().addComponents(buildImportStoryButton(cfg, storyId)));
+  }
+
   return {
     content: isAdmin ? cfg.txtManageEntriesSelectEntry : cfg.txtEditMyEntriesSelect,
-    components: [new ActionRowBuilder().addComponents(select)],
+    components,
     flags: MessageFlags.Ephemeral
   };
 }

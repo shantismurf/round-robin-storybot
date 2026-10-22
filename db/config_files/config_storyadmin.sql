@@ -239,6 +239,36 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('txtManageEntriesMoreEntries', 'More entries ([offset]+)...', 'en', 1),
 ('txtManageEntriesEntryPlaceholder', 'Select an entry...', 'en', 1),
 ('txtManageEntriesDeletedFlag', '[DELETED]', 'en', 1),
+-- Added: the whole-story upload on the Manage Entries picker (copyedit round trip step 6). The
+-- file exported for editing comes back and its block order becomes the story order, a changed
+-- writer name re-credits a turn, and a block the editor deleted removes that turn -- which is why
+-- applying needs a confirmation that lists removals one by one rather than counting them.
+--
+-- DRAFTED, pending LeeAnn's approval -- see docs/plans/PLAN-copyedit-round-trip.md.
+('btnManageEntriesImport', '📤 Upload Edited Story', 'en', 1),
+('txtImportStoryModalTitle', 'Upload Edited Story', 'en', 1),
+('lblImportStoryFile', 'Your edited text file', 'en', 1),
+('txtImportStoryModalHint', 'Upload the .txt file you exported for editing, with your changes in it. Keep each turn line, the one with the turn ID, exactly as it is.', 'en', 1),
+('txtImportStoryConfirmTitle', 'Apply this file to the story?', 'en', 1),
+('txtImportStoryConfirm', '[changed_count] turn(s) would change, from **[filename]**. The current text of each one is saved to its history first, so you can put any of them back from Manage Entries.', 'en', 1),
+-- One line per changed turn. The {? ?} block drops out when a turn only changed its text.
+('txtImportStoryRow', '[turn_number]. [writer_name] — [from_words] to [to_words] words{? ([notes])?}', 'en', 1),
+('txtImportStoryNoteMoved', 'moved to turn [to_position]', 'en', 1),
+('txtImportStoryNoteWriter', 'now [to_writer]', 'en', 1),
+('txtImportStoryNoteRemoved', 'removed', 'en', 1),
+('txtImportStoryNoteRestored', 'restored', 'en', 1),
+('txtImportStoryNoteConflict', 'also edited in Discord since your download', 'en', 1),
+('txtImportStoryUnchangedCount', '[unchanged_count] turn(s) stay as they are.', 'en', 1),
+('txtImportStoryOverflow', 'The full list is attached.', 'en', 1),
+('btnImportStoryConfirm', 'Apply These Changes', 'en', 1),
+('txtImportStorySuccess', '✅ Story updated from your file: [changed_count] turn(s) changed.', 'en', 1),
+('txtImportStoryNoChange', 'That file matches the story exactly as it is now, so nothing changed.', 'en', 1),
+('txtImportStoryUnreadable', '❌ That file has no turn lines like [[turn 12 | #4417]] in it, so there is nothing to match it to. Upload the file you exported for editing.', 'en', 1),
+('txtImportStoryUnknownEntry', '❌ That file has a turn line with ID [file_id], which is not a turn in this story. Export the story again and edit that file.', 'en', 1),
+('txtImportStoryDuplicateEntry', '❌ That file has turn ID [file_id] in it twice. Each turn can only appear once, so one of them needs deleting.', 'en', 1),
+('txtImportStoryUnknownWriter', '❌ "[writer_name]" on turn [file_turn] is not a writer in this story. Use the name of a writer who has already joined.', 'en', 1),
+('txtImportStoryEmptyEntry', '❌ Turn [file_turn] has no text left in it. To remove a turn, delete its whole block including the turn line.', 'en', 1),
+('txtImportStoryEntryTooLarge', '❌ Turn [file_turn] is too long to store. The limit is about [limit] characters per turn.', 'en', 1),
 -- Added Silo 3: storyadmin.js setup
 ('txtSetupAgeRestrictNote', '*(Age-restrict this channel if the server is not already 18+)*', 'en', 1),
 ('txtSetupNoMediaNote', 'ℹ️ No media channel set — images will not be processed.', 'en', 1),

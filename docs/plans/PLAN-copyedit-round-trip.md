@@ -1,8 +1,8 @@
 # Copyedit Round Trip (Export → Edit → Import)
 
-Status: In progress — steps 1-5 built (held under Unreleased for 3.10.0), step 6 open
+Status: Built — all six steps under Unreleased, awaiting copy approval, the 3.10.0 bump and a live check
 Created: 2026-09-22
-Last Updated: 2026-10-22 (steps 3, 4 and 5 built)
+Last Updated: 2026-10-22 (all six build-order steps built)
 
 ## Problem
 
@@ -600,7 +600,15 @@ Sequence set by LeeAnn on 2026-10-21; this is the order to build in, not a menu.
    The real fix for cross-page editing. Main open question is how to present it: framing it as
    one round trip ("edit as file") likely reads more clearly than two separate download/upload
    buttons.
-6. **Medium** — whole-story import with the per-turn confirm. Generalises (5)'s
+6. ~~**Medium** — whole-story import with the per-turn confirm.~~ **Built 2026-10-22**, under
+   Unreleased, as `story/_importPlan.js` (pure: the file plus a snapshot in, a plan or a refusal
+   out) and `story/_importStory.js` (the upload, the confirm, the apply). Entry point is a button
+   on the admin Manage Entries picker, since it acts on every entry at once. Decided while
+   building, both following the plan's own rules rather than extending them: a block for a
+   currently-deleted entry brings it back, because the file is the story and it is in the file;
+   and an entry the file leaves out keeps its slot between the turns it sat between, rather than
+   moving to the end, so Restore returns it where it belongs. Copy is **drafted, awaiting
+   approval**. The original description follows. Generalises (5)'s
    machinery over the file (2) already produces.
 
 Chapters and per-chapter export are deliberately **not** in this list — they are 4.0
@@ -694,6 +702,42 @@ LeeAnn's own wording from 2026-10-21 and shipped as written.
 
 Cancel on the confirm reuses `btnEditRestoreCancel`, and an emptied file reuses
 `txtEditEntryEmpty` ("Entry content cannot be empty."), rather than adding two more keys.
+
+### Drafted copy — the whole-story upload (step 6, 2026-10-22)
+
+**Not approved.** In `config_storyadmin.sql` so the code runs on the branch.
+
+| Key | Drafted value |
+| --- | --- |
+| `btnManageEntriesImport` | 📤 Upload Edited Story |
+| `txtImportStoryModalTitle` | Upload Edited Story |
+| `lblImportStoryFile` | Your edited text file |
+| `txtImportStoryModalHint` | Upload the .txt file you exported for editing, with your changes in it. Keep each turn line, the one with the turn ID, exactly as it is. |
+| `txtImportStoryConfirmTitle` | Apply this file to the story? |
+| `txtImportStoryConfirm` | [changed_count] turn(s) would change, from **[filename]**. The current text of each one is saved to its history first, so you can put any of them back from Manage Entries. |
+| `txtImportStoryRow` | [turn_number]. [writer_name] — [from_words] to [to_words] words{? ([notes])?} |
+| `txtImportStoryNoteMoved` | moved to turn [to_position] |
+| `txtImportStoryNoteWriter` | now [to_writer] |
+| `txtImportStoryNoteRemoved` | removed |
+| `txtImportStoryNoteRestored` | restored |
+| `txtImportStoryNoteConflict` | also edited in Discord since your download |
+| `txtImportStoryUnchangedCount` | [unchanged_count] turn(s) stay as they are. |
+| `txtImportStoryOverflow` | The full list is attached. |
+| `btnImportStoryConfirm` | Apply These Changes |
+| `txtImportStorySuccess` | ✅ Story updated from your file: [changed_count] turn(s) changed. |
+| `txtImportStoryNoChange` | That file matches the story exactly as it is now, so nothing changed. |
+| `txtImportStoryUnreadable` | ❌ That file has no turn lines like [[turn 12 \| #4417]] in it, so there is nothing to match it to. Upload the file you exported for editing. |
+| `txtImportStoryUnknownEntry` | ❌ That file has a turn line with ID [file_id], which is not a turn in this story. Export the story again and edit that file. |
+| `txtImportStoryDuplicateEntry` | ❌ That file has turn ID [file_id] in it twice. Each turn can only appear once, so one of them needs deleting. |
+| `txtImportStoryUnknownWriter` | ❌ "[writer_name]" on turn [file_turn] is not a writer in this story. Use the name of a writer who has already joined. |
+| `txtImportStoryEmptyEntry` | ❌ Turn [file_turn] has no text left in it. To remove a turn, delete its whole block including the turn line. |
+| `txtImportStoryEntryTooLarge` | ❌ Turn [file_turn] is too long to store. The limit is about [limit] characters per turn. |
+
+**The legend inside the export file is now out of date.** It still says "Do not renumber them,
+merge two entries into one, or reorder them", which was true until this step landed. The
+replacement is specified under "Import instructions" above and needs writing in her voice:
+reorder by moving a whole block, reassign by changing the name in the turn line, remove by
+deleting the whole block, and the `#id` must survive unchanged.
 
 ### Export and import copy, and the filename (2026-10-21)
 

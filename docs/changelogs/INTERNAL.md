@@ -33,6 +33,27 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
 2026-10-20. Design: docs/plans/PLAN-copyedit-round-trip.md.
 
 ### Added
+- **The whole-story upload: an edited export comes back and rewrites the story's structure.**
+  The file the story export already produces, edited anywhere and uploaded from the Manage
+  Entries picker. Its block order becomes the story's reading order, a changed writer name in a
+  turn line re-credits that turn, and a block the editor deleted removes it -- a soft delete, so
+  it keeps its slot between the turns it sat between and Restore brings it back there. A block
+  for an entry that is currently deleted brings it back, which is the same rule read the other
+  way. Everything decidable from the file alone is decided in `story/_importPlan.js`, which has
+  no database and no Discord in it, because this is the part that has to be right.
+  Nothing is written until a per-turn confirmation -- one line per changed turn
+  (`12. Maria - 1,420 to 1,380 words (moved to turn 9)`), removals listed individually rather
+  than counted, since a word processor that eats the tail of a file then arrives as a list of
+  turns the editor recognises. A turn edited in Discord after the file was exported is marked on
+  its line, the one thing in the summary the editor cannot have known about; the embed turns red
+  when anything is being removed or overwritten unknowingly. Six things refuse the file outright
+  rather than offering a summary to approve: an id that is not a turn of this story, the same id
+  twice, a writer name nobody in the story has, a block emptied of its prose (deleting the whole
+  block is how a turn is removed, and saying so is the difference between an accident the editor
+  can fix and one they cannot see), a block too long for the `TEXT` column, and a file with no
+  turn lines at all. Applying is one transaction: the history row before the content it replaces,
+  the status flips, the writer repointed with its own log row, then the whole reading order
+  rewritten from the plan's sequence.
 - **The single-turn file round trip on the edit panel.** Download one turn as plain text, edit it
   anywhere with no page boundaries, upload it back. This is the actual fix for the page problem:
   the edit modal splits an entry into 3800-character pages because Discord's text input cannot
@@ -191,6 +212,11 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   only, no change to the bot's code or behavior.
 
 ### Changed
+- **`parseEntryDelimiter` now returns the writer name** from a turn line, as `writerName` (null
+  when the file carries none, which is what a story with `show_authors` off exports). The
+  whole-story import reads it as the reassignment instruction, so "no name" had to be
+  distinguishable from a name. The name stays the last field of the line, which is why a pen name
+  containing a `|` still cannot shift what the parser reads as the id.
 - **The edit-history panel now renders a change row as a change, not as an empty version.** A
   reorder or a writer change has no content to show, page through or restore, so those rows get
   their own title and byline and a one line description of what changed, and their Restore button

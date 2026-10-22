@@ -1,0 +1,276 @@
+import { test, describe } from 'node:test';
+import assert from 'node:assert/strict';
+import { splitStoryFile, planStoryImport } from '../story/_importPlan.js';
+import { parseEntryDelimiter, parseExportStamp, buildEntryDelimiter, buildExportStamp } from '../story/_exportText.js';
+import { ENTRY_STATUS } from '../constants.js';
+
+const split = text => splitStoryFile(text, parseEntryDelimiter, parseExportStamp);
+
+const AT = new Date('2026-10-22T04:00:00.000Z');
+const LIMIT = 65000;
+
+// A three-turn story: Maria, Jun, Maria.
+const story = () => [
+  { entryId: '41', content: 'One.', entryStatus: ENTRY_STATUS.CONFIRMED, writerId: '9', writerName: 'Maria', lastEditedAt: null },
+  { entryId: '42', content: 'Two.', entryStatus: ENTRY_STATUS.CONFIRMED, writerId: '12', writerName: 'Jun', lastEditedAt: null },
+  { entryId: '43', content: 'Three.', entryStatus: ENTRY_STATUS.CONFIRMED, writerId: '9', writerName: 'Maria', lastEditedAt: null },
+];
+const writers = () => [{ id: '9', name: 'Maria' }, { id: '12', name: 'Jun' }];
+
+const block = (id, turn, content, writer = 'Maria') => ({
+  entryId: String(id), turnNumber: turn, writerName: writer, content,
+});
+const plan = (blocks, { current = story(), exportedAt = AT } = {}) =>
+  planStoryImport({ current, blocks, exportedAt, writers: writers(), contentByteLimit: LIMIT });
+
+const rowFor = (result, id) => result.rows.find(r => r.entryId === String(id));
+
+describe('splitStoryFile', () => {
+  const file = [
+    'A Test Story (story #3)',
+    '3 turn(s), 3 entr(ies) - exported 2026-10-22',
+    '',
+    '--- HOW TO EDIT THIS FILE ---',
+    'Leave the turn lines alone.',
+    '--- END ---',
+    '',
+    buildEntryDelimiter(1, '41', 'Maria'),
+    '',
+    'One.',
+    '',
+    buildEntryDelimiter(2, '42', 'Jun'),
+    '',
+    'Two.',
+    '',
+    'Still two.',
+    '',
+    buildExportStamp(AT),
+    '',
+  ].join('\n');
+
+  test('drops everything before the first turn line', () => {
+    const { blocks } = split(file);
+    assert.equal(blocks.length, 2);
+    assert.equal(blocks[0].content, 'One.');
+    assert.ok(!blocks[0].content.includes('HOW TO EDIT'));
+  });
+
+  test('keeps a block together across blank lines', () => {
+    assert.equal(split(file).blocks[1].content, 'Two.\n\nStill two.');
+  });
+
+  test('reads the export instant from the trailer', () => {
+    assert.equal(split(file).exportedAt.toISOString(), AT.toISOString());
+  });
+
+  test('carries the writer name, which is the reassignment instruction', () => {
+    assert.deepEqual(split(file).blocks.map(b => b.writerName), ['Maria', 'Jun']);
+  });
+
+  test('a file with no turn lines yields no blocks rather than one big one', () => {
+    assert.deepEqual(split('Just prose.\n\nMore prose.').blocks, []);
+  });
+
+  test('the trailer is not required', () => {
+    const { blocks, exportedAt } = split(`${buildEntryDelimiter(1, '41', 'Maria')}\n\nOne.\n`);
+    assert.equal(exportedAt, null);
+    assert.equal(blocks[0].content, 'One.');
+  });
+
+  // The trailer is read from the end, so a line like it inside the prose stays prose.
+  test('a stamp-looking line inside the prose stays in the block', () => {
+    const text = `${buildEntryDelimiter(1, '41', 'Maria')}\n\nHe wrote ${buildExportStamp(AT)} on it.\n\n${buildExportStamp(AT)}\n`;
+    const { blocks } = split(text);
+    assert.ok(blocks[0].content.includes('He wrote'));
+    assert.ok(blocks[0].content.endsWith('on it.'));
+  });
+});
+
+describe('planStoryImport — refusals', () => {
+  test('a file with no blocks', () => {
+    assert.deepEqual(plan([]), { error: 'no_blocks' });
+  });
+
+  test('an id that is not a turn in this story', () => {
+    const result = plan([block(41, 1, 'One.'), block(999, 2, 'Two.', 'Jun')]);
+    assert.equal(result.error, 'unknown_entry');
+    assert.equal(result.entryId, '999');
+  });
+
+  test('the same id twice', () => {
+    const result = plan([block(41, 1, 'One.'), block(41, 2, 'Again.')]);
+    assert.equal(result.error, 'duplicate_entry');
+    assert.equal(result.entryId, '41');
+  });
+
+  // A name the story does not know is a typo, not an instruction to invent a writer.
+  test('a writer name nobody in the story has', () => {
+    const result = plan([block(41, 1, 'One.', 'Marai')]);
+    assert.equal(result.error, 'unknown_writer');
+    assert.equal(result.writerName, 'Marai');
+  });
+
+  // The distinction that matters: emptying a block is not how a turn is removed.
+  test('a block emptied of its prose', () => {
+    const result = plan([block(41, 1, ''), block(42, 2, 'Two.', 'Jun'), block(43, 3, 'Three.')]);
+    assert.equal(result.error, 'empty_entry');
+    assert.equal(result.entryId, '41');
+  });
+
+  test('a block too long for the column', () => {
+    const result = plan([block(41, 1, 'x'.repeat(LIMIT + 1))]);
+    assert.equal(result.error, 'entry_too_large');
+  });
+});
+
+describe('planStoryImport — content', () => {
+  test('an unchanged file changes nothing', () => {
+    const result = plan([block(41, 1, 'One.'), block(42, 2, 'Two.', 'Jun'), block(43, 3, 'Three.')]);
+    assert.equal(result.changedCount, 0);
+    assert.equal(result.unchangedCount, 3);
+  });
+
+  test('an edited block reports both word counts', () => {
+    const result = plan([block(41, 1, 'One, revised and longer.'), block(42, 2, 'Two.', 'Jun'), block(43, 3, 'Three.')]);
+    const row = rowFor(result, 41);
+    assert.equal(row.contentChanged, true);
+    assert.equal(row.fromWords, 1);
+    assert.equal(row.toWords, 4);
+    assert.equal(result.changedCount, 1);
+  });
+
+  // The one line in the summary the editor cannot have known about.
+  test('an entry edited in Discord after the export is flagged as a conflict', () => {
+    const current = story();
+    current[0].lastEditedAt = '2026-10-22T05:00:00.000Z';
+    const result = plan([block(41, 1, 'Revised.'), block(42, 2, 'Two.', 'Jun'), block(43, 3, 'Three.')], { current });
+    assert.equal(rowFor(result, 41).conflict, true);
+    assert.equal(result.conflicts, 1);
+  });
+
+  test('an edit made before the export is not a conflict', () => {
+    const current = story();
+    current[0].lastEditedAt = '2026-10-22T03:00:00.000Z';
+    assert.equal(rowFor(plan([block(41, 1, 'Revised.')], { current }), 41).conflict, false);
+  });
+
+  test('a file with no trailer cannot conflict, and says nothing about it', () => {
+    const current = story();
+    current[0].lastEditedAt = '2026-10-22T05:00:00.000Z';
+    const result = plan([block(41, 1, 'Revised.')], { current, exportedAt: null });
+    assert.equal(rowFor(result, 41).conflict, false);
+  });
+});
+
+describe('planStoryImport — order', () => {
+  test('the file order is the new order', () => {
+    const result = plan([block(43, 3, 'Three.'), block(41, 1, 'One.'), block(42, 2, 'Two.', 'Jun')]);
+    assert.deepEqual(result.order, ['43', '41', '42']);
+    assert.equal(rowFor(result, 43).toPosition, 1);
+    assert.equal(rowFor(result, 43).fromPosition, 3);
+    assert.equal(rowFor(result, 43).moved, true);
+    assert.equal(rowFor(result, 41).moved, true);
+  });
+
+  test('turn numbers are recomputed from the file, not read out of it', () => {
+    // Every delimiter claims turn 1; the position comes from where the block sits.
+    const result = plan([block(42, 1, 'Two.', 'Jun'), block(41, 1, 'One.'), block(43, 1, 'Three.')]);
+    assert.deepEqual(result.rows.map(r => r.toPosition), [1, 2, 3]);
+    assert.deepEqual(result.rows.map(r => r.entryId), ['42', '41', '43']);
+  });
+
+  test('the summary reads down the story', () => {
+    const result = plan([block(43, 3, 'Three.'), block(41, 1, 'One, revised.'), block(42, 2, 'Two.', 'Jun')]);
+    const positions = result.rows.map(r => r.toPosition ?? r.fromPosition);
+    assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
+  });
+
+  // A soft-deleted entry has to stay beside the prose it belongs between, or Restore brings it
+  // back at the wrong place.
+  test('a deleted entry keeps its place in the sequence', () => {
+    const current = [
+      ...story().slice(0, 2),
+      { entryId: '99', content: 'Cut.', entryStatus: ENTRY_STATUS.DELETED, writerId: '9', writerName: 'Maria', lastEditedAt: null },
+      story()[2],
+    ];
+    const result = plan([block(41, 1, 'One.'), block(42, 2, 'Two.', 'Jun'), block(43, 3, 'Three.')], { current });
+    assert.deepEqual(result.order, ['41', '42', '99', '43']);
+  });
+
+  test('a deleted entry follows the entry it sat behind when that entry moves', () => {
+    const current = [
+      ...story().slice(0, 2),
+      { entryId: '99', content: 'Cut.', entryStatus: ENTRY_STATUS.DELETED, writerId: '9', writerName: 'Maria', lastEditedAt: null },
+      story()[2],
+    ];
+    const result = plan([block(42, 1, 'Two.', 'Jun'), block(43, 2, 'Three.'), block(41, 3, 'One.')], { current });
+    assert.deepEqual(result.order, ['42', '99', '43', '41']);
+  });
+});
+
+describe('planStoryImport — removal and restoration', () => {
+  test('a block the editor deleted removes that turn', () => {
+    const result = plan([block(41, 1, 'One.'), block(43, 2, 'Three.')]);
+    const row = rowFor(result, 42);
+    assert.equal(row.removed, true);
+    assert.equal(row.fromPosition, 2);
+    assert.equal(row.toPosition, null);
+    assert.equal(result.removals, 1);
+    // It keeps its slot between the two turns it sat between, which is what makes Restore put
+    // it back where it belongs rather than at the end of the story.
+    assert.deepEqual(result.order, ['41', '42', '43']);
+  });
+
+  test('removals are listed one by one, not counted', () => {
+    const result = plan([block(41, 1, 'One.')]);
+    assert.equal(result.rows.filter(r => r.removed).length, 2);
+    assert.deepEqual(result.rows.filter(r => r.removed).map(r => r.fromPosition), [2, 3]);
+  });
+
+  // Symmetric with removal by omission: the file is the story, and this entry is in it.
+  test('a block for a deleted entry brings it back', () => {
+    const current = story();
+    current[1].entryStatus = ENTRY_STATUS.DELETED;
+    const result = plan([block(41, 1, 'One.'), block(42, 2, 'Two.', 'Jun'), block(43, 3, 'Three.')], { current });
+    assert.equal(rowFor(result, 42).restored, true);
+    assert.equal(result.restorations, 1);
+  });
+
+  test('an already-deleted entry left out of the file is not reported as a removal', () => {
+    const current = story();
+    current[1].entryStatus = ENTRY_STATUS.DELETED;
+    const result = plan([block(41, 1, 'One.'), block(43, 2, 'Three.')], { current });
+    assert.equal(result.removals, 0);
+    assert.deepEqual(result.order, ['41', '42', '43']);
+  });
+});
+
+describe('planStoryImport — writers', () => {
+  test('a changed name re-credits the turn', () => {
+    const result = plan([block(41, 1, 'One.', 'Jun'), block(42, 2, 'Two.', 'Jun'), block(43, 3, 'Three.')]);
+    const row = rowFor(result, 41);
+    assert.equal(row.writerFrom, 'Maria');
+    assert.equal(row.writerTo, 'Jun');
+    assert.equal(row.writerId, '12');
+    assert.equal(row.writerFromId, '9');
+    assert.equal(row.changed, true);
+  });
+
+  // The two differences a word processor introduces on its own must not read as a reassignment.
+  test('case and surrounding space are not a reassignment', () => {
+    const result = plan([block(41, 1, 'One.', '  maria '), block(42, 2, 'Two.', 'Jun'), block(43, 3, 'Three.')]);
+    assert.equal(rowFor(result, 41).writerTo, null);
+    assert.equal(result.changedCount, 0);
+  });
+
+  // A story with show_authors off exports no names at all, and must still import.
+  test('a file with no names in it changes no credits', () => {
+    const result = plan([
+      { entryId: '41', turnNumber: 1, writerName: null, content: 'One.' },
+      { entryId: '42', turnNumber: 2, writerName: null, content: 'Two.' },
+      { entryId: '43', turnNumber: 3, writerName: null, content: 'Three.' },
+    ]);
+    assert.equal(result.changedCount, 0);
+    assert.equal(rowFor(result, 41).writerName, 'Maria');
+  });
+});

@@ -30,20 +30,29 @@ import { STORY_STATUS } from '../constants.js';
 // cannot: migration 021 enforces one per turn. See docs/plans/PLAN-copyedit-round-trip.md.)
 // Turn number and entry id sit in fixed leading positions and the writer name goes last, so a
 // pen name containing a '|' or a '·' cannot shift what the parser reads as the id.
-const ENTRY_DELIMITER_RE = /^\[\[turn\s+(\d+)\s*\|\s*#(\d+)\s*(?:\|.*)?\]\]$/s;
+const ENTRY_DELIMITER_RE = /^\[\[turn\s+(\d+)\s*\|\s*#(\d+)\s*(?:\|\s*([\s\S]*?))?\s*\]\]$/;
 
 export function buildEntryDelimiter(turnNumber, entryId, writerName = null) {
   const who = writerName ? ` | ${writerName}` : '';
   return `[[turn ${turnNumber} | #${entryId}${who}]]`;
 }
 
-// Parses a delimiter line back to { turnNumber, entryId }, or null if the line is not one.
-// Exported for the importer and for tests — the round trip's correctness rests on these two
-// functions agreeing, so they live together.
+// Parses a delimiter line back to { turnNumber, entryId, writerName }, or null if the line is
+// not one. Exported for the importer and for tests — the round trip's correctness rests on these
+// two functions agreeing, so they live together.
+//
+// writerName is null when the file carries no name, which is what a story with show_authors off
+// exports. The whole-story import reads it as the reassignment instruction: a name that changed
+// means "credit this turn to that writer". It is the last field for that reason — a pen name
+// containing a '|' cannot shift what the parser reads as the id.
 export function parseEntryDelimiter(line) {
   const match = ENTRY_DELIMITER_RE.exec(line.trim());
   if (!match) return null;
-  return { turnNumber: parseInt(match[1], 10), entryId: match[2] };
+  return {
+    turnNumber: parseInt(match[1], 10),
+    entryId: match[2],
+    writerName: match[3]?.trim() || null,
+  };
 }
 
 // The export instant, as a machine-readable trailer on the last line.

@@ -44,28 +44,30 @@ const queue = (storyRow, writers, entries, cfg = CFG) => [
 ];
 
 describe('buildEntryDelimiter / parseEntryDelimiter', () => {
-  test('round-trips turn number and entry id', () => {
+  test('round-trips turn number, entry id and writer name', () => {
     const line = buildEntryDelimiter(12, '4417', 'Maria');
-    assert.deepEqual(parseEntryDelimiter(line), { turnNumber: 12, entryId: '4417' });
+    assert.deepEqual(parseEntryDelimiter(line), { turnNumber: 12, entryId: '4417', writerName: 'Maria' });
   });
 
+  // The whole-story import reads the name as a reassignment instruction, so "no name in the
+  // file" has to be distinguishable from a name, not an empty string.
   test('round-trips with no writer name', () => {
-    assert.deepEqual(parseEntryDelimiter(buildEntryDelimiter(1, '9')), { turnNumber: 1, entryId: '9' });
+    assert.deepEqual(parseEntryDelimiter(buildEntryDelimiter(1, '9')), { turnNumber: 1, entryId: '9', writerName: null });
   });
 
   // The reason turn and id come first and the name goes last.
   test('a pen name containing a pipe cannot shift what is read as the id', () => {
     const line = buildEntryDelimiter(5, '100', 'Maria | the Bold');
-    assert.deepEqual(parseEntryDelimiter(line), { turnNumber: 5, entryId: '100' });
+    assert.deepEqual(parseEntryDelimiter(line), { turnNumber: 5, entryId: '100', writerName: 'Maria | the Bold' });
   });
 
   test('a pen name containing brackets or a hash does not break parsing', () => {
     const line = buildEntryDelimiter(5, '100', 'Mar[i]a #2');
-    assert.deepEqual(parseEntryDelimiter(line), { turnNumber: 5, entryId: '100' });
+    assert.deepEqual(parseEntryDelimiter(line), { turnNumber: 5, entryId: '100', writerName: 'Mar[i]a #2' });
   });
 
   test('tolerates surrounding whitespace, as an edited file will have', () => {
-    assert.deepEqual(parseEntryDelimiter('   [[turn 2 | #55]]  '), { turnNumber: 2, entryId: '55' });
+    assert.deepEqual(parseEntryDelimiter('   [[turn 2 | #55]]  '), { turnNumber: 2, entryId: '55', writerName: null });
   });
 
   test('returns null for prose, including prose that merely mentions a turn', () => {
@@ -97,19 +99,22 @@ describe('generateEntriesTextExport', () => {
     const text = result.buffer.toString('utf8');
     const found = text.split('\n').map(parseEntryDelimiter).filter(Boolean);
     assert.deepEqual(found, [
-      { turnNumber: 1, entryId: '41' },
-      { turnNumber: 2, entryId: '42' },
+      { turnNumber: 1, entryId: '41', writerName: 'Maria' },
+      { turnNumber: 2, entryId: '42', writerName: 'Maria' },
     ]);
   });
 
-  // A turn can hold more than one confirmed entry, which is why the id and not the turn
-  // number is what import matches on.
-  test('two entries sharing a turn still get distinct, parseable delimiters', async () => {
+  // Migration 021 limits a turn to one confirmed entry, so this pairing cannot occur in
+  // production -- the fake hands it over anyway, to show that identity rests on the id. The turn
+  // number is a display value, recomputed from entry_order, and two rows carrying the same one
+  // must still be told apart. (An earlier version of this comment claimed a turn can hold
+  // several confirmed entries. It cannot.)
+  test('two rows sharing a turn number still get distinct, parseable delimiters', async () => {
     const result = await read(story(), [], [entry(41, 3, 'A.'), entry(42, 3, 'B.')]);
     const found = result.buffer.toString('utf8').split('\n').map(parseEntryDelimiter).filter(Boolean);
     assert.deepEqual(found, [
-      { turnNumber: 3, entryId: '41' },
-      { turnNumber: 3, entryId: '42' },
+      { turnNumber: 3, entryId: '41', writerName: 'Maria' },
+      { turnNumber: 3, entryId: '42', writerName: 'Maria' },
     ]);
   });
 
@@ -132,7 +137,7 @@ describe('generateEntriesTextExport', () => {
     // The delimiter must still parse without the name.
     assert.deepEqual(
       text.split('\n').map(parseEntryDelimiter).filter(Boolean),
-      [{ turnNumber: 1, entryId: '41' }]
+      [{ turnNumber: 1, entryId: '41', writerName: null }]
     );
   });
 
