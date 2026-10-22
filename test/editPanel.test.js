@@ -28,6 +28,8 @@ const cfg = {
 const manageCfg = {
   btnManageEntriesDelete: 'Delete',
   btnManageEntriesRestore: 'Restore',
+  btnManageEntriesChangeOrder: 'Change Order',
+  btnManageEntriesChangeWriter: 'Change Writer',
   btnEditBackToList: '← Back to entries list',
 };
 
@@ -89,12 +91,42 @@ describe('buildEditMessage', () => {
   });
 
   test('no action row exceeds Discord 5-component limit, with every button shown', () => {
-    // Prev + Next + Edit + Add Page + History is exactly 5 — the row is full.
+    // Prev + Next + Edit + Add Page + History is exactly 5 — the row is full. The manage row is
+    // at 4 of 5 (Delete, Restore, Change Order, Change Writer), so the worst case is 4 rows:
+    // page-jump select, nav row, manage row, Back to List.
     const msg = buildEditMessage(multiPage(), 0, true, 7, 'My Story', 42, { ...cfg, ...manageCfg }, { manageMode: true, hasPicker: true });
     for (const row of msg.components) {
       assert.ok(row.toJSON().components.length <= 5, 'an action row went over 5 components');
     }
     assert.ok(msg.components.length <= 5, 'message went over 5 action rows');
+  });
+
+  test('manage mode offers Change Order and Change Writer', () => {
+    const msg = buildEditMessage(singlePage(), 0, false, 7, 'My Story', 42, { ...cfg, ...manageCfg }, { manageMode: true });
+    const ids = customIds(msg);
+    assert.ok(ids.includes('story_edit_manage_order'));
+    assert.ok(ids.includes('story_edit_manage_writer'));
+  });
+
+  // A deleted entry holds its slot in the reading order rather than occupying one, and crediting
+  // it can wait until it is restored — so both change buttons are disabled, not hidden.
+  test('both change buttons are disabled on a deleted entry', () => {
+    const msg = buildEditMessage(
+      singlePage(), 0, false, 7, 'My Story', 42, { ...cfg, ...manageCfg },
+      { manageMode: true, entryStatus: 'deleted' }
+    );
+    const byId = Object.fromEntries(
+      msg.components.flatMap(row => row.toJSON().components.map(c => [c.custom_id, c]))
+    );
+    assert.equal(byId.story_edit_manage_order.disabled, true);
+    assert.equal(byId.story_edit_manage_writer.disabled, true);
+    assert.equal(byId.story_edit_manage_restore.disabled, false);
+  });
+
+  test('neither change button is offered outside manage mode', () => {
+    const ids = customIds(buildEditMessage(singlePage(), 0, false, 7, 'My Story', 42, cfg));
+    assert.ok(!ids.includes('story_edit_manage_order'));
+    assert.ok(!ids.includes('story_edit_manage_writer'));
   });
 });
 

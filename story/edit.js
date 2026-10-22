@@ -8,7 +8,8 @@ import { getActiveThreadId } from '../storybot.js';
 import { buildEntryPickerMessage } from './_manageEntriesList.js';
 import { handleEditHistoryButton } from './_editHistory.js';
 import { ENTRY_STATUS } from '../constants.js';
-import { turnNumberSubquery } from './_entryOrder.js';
+import { turnNumberSubquery, readEntryPosition, moveEntryToPosition } from './_entryOrder.js';
+import { logEntryReorder, logEntryWriterChange, listStoryWritersForCredit, readEntryWriter } from './_entryChangeLog.js';
 
 export { pendingEditData };
 
@@ -16,6 +17,18 @@ export { pendingEditData };
 // opens the same panel and the same modal from its own Edit button and so needs the identical
 // set — it previously kept a hand-maintained copy of this list, which silently went stale the
 // moment a key was added here (the modal would then render key names instead of text).
+// Change Order and Change Writer, which only a manage-mode session renders. Kept out of
+// EDIT_PANEL_CONFIG_KEYS because story/read.js reads that list too and never shows these.
+export const MANAGE_CHANGE_CONFIG_KEYS = [
+  'btnManageEntriesChangeOrder', 'txtManageEntriesChangeOrderModalTitle',
+  'lblManageEntriesChangeOrderTurn', 'txtManageEntriesChangeOrderPlaceholder',
+  'txtManageEntriesChangeOrderSuccess', 'txtManageEntriesChangeOrderInvalid',
+  'txtManageEntriesChangeOrderNoChange',
+  'btnManageEntriesChangeWriter', 'txtManageEntriesChangeWriterSelect',
+  'txtManageEntriesChangeWriterPlaceholder', 'txtManageEntriesChangeWriterSuccess',
+  'txtManageEntriesChangeWriterSame', 'txtManageEntriesChangeWriterLatest',
+];
+
 export const EDIT_PANEL_CONFIG_KEYS = [
   'lblEditPageSplitNotice', 'txtEditPageSplitInstructions',
   'btnEditPrev', 'btnEditNext', 'btnEditOpen', 'btnEditHistory', 'lblEditEntryContent',
@@ -27,6 +40,9 @@ export const EDIT_PANEL_CONFIG_KEYS = [
   'lblPageJumpPlaceholder', 'lblPageJumpOption',
   'txtEditRestoreConfirmMulti',
   'txtEditRestoreConfirmTitle', 'btnEditRestoreConfirm', 'btnEditRestoreCancel',
+  'txtEditHistoryVersionTitle', 'txtEditHistoryEditedBy',
+  'txtEditHistoryChangeTitle', 'txtEditHistoryChangeBy',
+  'txtEditHistoryWriterChanged', 'txtEditHistoryMoved',
 ];
 
 async function handleEdit(connection, interaction) {
@@ -156,6 +172,7 @@ async function openEditSession(connection, interaction, guildId, storyId, turnNu
     'btnManageEntriesDelete', 'btnManageEntriesRestore',
     'txtManageEntryDeleteSuccess', 'txtManageEntryRestoreSuccess',
     'txtManageEntryAlreadyDeleted', 'txtManageEntryAlreadyConfirmed',
+    ...MANAGE_CHANGE_CONFIG_KEYS,
   ], guildId);
 
   const state = pendingEditData.get(interaction.user.id);
@@ -164,6 +181,188 @@ async function openEditSession(connection, interaction, guildId, storyId, turnNu
   log(`openEditSession: opened entry ${entry.story_entry_id} for user ${interaction.user.username} on story ${storyId} (manageMode=${manageMode})`, { show: false, guildName: interaction?.guild?.name });
 
   await interaction.editReply(buildEditMessageForState(state));
+}
+
+// ---------------------------------------------------------------------------
+// Change Order / Change Writer (manage mode)
+// ---------------------------------------------------------------------------
+
+/**
+ * Entry point for the move modal's submit, routed from commands/story.js. Its own handler
+ * rather than a branch of handleEditModalSubmit, which is about entry content and would have to
+ * grow a mode flag to carry this.
+ */
+export async function handleChangeOrderModalSubmit(connection, interaction) {
+  await interaction.deferUpdate();
+  const state = pendingEditData.get(interaction.user.id);
+  if (!state) {
+    log(`handleChangeOrderModalSubmit: no session for ${interaction.user.username}`, { show: true, guildName: interaction?.guild?.name });
+    return;
+  }
+  const raw = interaction.fields.getTextInputValue('target_turn');
+  await applyOrderChange(connection, interaction, state, raw);
+}
+
+// The move modal. The turn number is what the editor sees everywhere else, so that is what the
+// field asks for -- entry_order is never shown or typed.
+export function buildChangeOrderModal(state) {
+  const cfg = state.editCfg ?? {};
+  const input = new TextInputBuilder()
+    .setCustomId('target_turn')
+    .setStyle(TextInputStyle.Short)
+    .setMaxLength(6)
+    .setPlaceholder(cfg.txtManageEntriesChangeOrderPlaceholder)
+    .setValue(String(state.orderPosition ?? state.turnNumber ?? ''));
+
+  return new ModalBuilder()
+    .setCustomId('story_edit_order_submit')
+    .setTitle(cfg.txtManageEntriesChangeOrderModalTitle)
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel(replaceTemplateVariables(cfg.lblManageEntriesChangeOrderTurn, {
+          total: String(state.orderTotal ?? 0),
+        }))
+        .setTextInputComponent(input)
+    );
+}
+
+// Whether a turn is the story's most recent one. PickNextWriter decides who is up by reading the
+// latest turn's writer (story/_turn.js), so changing that turn's writer shifts the rotation,
+// while changing an older one is inert. Compared by turn_id for the same reason PickNextWriter
+// orders by it rather than by started_at.
+async function isLatestTurnOfStory(connection, storyId, turnId) {
+  if (!turnId) return false;
+  const [rows] = await connection.execute(
+    `SELECT t.turn_id
+     FROM turn t
+     JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
+     WHERE sw.story_id = ?
+     ORDER BY t.turn_id DESC
+     LIMIT 1`,
+    [storyId]
+  );
+  return rows.length > 0 && String(rows[0].turn_id) === String(turnId);
+}
+
+/**
+ * Apply a typed turn number from the move modal: renumber, log the move, refresh the panel.
+ * The whole move is one transaction because the shift and the entry's own new value are only
+ * correct together.
+ */
+export async function applyOrderChange(connection, interaction, state, rawValue) {
+  const cfg = state.editCfg ?? {};
+  const guildName = interaction?.guild?.name;
+  const target = Number.parseInt(String(rawValue).trim(), 10);
+
+  const txn = await connection.getConnection();
+  await txn.beginTransaction();
+  let result;
+  try {
+    result = await moveEntryToPosition(txn, state.entryId, target);
+    if (!result || result.invalid) {
+      await txn.rollback();
+      log(`applyOrderChange: rejected "${rawValue}" for entry ${state.entryId} (total ${result?.totalPositions ?? '?'})`, { show: true, guildName });
+      return await interaction.followUp({
+        content: replaceTemplateVariables(cfg.txtManageEntriesChangeOrderInvalid, {
+          total: String(result?.totalPositions ?? state.orderTotal ?? 0),
+        }),
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    if (result.unchanged) {
+      await txn.rollback();
+      return await interaction.followUp({
+        content: replaceTemplateVariables(cfg.txtManageEntriesChangeOrderNoChange, {
+          to_position: String(result.to),
+        }),
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    await logEntryReorder(txn, {
+      entryId: state.entryId,
+      editorId: interaction.user.id,
+      editorName: interaction.member?.displayName ?? interaction.user.username,
+      from: result.from,
+      to: result.to,
+      guildName,
+    });
+    await txn.commit();
+  } catch (err) {
+    await txn.rollback();
+    log(`applyOrderChange failed for entry ${state.entryId}: ${err?.stack ?? err}`, { show: true, guildName });
+    throw err;
+  } finally {
+    txn.release();
+  }
+
+  // The panel header carries the turn number, so it has to be refreshed with the new one.
+  state.turnNumber = result.to;
+  state.hasHistory = true;
+  await state.originalInteraction.editReply({ ...buildEditMessageForState(state), content: '' });
+  await interaction.followUp({
+    content: replaceTemplateVariables(cfg.txtManageEntriesChangeOrderSuccess, {
+      to_position: String(result.to),
+    }),
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+/**
+ * Point this entry's turn at another writer of the same story, and log both sides.
+ * One column on turn — every display resolves the name through the join, so nothing else needs
+ * updating and there is no denormalised copy to chase.
+ */
+async function applyWriterChange(connection, interaction, state, newWriterId) {
+  const cfg = state.editCfg ?? {};
+  const guildName = interaction?.guild?.name;
+  const current = await readEntryWriter(connection, state.entryId);
+  if (!current) return;
+
+  if (String(current.id) === String(newWriterId)) {
+    return await interaction.followUp({
+      content: replaceTemplateVariables(cfg.txtManageEntriesChangeWriterSame, { to_writer: current.name }),
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const writers = await listStoryWritersForCredit(connection, current.storyId);
+  const chosen = writers.find(w => String(w.id) === String(newWriterId));
+  if (!chosen) return;
+
+  const txn = await connection.getConnection();
+  await txn.beginTransaction();
+  try {
+    await txn.execute(
+      `UPDATE turn SET story_writer_id = ? WHERE turn_id = ?`,
+      [newWriterId, current.turnId]
+    );
+    await logEntryWriterChange(txn, {
+      entryId: state.entryId,
+      editorId: interaction.user.id,
+      editorName: interaction.member?.displayName ?? interaction.user.username,
+      previousWriter: current,
+      newWriter: chosen,
+      guildName,
+    });
+    await txn.commit();
+  } catch (err) {
+    await txn.rollback();
+    log(`applyWriterChange failed for entry ${state.entryId}: ${err?.stack ?? err}`, { show: true, guildName });
+    throw err;
+  } finally {
+    txn.release();
+  }
+
+  state.hasHistory = true;
+  await state.originalInteraction.editReply({ ...buildEditMessageForState(state), content: '' });
+  await interaction.followUp({
+    content: replaceTemplateVariables(cfg.txtManageEntriesChangeWriterSuccess, {
+      turn_number: String(state.turnNumber),
+      from_writer: current.name,
+      to_writer: chosen.name,
+    }),
+    flags: MessageFlags.Ephemeral,
+  });
 }
 
 // Convenience wrapper for the (much more common) case of rendering from a live pendingEditData
@@ -291,6 +490,9 @@ function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle,
   // Admin-only actions (Manage Entries) — Delete/Restore toggle entry_status directly and are
   // independent of edit history (Restore works even on an entry that's never been edited).
   if (manageMode) {
+    // Four of the row's five slots. Change Order and Change Writer are disabled on a deleted
+    // entry: it is not in the reading order to move, and crediting it can wait until it is
+    // restored. Same reasoning as Delete being disabled on an entry that is already deleted.
     components.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('story_edit_manage_delete')
@@ -301,7 +503,17 @@ function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle,
         .setCustomId('story_edit_manage_restore')
         .setLabel(editCfg.btnManageEntriesRestore)
         .setStyle(ButtonStyle.Secondary)
-        .setDisabled(entryStatus !== ENTRY_STATUS.DELETED)
+        .setDisabled(entryStatus !== ENTRY_STATUS.DELETED),
+      new ButtonBuilder()
+        .setCustomId('story_edit_manage_order')
+        .setLabel(editCfg.btnManageEntriesChangeOrder)
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(entryStatus === ENTRY_STATUS.DELETED),
+      new ButtonBuilder()
+        .setCustomId('story_edit_manage_writer')
+        .setLabel(editCfg.btnManageEntriesChangeWriter)
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(entryStatus === ENTRY_STATUS.DELETED)
     ));
   }
 
@@ -424,6 +636,56 @@ async function handleEditButton(connection, interaction) {
     log(`story_edit_backlist: returning to ${picker.role} entry list for story ${picker.storyId} (user ${interaction.user.username})`, { show: false, guildName: interaction?.guild?.name });
     const msg = await buildEntryPickerMessage(connection, guildId, picker.storyId, picker.listOffset ?? 0, picker.role, picker.role === 'author' ? userId : null);
     await state.originalInteraction.editReply(msg);
+
+  } else if (customId === 'story_edit_manage_order') {
+    // No defer — showModal must be the first response.
+    const place = await readEntryPosition(connection, state.entryId);
+    if (!place) {
+      return await interaction.reply({
+        content: await getConfigValue(connection, 'txtEditEntryNotFound', interaction.guild.id),
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    state.orderTotal = place.totalPositions;
+    state.orderPosition = place.position;
+    log(`story_edit_manage_order: entry ${state.entryId} is turn ${place.position} of ${place.totalPositions}`, { show: false, guildName: interaction?.guild?.name });
+    await interaction.showModal(buildChangeOrderModal(state));
+
+  } else if (customId === 'story_edit_manage_writer') {
+    await interaction.deferUpdate();
+    const writer = await readEntryWriter(connection, state.entryId);
+    const writers = await listStoryWritersForCredit(connection, writer?.storyId ?? state.storyId);
+    const choices = writers.filter(w => w.id !== writer?.id);
+    if (choices.length === 0) {
+      // Nobody else to credit it to, so the entry already belongs to the only writer there is.
+      return await interaction.followUp({
+        content: replaceTemplateVariables(state.editCfg.txtManageEntriesChangeWriterSame, {
+          to_writer: writer?.name ?? '',
+        }),
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    // Whether this is the story's latest turn decides one line of the prompt: PickNextWriter
+    // reads the most recent turn's writer, so changing that one also changes who is up next.
+    const isLatest = await isLatestTurnOfStory(connection, writer?.storyId ?? state.storyId, writer?.turnId);
+    const select = new StringSelectMenuBuilder()
+      .setCustomId('story_edit_writer_select')
+      .setPlaceholder(state.editCfg.txtManageEntriesChangeWriterPlaceholder)
+      .addOptions(choices.map(w => ({ label: w.name.slice(0, 100), value: w.id })));
+    const prompt = replaceTemplateVariables(state.editCfg.txtManageEntriesChangeWriterSelect, {
+      turn_number: String(state.turnNumber),
+    });
+    const latestNote = isLatest ? `\n${state.editCfg.txtManageEntriesChangeWriterLatest}` : '';
+    log(`story_edit_manage_writer: entry ${state.entryId}, ${choices.length} candidate writer(s), isLatestTurn=${isLatest}`, { show: false, guildName: interaction?.guild?.name });
+    await interaction.followUp({
+      content: `${prompt}${latestNote}`,
+      components: [new ActionRowBuilder().addComponents(select)],
+      flags: MessageFlags.Ephemeral,
+    });
+
+  } else if (customId === 'story_edit_writer_select') {
+    await interaction.deferUpdate();
+    await applyWriterChange(connection, interaction, state, interaction.values[0]);
 
   } else if (customId === 'story_edit_open_modal') {
     // No defer — showModal must be the first response

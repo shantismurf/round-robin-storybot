@@ -18,8 +18,9 @@
 -- ROW_NUMBER() needs MariaDB 10.2 or newer. Safe: commands/story.js already runs DENSE_RANK()
 -- against this database in the turn autocomplete.
 --
--- NOTE no semicolons inside these comments. The migration runner splits the file on ; before
--- it strips comment text, so one here would corrupt the statement that follows.
+-- NOTE no semicolons inside these comments. The migration runner splits the file on the
+-- statement separator before it strips comment text, so one written here would corrupt the
+-- statement that follows -- which is why this note does not contain the character it names.
 
 ALTER TABLE story_entry ADD COLUMN IF NOT EXISTS entry_order INT NULL;
 

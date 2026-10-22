@@ -159,6 +159,25 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('btnManageEntriesDelete', 'Delete Entry', 'en', 1),
 ('btnManageEntriesRestore', 'Restore Entry', 'en', 1),
 ('btnManageEntriesBack', 'Back', 'en', 1),
+-- Added: Change Order / Change Writer on the Manage Entries edit panel (copyedit round trip).
+-- "Turn" rather than "entry" for the numbered thing a reader sees -- LeeAnn, 2026-10-22. Reassign
+-- was already taken by Manage Turns (btnTurnReassign, "Reassign to Previous"), so these are
+-- Change Order and Change Writer.
+('btnManageEntriesChangeOrder', 'Change Order', 'en', 1),
+('txtManageEntriesChangeOrderModalTitle', 'Change Order', 'en', 1),
+('lblManageEntriesChangeOrderTurn', 'Move to turn number (1-[total])', 'en', 1),
+('txtManageEntriesChangeOrderPlaceholder', 'e.g. 4', 'en', 1),
+('txtManageEntriesChangeOrderSuccess', '✅ Moved to turn [to_position]. The turns in between have been renumbered.', 'en', 1),
+('txtManageEntriesChangeOrderInvalid', '❌ Enter a turn number between 1 and [total].', 'en', 1),
+('txtManageEntriesChangeOrderNoChange', '❌ This entry is already turn [to_position].', 'en', 1),
+('btnManageEntriesChangeWriter', 'Change Writer', 'en', 1),
+('txtManageEntriesChangeWriterSelect', 'Who should turn [turn_number] belong to?', 'en', 1),
+('txtManageEntriesChangeWriterPlaceholder', 'Select a writer...', 'en', 1),
+('txtManageEntriesChangeWriterSuccess', '✅ Turn [turn_number] now belongs to **[to_writer]** (was [from_writer]).', 'en', 1),
+('txtManageEntriesChangeWriterSame', '❌ This entry already belongs to [to_writer].', 'en', 1),
+-- Shown only when the entry being reassigned is the story's most recent turn, where the writer
+-- change also moves the rotation pointer.
+('txtManageEntriesChangeWriterLatest', '-# This is the most recent turn, so changing its writer also changes whose turn comes next.', 'en', 1),
 ('txtStoryCloseNotAuthorized', 'You do not have permission to close this story. Only the story creator or an admin can close a story.', 'en', 1),
 ('txtSetupRoundupDayInvalid', '❌ Day must be a number between 0 (Sunday) and 6 (Saturday).', 'en', 1),
 ('txtSetupRoundupHourInvalid', '❌ Hour must be a number between 0 and 23 (UTC).', 'en', 1),

@@ -81,10 +81,22 @@ CREATE TABLE IF NOT EXISTS story_entry (
 CREATE TABLE IF NOT EXISTS story_entry_edit (
   edit_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   entry_id BIGINT UNSIGNED NOT NULL,
-  content TEXT NOT NULL,
+  -- NULL on a reorder or writer change, which has no content to snapshot. See migration 027.
+  content TEXT NULL,
   edited_by VARCHAR(30) NOT NULL,
   edited_by_name VARCHAR(100) NOT NULL,
   edited_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  -- NULL means this row is a content version, which is what every row was before 027.
+  change_type ENUM('reorder', 'reassign') NULL,
+  -- Both sides of the change live on the row: the history panel pages one row at a time, so
+  -- it has nothing else to render from. Names are snapshots, like edited_by_name.
+  previous_writer_id BIGINT UNSIGNED NULL,
+  previous_writer_name VARCHAR(255) NULL,
+  new_writer_id BIGINT UNSIGNED NULL,
+  new_writer_name VARCHAR(255) NULL,
+  -- Turn numbers as a reader sees them, not raw entry_order values.
+  previous_position INT NULL,
+  new_position INT NULL,
   FOREIGN KEY (entry_id) REFERENCES story_entry(story_entry_id) ON DELETE CASCADE
 );
 

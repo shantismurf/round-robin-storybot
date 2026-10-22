@@ -1,8 +1,8 @@
 # Copyedit Round Trip (Export → Edit → Import)
 
-Status: In progress — phases 1-2 built, entry-ordering design open
+Status: In progress — steps 1-4 built (held under Unreleased for 3.10.0), steps 5-6 open
 Created: 2026-09-22
-Last Updated: 2026-10-21 (change log, import confirmation)
+Last Updated: 2026-10-22 (steps 3 and 4 built)
 
 ## Problem
 
@@ -572,9 +572,18 @@ Sequence set by LeeAnn on 2026-10-21; this is the order to build in, not a menu.
    change" for the inventory. Prerequisite for everything below it, because both
    reordering in the panel and reorder/remove semantics on import need a column to
    write to.
-4. **Small/medium** — reorder and writer-change in Manage Entries, **with the change
-   log in the same piece of work** — reorder and reassign should not land unaudited.
-   The move is `entry_order` plus a renumber that carries soft-deleted rows; the
+4. ~~**Small/medium** — reorder and writer-change in Manage Entries, **with the change
+   log in the same piece of work**.~~ **Built 2026-10-22**, under Unreleased. Migration 027
+   turns `story_entry_edit` into a per-entry event log (`change_type`, both writers, both
+   positions, `content` nullable); `moveEntryToPosition` in `story/_entryOrder.js` is the
+   renumber, shifting one side of the displaced range across every status so a soft-deleted
+   entry travels with its neighbours; `story/_entryChangeLog.js` writes the non-content rows
+   and lists the picker's candidates; `story/edit.js` carries the two buttons (disabled on a
+   deleted entry), the move modal, the writer picker with its latest-turn note, and both
+   apply paths; `story/_editHistory.js` branches per row type with Restore disabled on a
+   change row, and the restore execution refuses a non-content row. The approved copy below
+   landed as written. The original description follows. The move is `entry_order` plus a
+   renumber that carries soft-deleted rows; the
    writer change is `turn.story_writer_id` pointed at another `story_writer` row of
    the same story, with no ordering involved. Delete and Restore already exist
    (`story/edit.js:401`). The change log is `story_entry_edit` gaining `change_type`
@@ -638,6 +647,20 @@ header's writer list.
 A change row needs no string of its own: the Restore button is **disabled** rather than
 replaced by a message (LeeAnn, 2026-10-21). A drafted `txtEditHistoryNoRestore` was dropped
 with it, as were the Undo strings — see Settled.
+
+**As built (2026-10-22).** Everything above landed as written, with the em-dash that the
+shipped version title already uses, so the two titles read "Edit History — Version 3 of 5"
+and "Entry History — Change 3 of 5". Two more strings came along with them, moved out of
+inline template literals in `story/_editHistory.js` at their shipped wording:
+`txtEditHistoryVersionTitle` ("Edit History — Version [version] of [total]{? · Page [page] of
+[pages]?}") and `txtEditHistoryEditedBy` ("Edited by [edited_by] · [edited_at]"). The same
+file was also hardcoding the two restore warnings that already existed in config as
+`txtEditRestoreWarning{Multi,Single}`; it now reads the keys.
+
+One case has no approved string and reuses one: a story whose only writer is the entry's
+current writer has nobody to offer in the picker, so Change Writer answers with
+`txtManageEntriesChangeWriterSame` ("This entry already belongs to [to_writer]"), which is
+true but was written for a different path. Worth a string of its own if it ever reads wrong.
 
 ### Export and import copy, and the filename (2026-10-21)
 

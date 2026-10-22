@@ -124,3 +124,100 @@ export async function nextEntryOrderForEntry(connection, entryId) {
 // holding their place for a Restore. Exported so a caller counting both does not spell the pair
 // out again.
 export const ORDERED_STATUSES = Object.freeze([ENTRY_STATUS.CONFIRMED, ENTRY_STATUS.DELETED]);
+
+/**
+ * Where one entry sits in its story: its raw `entry_order`, the turn number a reader sees, and
+ * how many turns the story has. Position is counted over confirmed rows, so a deleted entry
+ * holding a slot does not inflate the numbers anyone is shown.
+ *
+ * @returns {Promise<null|{ entryOrder: number, position: number, totalPositions: number, storyId: number }>}
+ */
+export async function readEntryPosition(connection, entryId) {
+  const [rows] = await connection.execute(
+    `SELECT se.entry_order, sw.story_id,
+            ${turnNumberSubquery()} AS position,
+            ${confirmedEntryCountSubquery()} AS total_positions
+     FROM story_entry se
+     JOIN turn t ON se.turn_id = t.turn_id
+     JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
+     WHERE se.story_entry_id = ?`,
+    [ENTRY_STATUS.CONFIRMED, ENTRY_STATUS.CONFIRMED, entryId]
+  );
+  if (rows.length === 0) return null;
+  return {
+    entryOrder: rows[0].entry_order,
+    position: rows[0].position,
+    totalPositions: rows[0].total_positions,
+    storyId: rows[0].story_id,
+  };
+}
+
+/**
+ * Move an entry to the turn number `targetPosition`, renumbering what it displaces.
+ *
+ * Positions in and out are turn numbers as a reader sees them. Internally the move permutes
+ * `entry_order` values, which keeps the sequence dense without a renumber of the whole story,
+ * and the shift deliberately covers **every** status: a soft-deleted entry has to travel with
+ * its neighbours, or its held slot would collide with a live one the next time anything moved,
+ * and Restore could no longer be a plain status flip.
+ *
+ * Must be called inside a transaction — it issues two or three statements that are only correct
+ * together.
+ *
+ * @returns {Promise<null|{ invalid?: true, unchanged?: true, totalPositions?: number, from?: number, to?: number }>}
+ */
+export async function moveEntryToPosition(txn, entryId, targetPosition) {
+  const current = await readEntryPosition(txn, entryId);
+  if (!current) return null;
+  const { entryOrder, position, totalPositions, storyId } = current;
+
+  if (!Number.isInteger(targetPosition) || targetPosition < 1 || targetPosition > totalPositions) {
+    return { invalid: true, totalPositions };
+  }
+  if (targetPosition === position) return { unchanged: true, from: position, to: position };
+
+  // The slot to land on is whatever entry_order the confirmed entry at that turn number holds
+  // right now. Taking it from the live list rather than computing it keeps this correct however
+  // many deleted rows sit in between.
+  const [targetRows] = await txn.execute(
+    `SELECT se.entry_order
+     FROM story_entry se
+     JOIN turn t ON se.turn_id = t.turn_id
+     JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
+     WHERE sw.story_id = ? AND se.entry_status = ?
+     ORDER BY ${entryOrderSort()}
+     LIMIT 1 OFFSET ?`,
+    [storyId, ENTRY_STATUS.CONFIRMED, targetPosition - 1]
+  );
+  if (targetRows.length === 0) return { invalid: true, totalPositions };
+  const targetOrder = targetRows[0].entry_order;
+
+  // One side of the range shifts to make room. There is deliberately no unique key on
+  // entry_order, so the intermediate state these two statements pass through is legal.
+  if (targetOrder < entryOrder) {
+    await txn.execute(
+      `UPDATE story_entry se
+       JOIN turn t ON se.turn_id = t.turn_id
+       JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
+       SET se.entry_order = se.entry_order + 1
+       WHERE sw.story_id = ? AND se.entry_order >= ? AND se.entry_order < ?`,
+      [storyId, targetOrder, entryOrder]
+    );
+  } else {
+    await txn.execute(
+      `UPDATE story_entry se
+       JOIN turn t ON se.turn_id = t.turn_id
+       JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
+       SET se.entry_order = se.entry_order - 1
+       WHERE sw.story_id = ? AND se.entry_order > ? AND se.entry_order <= ?`,
+      [storyId, entryOrder, targetOrder]
+    );
+  }
+
+  await txn.execute(
+    `UPDATE story_entry SET entry_order = ? WHERE story_entry_id = ?`,
+    [targetOrder, entryId]
+  );
+
+  return { from: position, to: targetPosition };
+}

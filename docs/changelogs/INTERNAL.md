@@ -33,6 +33,43 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
 2026-10-20. Design: docs/plans/PLAN-copyedit-round-trip.md.
 
 ### Added
+- **Change Order and Change Writer on the Manage Entries edit panel** (migration 027). Two
+  buttons on the manage row, so a story can be reordered and an entry re-credited without
+  touching the database by hand. Change Order asks for a turn number -- the number an editor
+  already sees everywhere else, never a raw `entry_order` -- and permutes `entry_order` so the
+  sequence stays dense: one shift across the displaced range, then the entry's own new value,
+  in one transaction. The shift deliberately covers every status, deleted rows included, because
+  a soft-deleted entry keeps its slot so Restore stays a plain status flip; a renumber that
+  carried only confirmed rows would leave a held slot behind to collide with a live one. Change
+  Writer repoints `turn.story_writer_id`, which every display resolves through a join, so there
+  is no denormalised copy to chase. Its picker offers every writer ever joined to the story
+  rather than only active ones -- crediting an entry is not a question of who may write next --
+  and on the story's most recent turn it says that changing the writer also changes who is up,
+  since `PickNextWriter` reads the latest turn's writer. Both buttons are disabled on a deleted
+  entry. Neither is called "Reassign": `btnTurnReassign` already means "Reassign to Previous" in
+  Manage Turns.
+- **`story_entry_edit` became a per-entry event log** (migration 027). It held content versions
+  only. A reorder and a writer change are changes to the same entry and belong in the same
+  history, so the table gained `change_type` (NULL means content version, which is what every
+  existing row is), both writers' ids and names, and both positions. `content` became nullable.
+  Both sides live on the row rather than only the previous value because the history panel pages
+  one row at a time and has nothing else to render from, and the names are snapshots for the same
+  reason `edited_by_name` is one: a writer who later leaves, or renames their pen name, must not
+  rewrite what the history says happened. Typed columns rather than a detail JSON like
+  `guild_event` has, because the panel reads these rows on every page turn and mysql2 3.23
+  changing how it returns MariaDB JSON columns already took out every background job once.
+- **`story/_entryChangeLog.js`** — the writers of those non-content rows (`logEntryReorder`,
+  `logEntryWriterChange`), plus `listStoryWritersForCredit` for the picker and `readEntryWriter`
+  for the log's previous side.
+- **A test that reads every migration file the way the runner does.** `runMigrationFile` splits
+  on the statement separator and strips comment text afterwards, so a separator written inside a
+  comment cuts that comment in half and glues its tail to the front of the next statement. The
+  note at the top of migration 026 did exactly that by naming the character it was warning
+  about, which would have failed at deploy with no way to run the migration by hand; it was
+  fixed before the migration shipped, and `test/migrationFiles.test.js` now asserts that every
+  statement in every migration begins with a SQL keyword. Migration 001 carries the same defect
+  in a parenthetical and is listed as a known exception: it is stamped as applied on every
+  existing database, so nothing has hit it, but a fresh install would.
 - **`story_entry.entry_order` — a story's reading order as a column of its own** (migration 026).
   Display order was derived entirely from `turn.started_at`, which is also the record of when a
   turn happened. Those are two different facts, and reordering a story for publication must not
@@ -133,6 +170,16 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   only, no change to the bot's code or behavior.
 
 ### Changed
+- **The edit-history panel now renders a change row as a change, not as an empty version.** A
+  reorder or a writer change has no content to show, page through or restore, so those rows get
+  their own title and byline and a one line description of what changed, and their Restore button
+  is disabled rather than hidden -- LeeAnn, 2026-10-22: a move or a writer change is set again
+  with the button that set it, and undo exists only for bringing back a deleted entry. The
+  restore execution refuses a non-content row as well, so a stale button cannot write a NULL over
+  an entry. Four strings that were inline template literals in `story/_editHistory.js` moved into
+  config at their shipped wording (`txtEditHistoryVersionTitle`, `txtEditHistoryEditedBy`, and the
+  two restore warnings, which already existed as `txtEditRestoreWarning{Multi,Single}` and were
+  being hardcoded alongside them).
 - **Export filenames now carry the story number you can see, and the time.** Both exports built
   their name from the internal `story_id`, so the number in the filename matched nothing visible
   in the UI, and neither carried a timestamp — exporting the same story twice left `(1)` and `(2)`
