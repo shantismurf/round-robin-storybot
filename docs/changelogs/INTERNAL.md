@@ -60,10 +60,12 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   The file opens with the title, counts, status, export date and the writer list, then a legend
   describing the markers and the markdown it supports — the format spec the file carries for
   whoever (or whatever) edits it.
-  Each entry is preceded by `[[turn N | #entryId | writer]]`. The entry id is what a future import will
-  match on: a turn number is not unique, since a turn can hold more than one confirmed entry, and
-  neither is a writer name. Turn and id sit in fixed leading positions with the name last, so a pen
-  name containing a `|` cannot shift what the parser reads as the id. The delimiter is fixed in
+  Each entry is preceded by `[[turn N | #entryId | writer]]`. The entry id is what a future import
+  will match on, because it is the only part of that line that never changes: the turn number is a
+  display number computed from the entry order, so one entry is turn 4 before a reorder and turn 7
+  after it, and once import can reorder, the file's turn numbers are input for the new order rather
+  than identity. A writer name is not unique either. Turn and id sit in fixed leading positions
+  with the name last, so a pen name containing a `|` cannot shift what the parser reads as the id. The delimiter is fixed in
   code rather than config, matching `[[break]]` in `story/_entryMarkup.js` — it is a structural
   token, and a guild rewording it would break import rather than translate it. `show_authors` is
   honoured for both the writer list and the per-entry
@@ -103,6 +105,15 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
 - **`buildCloseExportRow` and `EXPORT_ROW_CONFIG_KEYS`** (`story/_exportText.js`) — the close
   announcement's export row, which `story/close.js` and `story/_manageClose.js` each held a
   byte-identical copy of, so adding a third button meant editing it twice.
+
+- **`Dockerfile` and `.dockerignore` for the Coolify host.** The bot moved from bot-hosting.net
+  to Coolify on the Hetzner server on 2026-10-12. Coolify's default Nixpacks build reinstalled
+  every npm package on each deploy (about 100 seconds), because copying the changed code
+  invalidated its install cache. The Dockerfile installs packages in their own layer before
+  copying the code, so a code-only deploy reuses the cached install. It takes effect once the
+  Coolify app's Build Pack is set to Dockerfile. `config.json` stays out of the image and is
+  still supplied by Coolify as a File Mount at `/app/config.json`. No bump: deployment tooling
+  only, no change to the bot's code or behavior.
 
 ### Changed
 - **Export filenames now carry the story number you can see, and the time.** Both exports built
@@ -166,17 +177,6 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   the visible case). `processJob` now accepts either a string or an object, and parses inside
   the try so a bad payload goes through normal retries. Jobs stuck since the move are re-queued
   on the next restart and run late. No bump: no intended behavior change.
-
-No bump: deployment tooling only, no change to the bot's code or behavior.
-
-### Added
-- **`Dockerfile` and `.dockerignore` for the Coolify host.** The bot moved from bot-hosting.net
-  to Coolify on the Hetzner server on 2026-10-12. Coolify's default Nixpacks build reinstalled
-  every npm package on each deploy (about 100 seconds), because copying the changed code
-  invalidated its install cache. The Dockerfile installs packages in their own layer before
-  copying the code, so a code-only deploy reuses the cached install. It takes effect once the
-  Coolify app's Build Pack is set to Dockerfile. `config.json` stays out of the image and is
-  still supplied by Coolify as a File Mount at `/app/config.json`.
 
 ---
 

@@ -21,8 +21,13 @@ import { STORY_STATUS } from '../constants.js';
 // code ([[break]] is hard-coded in story/_entryMarkup.js).
 //
 // The entry id is what import matches on. Turn number and writer are there for the human
-// reading the file — a turn number is not unique (a turn can hold more than one confirmed
-// entry) and neither is a writer, so neither can carry identity on its own.
+// reading the file. The turn number cannot carry identity: it is a *display* number, computed
+// from the entry order rather than stored, so one entry is turn 4 today and turn 7 after a
+// reorder, and a file exported before that reorder would match the wrong entry. Once import
+// can reorder, the file's turn numbers are input for the new order, which makes matching on
+// them circular besides. A writer name is not unique either. The entry id never changes.
+// (An earlier version of this comment said a turn can hold several confirmed entries. It
+// cannot: migration 021 enforces one per turn. See docs/plans/PLAN-copyedit-round-trip.md.)
 // Turn number and entry id sit in fixed leading positions and the writer name goes last, so a
 // pen name containing a '|' or a '·' cannot shift what the parser reads as the id.
 const ENTRY_DELIMITER_RE = /^\[\[turn\s+(\d+)\s*\|\s*#(\d+)\s*(?:\|.*)?\]\]$/s;
@@ -155,8 +160,11 @@ export async function generateEntriesTextExport(connection, storyId, guildId, { 
     writerCount,
     entryCount: entries.length,
     buffer: Buffer.from(text, 'utf8'),
+    // The count rides in the name, not just the word: it tells the editor at a glance which
+    // version of a file they are looking at, alongside the timestamp.
     filename: buildExportFilename({
-      guildStoryId: story.guild_story_id, title: story.title, part: 'entries', exportedAt, ext: 'txt',
+      guildStoryId: story.guild_story_id, title: story.title,
+      part: `${entries.length}_entries`, exportedAt, ext: 'txt',
     }),
   };
 }

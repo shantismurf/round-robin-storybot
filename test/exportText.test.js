@@ -153,8 +153,9 @@ describe('generateEntriesTextExport', () => {
     assert.equal(result.turnCount, 4);
     assert.equal(result.wordCount, 5);
     assert.equal(result.writerCount, 2);
-    // The visible story number (#3), not the internal story_id (7), and a UTC stamp.
-    assert.match(result.filename, /^storybot3_a_test_story_entries_\d{4}-\d{2}-\d{2}_\d{4}\.txt$/);
+    // The visible story number (#3), not the internal story_id (7); the entry count, so two
+    // exports are told apart by size as well as time; and a UTC stamp.
+    assert.match(result.filename, /^storybot3_a_test_story_2_entries_\d{4}-\d{2}-\d{2}_\d{4}\.txt$/);
 
     const empty = await read(story(), [], []);
     assert.equal(empty.hasEntries, false);
