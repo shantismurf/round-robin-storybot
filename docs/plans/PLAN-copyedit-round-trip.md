@@ -645,9 +645,15 @@ config file and one test.
 **The single-entry download message, in LeeAnn's own words** (2026-10-21), so it ships as
 written:
 
-> Download the text of entry [turn_number] ([word_count] words) for editing. This is the raw
+> Download the text of turn [turn_number] ([word_count] words) for editing. This is the raw
 > text of the entry, so keep any formatting markdown intact. Do not remove the first line,
 > which contains the internal turn ID, so that the entry can be imported correctly.
+
+**"Turn", not "entry", wherever user-facing copy refers to the numbered thing** (LeeAnn,
+2026-10-22 — she changed her own draft's "entry [turn_number]" to "turn [turn_number]"). The
+number *is* a turn number, and the file's first line reads `[[turn 12 | #4417 | Maria]]`.
+"Entry" stays correct as the noun for the thing itself, which is why "Delete Entry" and
+"Entry deleted" are right as they stand; the rule is about the number.
 
 That copy fixes the shape of the single-entry file: the `[[turn N | #id | writer]]` delimiter
 is its **first line**, with no title-and-counts header of its own, then the prose, then the
