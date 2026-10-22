@@ -248,6 +248,20 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   what an audit of the 118 button labels actually found.
 
 ### Changed
+- **Every help page title and section heading now follows the emoji standard**, 17 rows in
+  `config_help.sql`, approved line by line by LeeAnn 2026-10-22. The three Admin pages were 🔧,
+  🎛️ and 🛠️ -- three emoji for one set, which is why the pages did not read as a series -- and
+  are now all 🛡️, administration, with the em-dash doing the distinguishing. 🔑 became
+  permissions (Who can use `/story manage`, Story Admin Role) and handed Turn Thread Privacy to
+  🔒, privacy everywhere. 📖 went back to meaning reading alone: the contents menu is 🪺, a
+  robin's nest for a round robin bot, the Overview page is 🧭, Reading & Editing took 📚 and Find
+  & Join took 🔍. Normal Mode is 🧵, a thread per turn, which frees 📜 for Ground Rules. 👑 is the
+  story creator and fills Story Creator's Join Options, the one heading that had no emoji at all.
+  Your Dashboard is 🎛️ in both the places it appears rather than 📅 in one and 🗂️ in the other.
+  Story Mode and Ratings Filter deliberately keep the same 🚦 -- her call, and recorded in the
+  guide as an exception rather than left to look like drift: a stoplight is right for either,
+  since one paces a story and the other gates what may be in it. The full vocabulary is in
+  `docs/reference/help_style_guide.md`, and the file's own header comment now points at it.
 - **Add Page appears only on an entry's last page.** It appends an empty page to the end of the
   entry, so from page 3 of 5 it looked like it would insert a page there -- LeeAnn, 2026-10-22:
   "its just not intuitive. Add Page should only appear on the last page of an entry edit." The

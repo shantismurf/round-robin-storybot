@@ -28,7 +28,9 @@ helpful, but that doesn't always mean lockstep with what you see."
 1. **Every page title and every section heading carries exactly one emoji, at the front.** Body
    text carries none.
 2. **An emoji is a topic's name, not decoration.** The same topic wears the same emoji everywhere
-   in the help, and two different topics never share one.
+   in the help, and two different topics never share one. One deliberate exception, LeeAnn
+   2026-10-22: `🚦` sits on both Story Mode and Ratings Filter, because a stoplight is the right
+   picture for either -- one paces a story, the other gates what may be in it.
 3. **A page title never wears the same emoji as a heading inside that page.**
 4. **Pages that form a set share one title emoji** and distinguish themselves after an em-dash
    (`📝 Create a New Story — General Options`).
@@ -72,39 +74,45 @@ guild's overriding row, so they stay. **Keys added from here on are named for th
 
 ---
 
-## Current drift, measured 2026-10-22
+## The vocabulary
 
-Found by auditing every title and heading in `config_help.sql`. **None of this is fixed yet** —
-every item is user-facing text and needs LeeAnn's approval per change.
+Settled with LeeAnn 2026-10-22, when the whole file was brought into line with the rules above.
+A new section takes the emoji of the topic it belongs to, and a genuinely new topic takes a new
+one.
 
-Breaks rule 4 — one set, three emoji:
+| Emoji | Means | Where |
+|---|---|---|
+| 🪺 | the help itself | the contents menu — a robin's nest for a round robin bot |
+| 🧭 | orientation | the Overview page |
+| 🔍 | finding a story | the Find & Join page |
+| 👋 | joining | Joining Options |
+| ✒️ | pen name | both Pen Name sections |
+| 🔒 | privacy | both Turn Thread Privacy sections, Hide My Threads |
+| 🔑 | permissions | Who can use `/story manage`, Story Admin Role |
+| 💬 | notifications | both Notifications sections |
+| 📝 | creating a story | both Create a New Story pages |
+| 🚦 | gating or pacing | Story Mode, Ratings Filter |
+| 🧵 ⚡ 🐢 | the three modes | Normal (a thread per turn), Quick, Slow |
+| ✍️ | writing | the Writing Your Entry page |
+| 📚 | reading and editing | that page |
+| 📖 | reading | Reading a Story |
+| ✏️ | editing | Editing an Entry |
+| 🗂️ | a writer's own stories | the Your Stories page |
+| 🎛️ | the dashboard | both Your Dashboard sections |
+| ⚙️ | managing a story | the Managing a Story page, Story Management Panel |
+| 📜 | ground rules | both Ground Rules sections |
+| 📋 | metadata | Story Metadata |
+| 🛡️ | administration | all three Admin pages, Admin Controls |
+| 👑 | the story creator | Story Creator's Join Options, Story Creator Commands |
+| ⌨️ | commands | the Writer Command Reference page |
 
-| Page | Title today |
-|---|---|
-| `admin-server-setup` | 🔧 Admin — Server Setup |
-| `admin-story-setup` | 🎛️ Admin — Story Settings |
-| `admin-commands` | 🛠️ Admin — Managing Stories & Writers |
+Changed to get there, 17 rows in `config_help.sql`: the contents menu 📖→🪺, Overview 📖→🧭,
+Find & Join 📚→🔍, Reading & Editing 📖→📚, Writer Command Reference 📋→⌨️, all three Admin
+titles (🔧, 🎛️, 🛠️)→🛡️, Joining Options ⚙️→👋, Story Creator's Join Options (none)→👑, Turn
+Thread Privacy on the create page 🔑→🔒, Normal Mode 📜→🧵, Who can use `/story manage` 👤→🔑,
+Story Commands 📖→📁, Your Dashboard 📅 and 🗂️→🎛️, Story Creator Commands ⚙️→👑.
 
-Breaks rule 2 — same topic, two emoji:
+`📁` Story Commands is hers, as is leaving Story Mode's stoplight alone. `🔖`, `📅`, `🔧`, `🎛️`
+on a page title and `🛠️` on one are now unused in the help and free for a new topic.
 
-- Turn Thread Privacy is `🔒` on `find-join` and `🔑` on `create-general`.
-
-Breaks rule 2 — one emoji, unrelated topics:
-
-- `📖` ×5: the contents menu title, the Overview page, the Reading & Editing page, Reading a
-  Story, Story Commands. Also breaks rule 3 — `📖 Reading a Story` sits inside `📖 Reading &
-  Editing`.
-- `⚙️` ×4: Joining Options, Managing a Story, Story Creator Commands, Story Management Panel.
-- `📋` ×2 (Story Metadata, Writer Command Reference), `👤` ×2, `🗂️` ×2, `🛠️` ×2, `🚦` ×2
-  (Story Mode, Ratings Filter), `🔑` ×2.
-- `📜` sits on Normal Mode as well as on both Ground Rules headings, so the Ground Rules pair
-  below is correct and Normal Mode is the odd one out.
-
-Deliberate reuse, correct under rule 2 — the same topic in two places:
-
-- `💬` Notifications, `✒️` Pen Name, `📜` Ground Rules (×2), `📝` on both Create a New Story
-  pages.
-
-Breaks rule 1:
-
-- `lblHelp4CreatorOptions` ("Story Creator's Join Options") is the only heading with no emoji.
+Nothing in the help now shares an emoji across two topics except the `🚦` pair above.
