@@ -619,8 +619,8 @@ Sequence set by LeeAnn on 2026-10-21; this is the order to build in, not a menu.
    building, both following the plan's own rules rather than extending them: a block for a
    currently-deleted entry brings it back, because the file is the story and it is in the file;
    and an entry the file leaves out keeps its slot between the turns it sat between, rather than
-   moving to the end, so Restore returns it where it belongs. Copy is **drafted, awaiting
-   approval**. The original description follows. Generalises (5)'s
+   moving to the end, so Restore returns it where it belongs. Copy approved 2026-10-22.
+   The original description follows. Generalises (5)'s
    machinery over the file (2) already produces.
 
 Chapters and per-chapter export are deliberately **not** in this list — they are 4.0

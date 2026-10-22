@@ -271,8 +271,7 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 -- One report for the whole file rather than a refusal per problem -- LeeAnn, 2026-10-22: "a full
 -- error report is nice". The header is hers verbatim. Each line below is a bullet naming every
 -- turn or writer of its kind, so the editor fixes the lot in one pass, and the wording is kept
--- free of is/are so one item and twenty read the same. DRAFTED below the header, pending her
--- review.
+-- free of is/are so one item and twenty read the same. Approved 2026-10-22.
 ('txtImportStoryErrorHeader', 'The uploaded file encountered the following errors:', 'en', 1),
 ('txtImportStoryErrorNoTurnLines', '- No Turn Lines: the file has no turn lines in it', 'en', 1),
 ('txtImportStoryErrorUnknownId', '- Turn ID Mismatch: [file_ids] not found in story', 'en', 1),
