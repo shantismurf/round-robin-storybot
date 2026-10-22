@@ -29,7 +29,6 @@ import { buildEntryDelimiter, parseEntryDelimiter, buildExportStamp, parseExport
 import { buildExportFilename } from './_exportData.js';
 import { resolveMentionsToPlainText } from './_entryMarkup.js';
 import { turnNumberSubquery } from './_entryOrder.js';
-import { buildEditMessageForState } from './edit.js';
 import { ENTRY_STATUS } from '../constants.js';
 
 // Every config key this module reads. Exported for the same reason EDIT_PANEL_CONFIG_KEYS is:
@@ -363,7 +362,10 @@ export async function handleImportModalSubmit(connection, interaction, state) {
  * replaces it. One transaction, the same order the modal save uses, so the version the editor
  * can restore always exists before the thing it would restore over.
  */
-export async function handleImportConfirm(connection, interaction, state) {
+// `buildPanel` is story/edit.js's buildEditMessageForState, passed in rather than imported: this
+// module's config keys are part of EDIT_PANEL_CONFIG_KEYS now, and a module cycle between the two
+// leaves that list uninitialised depending on which file is loaded first.
+export async function handleImportConfirm(connection, interaction, state, buildPanel) {
   const guildName = interaction?.guild?.name;
   const staged = state.pendingImport;
   if (!staged) {
@@ -408,7 +410,7 @@ export async function handleImportConfirm(connection, interaction, state) {
   state.importMessage = null;
 
   // Same follow-up as a saved edit: the entry's thread post is now stale, so offer the repost.
-  const editMsg = buildEditMessageForState(state);
+  const editMsg = buildPanel(state);
   const repostRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`story_repost_entry_${state.entryId}`)

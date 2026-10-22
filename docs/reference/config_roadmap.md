@@ -74,10 +74,13 @@ unchanged from what shipped. All three use {?...?} optional blocks so the page s
 single-page entry. story/read.js renders the same panel and modal and so reads the same keys via
 edit.js's exported EDIT_PANEL_CONFIG_KEYS. See docs/plans/PLAN-copyedit-round-trip.md.
 ADDED (single-turn file round trip, Unreleased): the fifteen btnEdit{Export,Import}File /
-txtEditImport* keys drive the download-and-upload pair on the edit panel. Read via
-story/_editFileRoundTrip.js's EDIT_FILE_CONFIG_KEYS, which openEditSession fetches alongside
-EDIT_PANEL_CONFIG_KEYS -- deliberately a separate list, because story/read.js renders the same
-panel from EDIT_PANEL_CONFIG_KEYS alone and does not show these buttons.
+txtEditImport* keys drive the download-and-upload pair on the edit panel. Declared as
+EDIT_FILE_CONFIG_KEYS in story/_editFileRoundTrip.js and spread into EDIT_PANEL_CONFIG_KEYS,
+because the two buttons are on every edit panel however it was opened. They were briefly kept out
+of that list, which left the panel reached from /story read's Edit button without them -- LeeAnn,
+2026-10-22: "the Edit interface should not be rendered differently if accessed from different
+places." buildEditMessage no longer takes an option for it, so the panel cannot drift by caller
+again.
 LeeAnn's wording throughout, approved 2026-10-22, txtEditImportConfirmTitle included -- a
 question ("Replace this entry's content?") like the bot's other action confirms, rather than a
 repeat of the modal title above it. txtEditImportModalHint was removed on her call: the modal's only text is now

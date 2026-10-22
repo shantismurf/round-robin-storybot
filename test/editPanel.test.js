@@ -20,14 +20,13 @@ const cfg = {
   txtEditPageSplitInstructions: 'Edits on this page do not affect other pages in the entry.',
   lblPageJumpOption: 'Page [page]',
   lblPageJumpPlaceholder: 'Page [page] of [total]',
+  btnEditExportFile: '📤 Export for Editing',
+  btnEditImportFile: '📥 Import Edited Entry',
 };
 
 // Not part of EDIT_PANEL_CONFIG_KEYS: openEditSession fetches these on top of it for the
-// Manage Entries panel, and story/read.js never renders those rows. Only needed by the
-// full-panel row-budget test below.
+// Manage Entries panel's admin rows. Only needed by the full-panel row-budget test below.
 const manageCfg = {
-  btnEditExportFile: '📤 Export for Editing',
-  btnEditImportFile: '📥 Import Edited Entry',
   btnManageEntriesDelete: 'Delete',
   btnManageEntriesRestore: 'Restore',
   btnManageEntriesChangeOrder: 'Change Order',
@@ -143,14 +142,17 @@ describe('buildEditMessage', () => {
 
   // story/read.js renders this panel inline from its own Edit button with EDIT_PANEL_CONFIG_KEYS
   // alone, so the file buttons must not appear there — they would render with no label and throw.
-  test('the read path gets no file buttons, and needs no keys for them', () => {
+  // LeeAnn, 2026-10-22: "the Edit interface should not be rendered differently if accessed from
+  // different places." The read path passes no options at all, so this is the check that the
+  // panel it gets is the panel everything else gets.
+  test('the file buttons are on the panel with no options passed at all', () => {
     const ids = customIds(buildEditMessage(singlePage(), 0, false, 7, 'My Story', 42, cfg));
-    assert.ok(!ids.includes('story_edit_export_file'));
-    assert.ok(!ids.includes('story_edit_import_file'));
+    assert.ok(ids.includes('story_edit_export_file'));
+    assert.ok(ids.includes('story_edit_import_file'));
   });
 
   test('Back to List stays last in the tail row', () => {
-    const msg = buildEditMessage(singlePage(), 0, false, 7, 'My Story', 42, { ...cfg, ...manageCfg }, { fileRoundTrip: true, hasPicker: true });
+    const msg = buildEditMessage(singlePage(), 0, false, 7, 'My Story', 42, { ...cfg, ...manageCfg }, { hasPicker: true });
     const tail = msg.components.at(-1).toJSON().components;
     assert.deepEqual(tail.map(c => c.custom_id),
       ['story_edit_export_file', 'story_edit_import_file', 'story_edit_backlist']);

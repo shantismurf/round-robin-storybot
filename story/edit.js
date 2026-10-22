@@ -21,8 +21,8 @@ export { pendingEditData };
 // opens the same panel and the same modal from its own Edit button and so needs the identical
 // set — it previously kept a hand-maintained copy of this list, which silently went stale the
 // moment a key was added here (the modal would then render key names instead of text).
-// Change Order and Change Writer, which only a manage-mode session renders. Kept out of
-// EDIT_PANEL_CONFIG_KEYS because story/read.js reads that list too and never shows these.
+// Change Order and Change Writer, which only a manage-mode session renders -- the one part of the
+// panel that genuinely differs, since it is an admin capability rather than a way in.
 export const MANAGE_CHANGE_CONFIG_KEYS = [
   'btnManageEntriesChangeOrder', 'txtManageEntriesChangeOrderModalTitle',
   'lblManageEntriesChangeOrderTurn', 'txtManageEntriesChangeOrderPlaceholder',
@@ -33,7 +33,10 @@ export const MANAGE_CHANGE_CONFIG_KEYS = [
   'txtManageEntriesChangeWriterSame', 'txtManageEntriesChangeWriterLatest',
 ];
 
+// The file round trip's keys are part of this list rather than beside it: the buttons are on
+// every edit panel, wherever it was opened from, so the keys the panel needs are one list.
 export const EDIT_PANEL_CONFIG_KEYS = [
+  ...EDIT_FILE_CONFIG_KEYS,
   'lblEditPageSplitNotice', 'txtEditPageSplitInstructions',
   'btnEditPrev', 'btnEditNext', 'btnEditOpen', 'btnEditHistory', 'lblEditEntryContent',
   'btnEditAddPage', 'txtEditModalPageHint',
@@ -177,7 +180,6 @@ async function openEditSession(connection, interaction, guildId, storyId, turnNu
     'txtManageEntryDeleteSuccess', 'txtManageEntryRestoreSuccess',
     'txtManageEntryAlreadyDeleted', 'txtManageEntryAlreadyConfirmed',
     ...MANAGE_CHANGE_CONFIG_KEYS,
-    ...EDIT_FILE_CONFIG_KEYS,
   ], guildId);
 
   const state = pendingEditData.get(interaction.user.id);
@@ -405,17 +407,12 @@ export function buildEditMessageForState(state) {
     {
       manageMode: state.manageMode, entryStatus: state.entryStatus,
       hasPicker: !!state.pickerContext,
-      // Only a real edit session gets the file round trip. story/read.js renders this same panel
-      // inline from its own Edit button with EDIT_PANEL_CONFIG_KEYS alone, and an import there
-      // would replace the read view it is sitting in -- see the read-path branch in
-      // handleEditModalSubmit for the same distinction.
-      fileRoundTrip: !state.fromReadPath,
     }
   );
 }
 
 function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle, guildStoryId, editCfg, pickerOpts = {}) {
-  const { manageMode = false, entryStatus = null, hasPicker = false, fileRoundTrip = false } = pickerOpts;
+  const { manageMode = false, entryStatus = null, hasPicker = false } = pickerOpts;
   const chunk = chunks[chunkPage];
   const isMultiPage = chunks.length > 1;
 
@@ -554,13 +551,17 @@ function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle,
     ));
   }
 
-  // Shown whenever this session was reached via either entry picker (admin or author), so there's
-  // a way back to it — not shown when reached directly by turn number or Read's Edit button.
-  // The file round trip and Back to List share the last row. They are separate concerns, but
-  // the manage-mode panel is at four rows already (page-jump select, nav, admin actions, this
-  // one) and a fifth would sit on Discord's hard limit with nothing left for the next addition.
-  // Back to List goes last, where it reads as the way out.
-  const tailButtons = fileRoundTrip ? buildFileRoundTripButtons(editCfg) : [];
+  // The file round trip is on every edit panel, however it was opened -- LeeAnn, 2026-10-22: "the
+  // Edit interface should not be rendered differently if accessed from different places". There is
+  // deliberately no option to leave it off, so the panel cannot drift apart again by caller.
+  //
+  // Back to List joins it on the last row, shown whenever this session was reached via either
+  // entry picker (admin or author), so there's a way back to it -- not when reached directly by
+  // turn number or Read's Edit button. They are separate concerns sharing a row because the
+  // manage-mode panel is at four already (page-jump select, nav, admin actions, this one) and a
+  // fifth would sit on Discord's hard limit with nothing left for the next addition. Back to List
+  // goes last, where it reads as the way out.
+  const tailButtons = buildFileRoundTripButtons(editCfg);
   if (hasPicker) {
     tailButtons.push(
       new ButtonBuilder()
@@ -737,7 +738,7 @@ async function handleEditButton(connection, interaction) {
 
   } else if (customId === 'story_edit_import_confirm') {
     await interaction.deferUpdate();
-    await handleImportConfirm(connection, interaction, state);
+    await handleImportConfirm(connection, interaction, state, buildEditMessageForState);
 
   } else if (customId === 'story_edit_writer_select') {
     await interaction.deferUpdate();

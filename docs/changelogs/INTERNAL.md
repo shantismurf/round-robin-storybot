@@ -236,6 +236,19 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   only, no change to the bot's code or behavior.
 
 ### Changed
+- **The edit panel is the same panel from every route it is opened by.** The file round trip's two
+  buttons were gated off the panel that `/story read`'s Edit button opens, because `read.js` fetches
+  `EDIT_PANEL_CONFIG_KEYS` and the new labels were not in it -- so the same interface rendered two
+  ways depending on how the writer got there, and the help page documents both routes as
+  equivalent. LeeAnn, 2026-10-22: "the Edit interface should not be rendered differently if
+  accessed from different places." `EDIT_FILE_CONFIG_KEYS` is now spread into
+  `EDIT_PANEL_CONFIG_KEYS`, and `buildEditMessage` no longer takes an option for the buttons at
+  all, so a caller cannot render a panel without them. That spread made the `edit.js` /
+  `_editFileRoundTrip.js` import cycle load-order dependent (`Cannot access
+  'EDIT_FILE_CONFIG_KEYS' before initialization` from whichever file was loaded first), so
+  `handleImportConfirm` now takes `buildEditMessageForState` as an argument instead of importing
+  it, which also puts the dependency the right way round -- the panel knows about the file round
+  trip, not the other way about.
 - **`parseEntryDelimiter` now returns the writer name** from a turn line, as `writerName` (null
   when the file carries none, which is what a story with `show_authors` off exports). The
   whole-story import reads it as the reassignment instruction, so "no name" had to be
