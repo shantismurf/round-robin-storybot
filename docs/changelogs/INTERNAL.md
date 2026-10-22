@@ -236,6 +236,14 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   only, no change to the bot's code or behavior.
 
 ### Changed
+- **Add Page appears only on an entry's last page.** It appends an empty page to the end of the
+  entry, so from page 3 of 5 it looked like it would insert a page there -- LeeAnn, 2026-10-22:
+  "its just not intuitive. Add Page should only appear on the last page of an entry edit." The
+  button is now pushed onto the panel only when the page on screen is the last one.
+  `txtEditModalPageHint`'s closing sentence became a `{?...?}` optional block whose `[add_label]`
+  token is supplied only on that page, so no page points at a button it is not showing; the
+  wording is hers, unchanged, and the label is substituted from `btnEditAddPage` rather than
+  spelled out.
 - **The edit panel is the same panel from every route it is opened by.** The file round trip's two
   buttons were gated off the panel that `/story read`'s Edit button opens, because `read.js` fetches
   `EDIT_PANEL_CONFIG_KEYS` and the new labels were not in it -- so the same interface rendered two

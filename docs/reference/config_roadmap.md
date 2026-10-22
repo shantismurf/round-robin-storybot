@@ -71,7 +71,10 @@ TextInputBuilder placeholder — a placeholder only renders over an empty field 
 pre-fills one, so the hint it replaced was never visible. lblEditEmbedTitle, txtEditEmbedFooter and
 lblEditModalTitle were inline template literals in story/edit.js and story/read.js; wording is
 unchanged from what shipped. All three use {?...?} optional blocks so the page suffix drops out on a
-single-page entry. story/read.js renders the same panel and modal and so reads the same keys via
+single-page entry. CHANGED 2026-10-22: btnEditAddPage renders only on an entry's last page, so
+txtEditModalPageHint's closing sentence is now an optional block whose [add_label] token (substituted
+from btnEditAddPage) is supplied only there -- the wording is unchanged, it just stops pointing at a
+button that is not on screen. story/read.js renders the same panel and modal and so reads the same keys via
 edit.js's exported EDIT_PANEL_CONFIG_KEYS. See docs/plans/PLAN-copyedit-round-trip.md.
 ADDED (single-turn file round trip, Unreleased): the fifteen btnEdit{Export,Import}File /
 txtEditImport* keys drive the download-and-upload pair on the edit panel. Declared as

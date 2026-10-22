@@ -120,7 +120,13 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 -- appends an empty page and opens it, and txtEditModalPageHint says so inside the modal. The hint
 -- is a LabelBuilder description rather than a placeholder because a placeholder never renders over
 -- a pre-filled value, which is why the old save-and-reopen hint was invisible.
-('txtEditModalPageHint', 'Page [page] of [total] · [chars] of [limit] characters used. Save any changes, then use Add Page for more room.', 'en', 1),
+--
+-- The Add Page sentence is wrapped in optional markers and its [add_label] token is supplied only
+-- while the page on screen is the entry's last one, which is the only place the button now appears
+-- (LeeAnn, 2026-10-22). Her wording is unchanged -- on page 3 of 5 the hint simply stops pointing
+-- at a button that is not there. The label is substituted from btnEditAddPage rather than spelled
+-- out, the same way txtEditImportConflict names the Save button.
+('txtEditModalPageHint', 'Page [page] of [total] · [chars] of [limit] characters used.{? Save any changes, then use [add_label] for more room.?}', 'en', 1),
 -- Moved into config from inline template literals in edit.js. Wording is unchanged from what
 -- shipped. The {?...?} block is stripped when page/total are absent from the map (single-page entry).
 ('lblEditEmbedTitle', '#[story_num] [title] · Turn #[turn]{? · Page [page] of [total]?}', 'en', 1),

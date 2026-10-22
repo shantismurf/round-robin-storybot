@@ -9,7 +9,7 @@ const cfg = {
   lblEditEmbedTitle: '#[story_num] [title] · Turn #[turn]{? · Page [page] of [total]?}',
   txtEditEmbedFooter: '[chars] / [limit] on this page of [total_chars] in the full entry.',
   lblEditModalTitle: 'Edit Entry{? — Page [page] of [total]?}',
-  txtEditModalPageHint: 'Page [page] of [total] · [chars] of [limit] characters used. Save, then use Add Page for more room.',
+  txtEditModalPageHint: 'Page [page] of [total] · [chars] of [limit] characters used.{? Save any changes, then use [add_label] for more room.?}',
   btnEditAddPage: '➕ Add Page',
   btnEditOpen: 'Edit',
   btnEditPrev: '← Prev',
@@ -164,13 +164,22 @@ describe('buildEntryModal', () => {
 
   test('nests the text input inside a label carrying the page hint', () => {
     const chunks = multiPage();
-    const json = buildEntryModal(state(chunks, 2)).toJSON();
+    const json = buildEntryModal(state(chunks, 1)).toJSON();
     const label = json.components[0];
     assert.equal(label.component.custom_id, 'entry_content');
     assert.equal(
       label.description,
-      `Page 3 of ${chunks.length} · ${chunks[2].text.length} of ${EDIT_PAGE_LIMIT} characters used. Save, then use Add Page for more room.`
+      `Page 2 of ${chunks.length} · ${chunks[1].text.length} of ${EDIT_PAGE_LIMIT} characters used.`
     );
+  });
+
+  // The hint points at Add Page only where the button is, which is the last page.
+  test('the Add Page sentence is on the last page and nowhere else', () => {
+    const chunks = multiPage();
+    const last = buildEntryModal(state(chunks, chunks.length - 1)).toJSON().components[0];
+    assert.ok(last.description.endsWith('then use ➕ Add Page for more room.'));
+    const middle = buildEntryModal(state(chunks, 1)).toJSON().components[0];
+    assert.ok(!middle.description.includes('Add Page'));
   });
 
   test('the hint is a label description, not a placeholder', () => {

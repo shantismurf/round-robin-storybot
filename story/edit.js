@@ -496,18 +496,22 @@ function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle,
       .setDisabled(false)
   );
 
-  // Appends an empty page at the end of the entry and opens it. Shown unconditionally rather
-  // than only when the last page is near full: the whole point is discoverability, and a
-  // conditional button is one more rule for a writer to work out. Note this row now carries up
-  // to 5 buttons (Prev/Next/Edit/Add Page/History), which is Discord's per-row maximum — adding
-  // another means splitting the row.
-  buttons.push(
-    new ButtonBuilder()
-      .setCustomId('story_edit_add_page')
-      .setLabel(editCfg.btnEditAddPage)
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(false)
-  );
+  // Appends an empty page at the end of the entry and opens it, so it is only offered while the
+  // last page is the one on screen -- LeeAnn, 2026-10-22: "Add Page should only appear on the last
+  // page of an entry edit". Offered from page 3 of 5 it reads as "make room here" and does
+  // something else entirely; room in the middle of an entry is the page's own headroom, or the
+  // file round trip. A single-page entry is on its last page, so it still has the button.
+  // Note this row carries up to 5 buttons (Prev/Next/Edit/Add Page/History), which is Discord's
+  // per-row maximum -- adding another means splitting the row.
+  if (chunkPage === chunks.length - 1) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId('story_edit_add_page')
+        .setLabel(editCfg.btnEditAddPage)
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(false)
+    );
+  }
 
   if (hasHistory) {
     buttons.push(
@@ -821,7 +825,10 @@ export function buildEntryModal(state) {
           page: String(state.chunkPage + 1),
           total: String(state.chunks.length),
           chars: String(chunk.text.length),
-          limit: String(EDIT_PAGE_LIMIT)
+          limit: String(EDIT_PAGE_LIMIT),
+          // Only on the last page, where the button exists: the hint's optional block drops out
+          // without it, so no page points at a button it is not showing.
+          ...(state.chunkPage === state.chunks.length - 1 ? { add_label: cfg.btnEditAddPage } : {}),
         }))
         .setTextInputComponent(input)
     );
