@@ -1,6 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  entryExportHeader,
   buildSingleEntryExport,
   parseSingleEntryFile,
   readConflictingEdit,
@@ -59,6 +60,20 @@ describe('buildSingleEntryExport', () => {
 
   test('reports the word count the download message quotes', () => {
     assert.equal(buildSingleEntryExport(entry(), AT).wordCount, 6);
+  });
+});
+
+describe('entryExportHeader', () => {
+  // Quoted in the import modal and in the mismatch message, so it has to be byte-identical to
+  // the file's own first line -- the editor compares the two by eye.
+  test('is the file\'s first line, exactly', () => {
+    const header = entryExportHeader(entry());
+    assert.equal(header, '[[turn 12 | #4417 | Maria]]');
+    assert.equal(buildSingleEntryExport(entry(), AT).buffer.toString('utf8').split('\n')[0], header);
+  });
+
+  test('carries no writer name when the story hides authors', () => {
+    assert.equal(entryExportHeader({ ...entry(), show_authors: 0 }), '[[turn 12 | #4417]]');
   });
 });
 

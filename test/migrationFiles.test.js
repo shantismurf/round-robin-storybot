@@ -29,11 +29,11 @@ const SQL_OPENERS = new Set([
   'TRUNCATE', 'WITH', 'SELECT', 'CALL', 'START', 'COMMIT', 'ROLLBACK',
 ]);
 
-// 001 predates the rule and carries the defect in a parenthetical ("safe to re-run; only
-// updates rows where 0"). It is stamped as applied on every existing database, so nothing has
-// hit it, but a fresh install would. Reported 2026-10-22, left alone pending LeeAnn's call —
-// remove it from here when it is fixed.
-const KNOWN_BROKEN = new Set(['001_guild_story_id.sql']);
+// Nothing is exempt. 001 carried the defect in a parenthetical ("safe to re-run; only updates
+// rows where 0") until 2026-10-22 — it is stamped as applied on every existing database, so
+// nothing ever hit it, but a fresh install would have. If a migration ever has to be exempted,
+// add it here with the reason, and know that the exemption also asserts it is still broken.
+const KNOWN_BROKEN = new Set();
 
 const files = fs.readdirSync(MIGRATIONS_DIR).filter(f => f.endsWith('.sql')).sort();
 

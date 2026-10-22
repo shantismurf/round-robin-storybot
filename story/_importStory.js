@@ -181,6 +181,8 @@ export async function handleImportStoryModalSubmit(connection, interaction, stor
   const guildName = interaction?.guild?.name;
   const cfg = await getConfigValue(connection, IMPORT_STORY_CONFIG_KEYS, guildId);
 
+  log(`handleImportStoryModalSubmit entry: story ${storyId} for ${interaction.user.username}`, { show: false, guildName });
+
   const files = interaction.fields.getUploadedFiles('story_file');
   const attachment = files?.first?.() ?? null;
   if (!attachment || attachment.size > MAX_UPLOAD_BYTES) {
@@ -258,15 +260,13 @@ export async function handleImportStoryModalSubmit(connection, interaction, stor
     // editor should read the list rather than the button.
     .setColor(plan.removals > 0 || plan.conflicts > 0 ? 0xff6b6b : 0x99aab5);
 
+  // No Cancel: the confirmation is ephemeral, so dismissing it is the way out (LeeAnn,
+  // 2026-10-22). Danger-styled, because applying removes turns and overwrites prose.
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('story_import_story_confirm')
       .setLabel(cfg.btnImportStoryConfirm)
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId('story_import_story_cancel')
-      .setLabel(await getConfigValue(connection, 'btnEditRestoreCancel', guildId))
-      .setStyle(ButtonStyle.Secondary)
+      .setStyle(ButtonStyle.Danger)
   );
 
   pendingImportData.set(interaction.user.id, { storyId, guildId, plan, cfg, filename: attachment.name });
@@ -376,7 +376,10 @@ export async function handleImportStoryButton(connection, interaction) {
   if (customId.startsWith('story_import_story_confirm')) {
     await interaction.deferUpdate();
     const staged = pendingImportData.get(interaction.user.id);
-    if (!staged) return;
+    if (!staged) {
+      log(`handleImportStoryButton: nothing staged for ${interaction.user.username} (session expired or already applied)`, { show: true, guildName: interaction?.guild?.name });
+      return;
+    }
     await applyStoryImport(connection, interaction, staged);
     pendingImportData.delete(interaction.user.id);
     return await interaction.editReply({
@@ -387,15 +390,10 @@ export async function handleImportStoryButton(connection, interaction) {
     });
   }
 
-  if (customId === 'story_import_story_cancel') {
-    await interaction.deferUpdate();
-    pendingImportData.delete(interaction.user.id);
-    return await interaction.deleteReply().catch(() => {});
-  }
-
   // story_import_story_<storyId> -- the button on the Manage Entries picker. No defer, because
   // showModal has to be the first response.
   const storyId = parseInt(customId.replace('story_import_story_', ''), 10);
+  log(`handleImportStoryButton: story ${storyId} opening import modal for ${interaction.user.username}`, { show: false, guildName: interaction?.guild?.name });
   const cfg = await getConfigValue(connection, IMPORT_STORY_CONFIG_KEYS, interaction.guild.id);
   await interaction.showModal(buildImportStoryModal(cfg, storyId));
 }

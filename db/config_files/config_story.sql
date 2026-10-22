@@ -141,29 +141,37 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 -- Added: Manage Entries consolidation — author entry picker (/story edit with no turn given)
 -- and the "Back to entries list" button shared by both the admin and author pickers
 ('btnEditBackToList', '← Back to List', 'en', 1),
--- Added: the single-turn file round trip on the edit panel (copyedit round trip step 5). Two
--- buttons, not one: the gap between downloading a turn and uploading it back is hours or days,
--- and an interaction token on the download message dies in about fifteen minutes, so the upload
+-- Added: the single-entry file round trip on the edit panel (copyedit round trip step 5). Two
+-- buttons, not one: the gap between exporting an entry and importing it back is hours or days,
+-- and an interaction token on the export message dies in about fifteen minutes, so the import
 -- has to start from the panel.
 --
--- txtEditExportFileInstructions is LeeAnn's own wording, 2026-10-21, and ships as written. The
--- rest of this block is DRAFTED, pending her approval -- see docs/plans/PLAN-copyedit-round-trip.md.
-('btnEditExportFile', '📝 Download This Turn', 'en', 1),
+-- Export/Import, not Download/Upload -- LeeAnn, 2026-10-22: that is the word pair the rest of
+-- the bot already uses. The buttons name the entry, not the turn, because they act on its
+-- content; the numbered thing inside the copy is still a turn.
+--
+-- Her wording throughout, except txtEditImportConfirmTitle and lblEditImportFile, which are
+-- still drafted -- see docs/plans/PLAN-copyedit-round-trip.md.
+('btnEditExportFile', '📤 Export for Editing', 'en', 1),
 ('txtEditExportFileInstructions', 'Download the text of turn [turn_number] ([word_count] words) for editing. This is the raw text of the entry, so keep any formatting markdown intact. Do not remove the first line, which contains the internal turn ID, so that the entry can be imported correctly.', 'en', 1),
-('btnEditImportFile', '📤 Upload Edited Turn', 'en', 1),
-('txtEditImportModalTitle', 'Upload Edited Turn', 'en', 1),
+('btnEditImportFile', '📥 Import Edited Entry', 'en', 1),
+('txtEditImportModalTitle', 'Import Edited Entry', 'en', 1),
+-- The label above the file field inside the modal. Discord renders it as the field's own
+-- heading, with txtEditImportModalHint as the instructions above it.
 ('lblEditImportFile', 'Your edited text file', 'en', 1),
-('txtEditImportModalHint', 'Upload the .txt file you downloaded, with your edits in it. Keep the first line, the one with the turn ID, exactly as it was.', 'en', 1),
-('txtEditImportConfirmTitle', 'Replace this turn''s text?', 'en', 1),
-('txtEditImportConfirm', 'Turn [turn_number] goes from [from_words] words to [to_words] words, from **[filename]**. Your current text is saved to this entry''s history first, so you can put it back with the History button.', 'en', 1),
--- Shown only when the entry was edited in Discord after the file was exported: the one thing in
--- the confirmation the editor cannot know about, because it happened while they were away.
-('txtEditImportConflict', '⚠️ This entry was also edited here in Discord after you downloaded that file ([edited_at]). Uploading replaces that newer text too.', 'en', 1),
-('btnEditImportConfirm', 'Replace Text', 'en', 1),
+-- [export_header] is the entry's own turn line, exactly as the export file carries it, e.g.
+-- [[turn 12 | #4417 | Maria]] -- so the editor can compare it against the file in front of them.
+('txtEditImportModalHint', 'Upload your edited text file. Ensure the first line of the file has the correct turn ID:  `[export_header]`', 'en', 1),
+('txtEditImportConfirmTitle', 'Import Edited Entry', 'en', 1),
+('txtEditImportConfirm', 'Your edits will change turn [turn_id] from [from_words] to [to_words] words. After saving, this edit can be reverted from the turn''s History.', 'en', 1),
+-- Appended to the same confirmation rather than being a second screen: the question it asks is
+-- answered by the Save button already there.
+('txtEditImportConflict', 'The entry has been edited since this export was saved. Do you want to continue?', 'en', 1),
 ('txtEditImportSuccess', '✅ Turn [turn_number] updated from your file.', 'en', 1),
-('txtEditImportNoChange', 'That file matches this turn exactly as it is now, so nothing changed.', 'en', 1),
-('txtEditImportWrongEntry', '❌ That file is turn [file_turn] (ID [file_id]), not this one. Download this turn and edit that file, or open turn [file_turn] to upload this one.', 'en', 1),
-('txtEditImportUnreadable', '❌ That file does not start with a turn line like [[turn 12 | #4417]], so there is no way to tell which entry it belongs to. Upload the file you downloaded here, edits and all.', 'en', 1),
+('txtEditImportNoChange', 'No changes were detected or applied.', 'en', 1),
+-- One message for both "that file is for another entry" and "that file has no turn line at
+-- all": either way the first line is not this entry's, and the fix is the same.
+('txtEditImportError', 'Turn ID Mismatch: The file does not match the current turn. The first line of the file must read `[export_header]` to match the current turn.', 'en', 1),
 ('txtEditImportTooLarge', '❌ That file is too long to store as one turn. The limit is about [limit] characters.', 'en', 1),
 ('lblEditMyEntryOption', 'Turn [turn_number] — [word_count] words — [preview]', 'en', 1),
 ('txtEditMyEntriesSelect', 'Edit Your Entry (Admins, use `/story manage` for more options):', 'en', 1),

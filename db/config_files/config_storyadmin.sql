@@ -239,16 +239,16 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('txtManageEntriesMoreEntries', 'More entries ([offset]+)...', 'en', 1),
 ('txtManageEntriesEntryPlaceholder', 'Select an entry...', 'en', 1),
 ('txtManageEntriesDeletedFlag', '[DELETED]', 'en', 1),
--- Added: the whole-story upload on the Manage Entries picker (copyedit round trip step 6). The
+-- Added: the whole-story import on the Manage Entries picker (copyedit round trip step 6). The
 -- file exported for editing comes back and its block order becomes the story order, a changed
 -- writer name re-credits a turn, and a block the editor deleted removes that turn -- which is why
 -- applying needs a confirmation that lists removals one by one rather than counting them.
 --
 -- DRAFTED, pending LeeAnn's approval -- see docs/plans/PLAN-copyedit-round-trip.md.
-('btnManageEntriesImport', '📤 Upload Edited Story', 'en', 1),
-('txtImportStoryModalTitle', 'Upload Edited Story', 'en', 1),
+('btnManageEntriesImport', '📥 Import Edited Story', 'en', 1),
+('txtImportStoryModalTitle', 'Import Edited Story', 'en', 1),
 ('lblImportStoryFile', 'Your edited text file', 'en', 1),
-('txtImportStoryModalHint', 'Upload the .txt file you exported for editing, with your changes in it. Keep each turn line, the one with the turn ID, exactly as it is.', 'en', 1),
+('txtImportStoryModalHint', 'Upload your edited text file. Keep each turn line, the one with the turn ID, exactly as it is.', 'en', 1),
 ('txtImportStoryConfirmTitle', 'Apply this file to the story?', 'en', 1),
 ('txtImportStoryConfirm', '[changed_count] turn(s) would change, from **[filename]**. The current text of each one is saved to its history first, so you can put any of them back from Manage Entries.', 'en', 1),
 -- One line per changed turn. The {? ?} block drops out when a turn only changed its text.

@@ -11,7 +11,7 @@ import { ENTRY_STATUS } from '../constants.js';
 import { turnNumberSubquery, readEntryPosition, moveEntryToPosition } from './_entryOrder.js';
 import { logEntryReorder, logEntryWriterChange, listStoryWritersForCredit, readEntryWriter } from './_entryChangeLog.js';
 import {
-  EDIT_FILE_CONFIG_KEYS, buildFileRoundTripButtons, buildImportModal,
+  EDIT_FILE_CONFIG_KEYS, buildFileRoundTripButtons, buildImportModal, readExportHeader,
   handleExportFile, handleImportModalSubmit, handleImportConfirm,
 } from './_editFileRoundTrip.js';
 
@@ -291,6 +291,7 @@ export async function applyOrderChange(connection, interaction, state, rawValue)
     }
     if (result.unchanged) {
       await txn.rollback();
+      log(`applyOrderChange: entry ${state.entryId} is already turn ${result.to}, nothing to move`, { show: true, guildName });
       return await interaction.followUp({
         content: replaceTemplateVariables(cfg.txtManageEntriesChangeOrderNoChange, {
           to_position: String(result.to),
@@ -335,8 +336,13 @@ export async function applyOrderChange(connection, interaction, state, rawValue)
 async function applyWriterChange(connection, interaction, state, newWriterId) {
   const cfg = state.editCfg ?? {};
   const guildName = interaction?.guild?.name;
+  log(`applyWriterChange entry: entry ${state.entryId} -> writer ${newWriterId} by ${interaction.user.username}`, { show: false, guildName });
+
   const current = await readEntryWriter(connection, state.entryId);
-  if (!current) return;
+  if (!current) {
+    log(`applyWriterChange: entry ${state.entryId} not found`, { show: true, guildName });
+    return;
+  }
 
   if (String(current.id) === String(newWriterId)) {
     return await interaction.followUp({
@@ -347,7 +353,10 @@ async function applyWriterChange(connection, interaction, state, newWriterId) {
 
   const writers = await listStoryWritersForCredit(connection, current.storyId);
   const chosen = writers.find(w => String(w.id) === String(newWriterId));
-  if (!chosen) return;
+  if (!chosen) {
+    log(`applyWriterChange: writer ${newWriterId} is not a writer of story ${current.storyId}`, { show: true, guildName });
+    return;
+  }
 
   const txn = await connection.getConnection();
   await txn.beginTransaction();
@@ -722,18 +731,15 @@ async function handleEditButton(connection, interaction) {
     await handleExportFile(connection, interaction, state);
 
   } else if (customId === 'story_edit_import_file') {
-    // No defer -- showModal must be the first response.
-    await interaction.showModal(buildImportModal(state.editCfg));
+    // No defer -- showModal must be the first response. The header is read first so the modal's
+    // instructions can quote this entry's own turn line.
+    const exportHeader = await readExportHeader(connection, state.entryId);
+    log(`story_edit_import_file: entry ${state.entryId} opening import modal (header ${exportHeader})`, { show: false, guildName: interaction?.guild?.name });
+    await interaction.showModal(buildImportModal(state.editCfg, exportHeader));
 
   } else if (customId === 'story_edit_import_confirm') {
     await interaction.deferUpdate();
     await handleImportConfirm(connection, interaction, state);
-
-  } else if (customId === 'story_edit_import_cancel') {
-    await interaction.deferUpdate();
-    state.pendingImport = null;
-    await state.originalInteraction.deleteReply(state.importMessage).catch(() => {});
-    state.importMessage = null;
 
   } else if (customId === 'story_edit_writer_select') {
     await interaction.deferUpdate();

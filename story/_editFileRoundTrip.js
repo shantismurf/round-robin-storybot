@@ -24,7 +24,7 @@ import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags,
   ModalBuilder, LabelBuilder, FileUploadBuilder, TextDisplayBuilder,
 } from 'discord.js';
-import { getConfigValue, log, replaceTemplateVariables, chunkEntryContent, discordTimestamp } from '../utilities.js';
+import { getConfigValue, log, replaceTemplateVariables, chunkEntryContent } from '../utilities.js';
 import { buildEntryDelimiter, parseEntryDelimiter, buildExportStamp, parseExportStamp } from './_exportText.js';
 import { buildExportFilename } from './_exportData.js';
 import { resolveMentionsToPlainText } from './_entryMarkup.js';
@@ -38,8 +38,13 @@ export const EDIT_FILE_CONFIG_KEYS = [
   'btnEditExportFile', 'txtEditExportFileInstructions',
   'btnEditImportFile', 'txtEditImportModalTitle', 'lblEditImportFile', 'txtEditImportModalHint',
   'txtEditImportConfirmTitle', 'txtEditImportConfirm', 'txtEditImportConflict',
-  'btnEditImportConfirm', 'txtEditImportSuccess', 'txtEditImportNoChange',
-  'txtEditImportWrongEntry', 'txtEditImportUnreadable', 'txtEditImportTooLarge',
+  'txtEditImportSuccess', 'txtEditImportNoChange',
+  // One message covers both ways a file can fail to be this entry's: it is another entry's, or
+  // it has no turn line at all. Either way the first line is wrong and the fix is the same.
+  'txtEditImportError', 'txtEditImportTooLarge',
+  // The confirm's own button reuses the existing Save value rather than adding a thirteenth key
+  // that says the same word (LeeAnn, 2026-10-22).
+  'btnAdminConfigSave',
 ];
 
 // `story_entry.content` is TEXT: 65,535 *bytes*, not characters. Measured in bytes for that
@@ -84,11 +89,20 @@ async function readEntryForExport(connection, entryId) {
  * button on, and the legend's "do not reorder or renumber" paragraph is about a file holding a
  * whole story. The delimiter still leads, because import matches on the id.
  */
+/**
+ * The entry's own turn line, exactly as the export file carries it. Shown in the import modal
+ * and quoted back in the mismatch message, so the editor can compare it against the file in
+ * front of them without counting characters.
+ */
+export function entryExportHeader(entry) {
+  const writerName = entry.show_authors ? (entry.pen_name || entry.discord_display_name) : null;
+  return buildEntryDelimiter(entry.turn_number, entry.story_entry_id, writerName);
+}
+
 export function buildSingleEntryExport(entry, exportedAt = new Date()) {
   // show_authors is honoured as it is in the whole-story export: a writer who chose not to be
   // credited must not be named in a file that leaves Discord.
-  const writerName = entry.show_authors ? (entry.pen_name || entry.discord_display_name) : null;
-  const delimiter = buildEntryDelimiter(entry.turn_number, entry.story_entry_id, writerName);
+  const delimiter = entryExportHeader(entry);
   const text = `${delimiter}\n\n${entry.content.replace(/\s+$/, '')}\n\n${buildExportStamp(exportedAt)}\n`;
 
   return {
@@ -171,8 +185,16 @@ export function buildFileRoundTripButtons(cfg) {
   ];
 }
 
+/** The turn line for the entry a panel session has open, for the modal hint and the mismatch
+ *  message. Read fresh, because a reorder moves the turn number in it. */
+export async function readExportHeader(connection, entryId) {
+  const entry = await readEntryForExport(connection, entryId);
+  return entry ? entryExportHeader(entry) : null;
+}
+
 export async function handleExportFile(connection, interaction, state) {
   const guildName = interaction?.guild?.name;
+  log(`handleExportFile entry: entry ${state.entryId} for ${interaction.user.username}`, { show: false, guildName });
   const entry = await readEntryForExport(connection, state.entryId);
   if (!entry) {
     return await interaction.followUp({
@@ -197,7 +219,7 @@ export async function handleExportFile(connection, interaction, state) {
 // addLabelComponents -- verified against node_modules/@discordjs/builders (LabelBuilderData
 // accepts a FileUploadBuilder, and setFileUploadComponent is its setter). The hint rides as a
 // TextDisplayBuilder, the same way the setup panel's channel modals carry theirs.
-export function buildImportModal(cfg) {
+export function buildImportModal(cfg, exportHeader) {
   const upload = new FileUploadBuilder()
     .setCustomId('entry_file')
     .setMinValues(1)
@@ -207,7 +229,9 @@ export function buildImportModal(cfg) {
   return new ModalBuilder()
     .setCustomId('story_edit_import_submit')
     .setTitle(cfg.txtEditImportModalTitle)
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(cfg.txtEditImportModalHint))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+      replaceTemplateVariables(cfg.txtEditImportModalHint, { export_header: exportHeader })
+    ))
     .addLabelComponents(
       new LabelBuilder().setLabel(cfg.lblEditImportFile).setFileUploadComponent(upload)
     );
@@ -222,11 +246,18 @@ export async function handleImportModalSubmit(connection, interaction, state) {
   const guildName = interaction?.guild?.name;
   const cfg = state.editCfg;
 
+  log(`handleImportModalSubmit entry: entry ${state.entryId} (turn ${state.turnNumber}) for ${interaction.user.username}`, { show: false, guildName });
+
+  // The entry's own turn line, read fresh: it is what the mismatch message quotes back, and a
+  // reorder since the panel opened would have moved the turn number in it.
+  const exportHeader = await readExportHeader(connection, state.entryId);
+  const mismatch = () => replaceTemplateVariables(cfg.txtEditImportError, { export_header: exportHeader ?? '' });
+
   const files = interaction.fields.getUploadedFiles('entry_file');
   const attachment = files?.first?.() ?? null;
   if (!attachment) {
     log(`handleImportModalSubmit: no attachment on entry ${state.entryId}`, { show: true, guildName });
-    return await interaction.followUp({ content: cfg.txtEditImportUnreadable, flags: MessageFlags.Ephemeral });
+    return await interaction.followUp({ content: mismatch(), flags: MessageFlags.Ephemeral });
   }
 
   if (attachment.size > MAX_UPLOAD_BYTES) {
@@ -246,13 +277,13 @@ export async function handleImportModalSubmit(connection, interaction, state) {
     text = await response.text();
   } catch (err) {
     log(`handleImportModalSubmit: could not read ${attachment.name} for entry ${state.entryId}: ${err?.stack ?? err}`, { show: true, guildName });
-    return await interaction.followUp({ content: cfg.txtEditImportUnreadable, flags: MessageFlags.Ephemeral });
+    return await interaction.followUp({ content: mismatch(), flags: MessageFlags.Ephemeral });
   }
 
   const parsed = parseSingleEntryFile(text);
   if (parsed.error) {
     log(`handleImportModalSubmit: ${attachment.name} has no turn line (entry ${state.entryId})`, { show: true, guildName });
-    return await interaction.followUp({ content: cfg.txtEditImportUnreadable, flags: MessageFlags.Ephemeral });
+    return await interaction.followUp({ content: mismatch(), flags: MessageFlags.Ephemeral });
   }
 
   // The id is the identity. A file for another entry pasted over this one would replace prose
@@ -260,13 +291,7 @@ export async function handleImportModalSubmit(connection, interaction, state) {
   // afterwards.
   if (String(parsed.entryId) !== String(state.entryId)) {
     log(`handleImportModalSubmit: ${attachment.name} is entry ${parsed.entryId}, panel has ${state.entryId}`, { show: true, guildName });
-    return await interaction.followUp({
-      content: replaceTemplateVariables(cfg.txtEditImportWrongEntry, {
-        file_turn: String(parsed.turnNumber),
-        file_id: String(parsed.entryId),
-      }),
-      flags: MessageFlags.Ephemeral,
-    });
+    return await interaction.followUp({ content: mismatch(), flags: MessageFlags.Ephemeral });
   }
 
   if (parsed.content === '') {
@@ -302,34 +327,29 @@ export async function handleImportModalSubmit(connection, interaction, state) {
   const conflictAt = await readConflictingEdit(connection, state.entryId, parsed.exportedAt);
   state.pendingImport = { content: resolved, filename: attachment.name };
 
+  // turn_id carries the turn number a reader sees, not story_entry_id: the sentence reads "will
+  // change turn 12", and 12 is what the panel header, the file and the History panel all show.
   const body = replaceTemplateVariables(cfg.txtEditImportConfirm, {
-    turn_number: String(state.turnNumber),
+    turn_id: String(state.turnNumber),
     from_words: wordCount(state.currentContent).toLocaleString(),
     to_words: wordCount(resolved).toLocaleString(),
-    filename: attachment.name,
   });
-  // A rendered Discord timestamp, since this is an embed description where one resolves to the
-  // reader's own clock -- the editor is being told when something happened while they were away.
-  const conflictNote = conflictAt
-    ? `\n\n${replaceTemplateVariables(cfg.txtEditImportConflict, {
-        edited_at: discordTimestamp(new Date(conflictAt).getTime(), 'f'),
-      })}`
-    : '';
+  // The conflict line rides on the same confirmation rather than opening a second one: the
+  // question it asks ("do you want to continue?") is what the Save button already answers.
+  const conflictNote = conflictAt ? `\n\n${cfg.txtEditImportConflict}` : '';
 
   const embed = new EmbedBuilder()
     .setTitle(cfg.txtEditImportConfirmTitle)
     .setDescription(`${body}${conflictNote}`)
     .setColor(conflictAt ? 0xff6b6b : 0x99aab5);
 
+  // No Cancel: the whole confirmation is ephemeral, so dismissing the message is the way out,
+  // and this panel carries no panel-level Cancel anywhere else either (LeeAnn, 2026-10-22).
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('story_edit_import_confirm')
-      .setLabel(cfg.btnEditImportConfirm)
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId('story_edit_import_cancel')
-      .setLabel(cfg.btnEditRestoreCancel)
-      .setStyle(ButtonStyle.Secondary)
+      .setLabel(cfg.btnAdminConfigSave)
+      .setStyle(ButtonStyle.Success)
   );
 
   log(`handleImportModalSubmit: entry ${state.entryId} staged from ${attachment.name} (${wordCount(state.currentContent)} -> ${wordCount(resolved)} words, conflict=${conflictAt ?? 'none'})`, { show: true, guildName });
@@ -344,7 +364,11 @@ export async function handleImportModalSubmit(connection, interaction, state) {
 export async function handleImportConfirm(connection, interaction, state) {
   const guildName = interaction?.guild?.name;
   const staged = state.pendingImport;
-  if (!staged) return;
+  if (!staged) {
+    log(`handleImportConfirm: nothing staged for entry ${state.entryId} (session expired or already applied)`, { show: true, guildName });
+    return;
+  }
+  log(`handleImportConfirm entry: entry ${state.entryId} from ${staged.filename} by ${interaction.user.username}`, { show: false, guildName });
 
   const editorName = interaction.member?.displayName ?? interaction.user.username;
   const previousContent = state.currentContent;

@@ -33,7 +33,7 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
 2026-10-20. Design: docs/plans/PLAN-copyedit-round-trip.md.
 
 ### Added
-- **The whole-story upload: an edited export comes back and rewrites the story's structure.**
+- **The whole-story import: an edited export comes back and rewrites the story's structure.**
   The file the story export already produces, edited anywhere and uploaded from the Manage
   Entries picker. Its block order becomes the story's reading order, a changed writer name in a
   turn line re-credits that turn, and a block the editor deleted removes it -- a soft delete, so
@@ -61,17 +61,24 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   whole entry cannot be made at all. Two buttons rather than one framing it as a single "edit as
   file" action -- LeeAnn, 2026-10-21: the gap between downloading and uploading is "several
   minutes, if not hours or days", and an interaction token on the download message is dead in
-  about fifteen minutes, so the upload has to start from the panel. The file is the whole-story
-  export's format narrowed to one entry: the `[[turn N | #id | writer]]` delimiter first, the
-  prose verbatim, then the `[[exported-at]]` trailer. It keeps the delimiter even with one entry
-  in it, because the id is what makes "this is the wrong file" and "this entry changed in Discord
-  since you downloaded it" answerable. Upload goes through a modal file field
-  (`FileUploadBuilder` wrapped in a `LabelBuilder`, verified against the installed builders), and
-  nothing is written until a confirm that states the word count either side, names the file, and
-  says the current text is saved to history first. A file for another entry is refused by id; a
-  file with no turn line is refused with what a turn line looks like; a file matching the entry
-  as it stands changes nothing and says so; and content over 65,000 bytes is refused rather than
-  silently truncated by the `TEXT` column. An import is a new submission of the whole entry, so
+  about fifteen minutes, so the import has to start from the panel. **Export for Editing** and
+  **Import Edited Entry**, not Download and Upload -- that is the word pair the rest of the bot
+  already uses, and the buttons name the entry rather than the turn because they act on its
+  content. The file is the whole-story export's format narrowed to one entry: the
+  `[[turn N | #id | writer]]` delimiter first, the prose verbatim, then the `[[exported-at]]`
+  trailer. It keeps the delimiter even with one entry in it, because the id is what makes "this
+  is the wrong file" and "this entry changed in Discord since you exported it" answerable. Import
+  goes through a modal file field (`FileUploadBuilder` wrapped in a `LabelBuilder`, verified
+  against the installed builders) whose instructions quote this entry's own turn line, so the
+  editor can compare it against the file in front of them. Nothing is written until a confirm
+  that states the word count either side and says the current text goes to the entry's history
+  first; the conflict warning rides on that same confirm rather than opening a second one, since
+  the question it asks is what the Save button there answers. One message covers both ways a file
+  can fail to be this entry's -- it is another entry's, or it has no turn line at all -- because
+  either way the first line is wrong and the fix is the same. A file matching the entry as it
+  stands changes nothing and says so, and content over 65,000 bytes is refused rather than
+  silently truncated by the `TEXT` column. No Cancel button anywhere in the flow: it is all
+  ephemeral, so dismissing the message is the way out. An import is a new submission of the whole entry, so
   it goes through the same mention resolution a modal save does. `story/_editFileRoundTrip.js`
   holds all of it; the two buttons share the panel's last row with Back to List, which keeps the
   worst-case panel at four of Discord's five action rows.
@@ -281,6 +288,14 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   reaches the hub log channel.
 
 ### Fixed
+- **Migration 001 would have crashed a fresh install.** Its backfill comment read "safe to
+  re-run; only updates rows where 0", and `runMigrationFile` splits a migration on the statement
+  separator *before* it strips comment text -- so the words "only updates rows where 0)" ended up
+  glued to the front of the `UPDATE` that follows, which MariaDB rejects. Every existing database
+  has 001 stamped as applied, so nothing ever hit it, but a new install runs the migrations for
+  real. Found 2026-10-22 while fixing the same mistake in migration 026 before it shipped, and
+  `test/migrationFiles.test.js` now checks every migration the way the runner reads it, with
+  nothing exempt.
 - **Discord's `___text___` (underline + italic) lost an underscore in the HTML export.** The
   underline pre-pass is lazy, so `__(.*?)__` took the first two underscores and the shortest
   run to the next pair, rendering `___both___` as underlined `_both` with a stray trailing

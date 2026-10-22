@@ -2,7 +2,7 @@
 
 Status: Built — all six steps under Unreleased, awaiting copy approval, the 3.10.0 bump and a live check
 Created: 2026-09-22
-Last Updated: 2026-10-22 (all six build-order steps built)
+Last Updated: 2026-10-22 (all six steps built, step 5 copy approved)
 
 ## Problem
 
@@ -595,8 +595,9 @@ Sequence set by LeeAnn on 2026-10-21; this is the order to build in, not a menu.
    before the file comes back). The file is this plan's format narrowed to one entry; the id in
    the delimiter is what powers the wrong-file and stale-file checks; the confirm states the word
    count either side and names the file; the apply writes the history row before the content, the
-   same order the modal save uses. The copy is drafted and **awaiting her approval** except
-   `txtEditExportFileInstructions`, which is hers verbatim. The original description follows.
+   same order the modal save uses. **Copy approved 2026-10-22** -- Export/Import rather than
+   Download/Upload, one message for both first-line failures, the existing Save button, and no
+   Cancel; two strings in the set are still mine. See the approved-copy section below. The original description follows.
    The real fix for cross-page editing. Main open question is how to present it: framing it as
    one round trip ("edit as file") likely reads more clearly than two separate download/upload
    buttons.
@@ -677,42 +678,64 @@ current writer has nobody to offer in the picker, so Change Writer answers with
 `txtManageEntriesChangeWriterSame` ("This entry already belongs to [to_writer]"), which is
 true but was written for a different path. Worth a string of its own if it ever reads wrong.
 
-### Drafted copy — the single-turn file round trip (step 5, 2026-10-22)
+### Approved copy — the single-entry file round trip (step 5, 2026-10-22)
 
-**Not approved.** Drafted against the built mechanics, as this plan said to do, and in the config
-file so the code runs on the branch. `txtEditExportFileInstructions` is the exception: it is
-LeeAnn's own wording from 2026-10-21 and shipped as written.
+LeeAnn's wording, approved 2026-10-22. Two of her decisions shaped the set beyond the strings
+themselves:
+
+- **Export and Import, not Download and Upload.** "Why is it download and upload when we've been
+  saying import and export this whole time?" The buttons also name the *entry*, not the turn,
+  because they act on its content -- the numbered thing inside the copy is still a turn, per the
+  rule she set the same day.
+- **No Cancel button.** The whole flow is ephemeral, so dismissing the message is the way out.
+  The confirm's button reuses `btnAdminConfigSave` ("✅ Save Changes") rather than adding another
+  key that says Save.
+
+| Key | Value |
+| --- | --- |
+| `btnEditExportFile` | 📤 Export for Editing |
+| `btnEditImportFile` | 📥 Import Edited Entry |
+| `txtEditImportModalTitle` | Import Edited Entry |
+| `txtEditImportModalHint` | Upload your edited text file. Ensure the first line of the file has the correct turn ID:  `[export_header]` |
+| `txtEditImportConfirm` | Your edits will change turn [turn_id] from [from_words] to [to_words] words. After saving, this edit can be reverted from the turn's History. |
+| `txtEditImportConflict` | The entry has been edited since this export was saved. Do you want to continue? |
+| `txtEditImportNoChange` | No changes were detected or applied. |
+| `txtEditImportError` | Turn ID Mismatch: The file does not match the current turn. The first line of the file must read `[export_header]` to match the current turn. |
+| `txtEditExportFileInstructions` | (her 2026-10-21 wording, unchanged) |
+
+`[export_header]` is the entry's own turn line, read fresh and rendered exactly as the export
+file carries it (`[[turn 12 | #4417 | Maria]]`, or without the name when `show_authors` is off),
+so the editor can compare it against the file in front of them. It is deliberately the same
+token in the modal hint and in the mismatch message.
+
+`txtEditImportError` replaced two separate strings at her instruction: a file for another entry
+and a file with no turn line at all both mean the first line is wrong, and the fix is the same.
+`btnEditImportConfirm` was dropped with the Save reuse, and `txtEditImportWrongEntry` /
+`txtEditImportUnreadable` with the merge.
+
+**Still drafted in this set:** `txtEditImportConfirmTitle` ("Import Edited Entry", the
+confirmation embed's title, mirroring the modal) and `lblEditImportFile` ("Your edited text
+file", the label on the file field *inside* the modal, under the hint). `txtEditImportTooLarge`
+is also still mine; the limit it quotes is about 65,000 characters, which is what
+`story_entry.content`'s `TEXT` column holds (65,535 bytes, measured in bytes because a
+non-Latin script would otherwise pass the check and be truncated).
+
+**Open question from her, unanswered as of this writing:** whether
+`txtEditImportConfirm` should say where History is reached. It is the **History** button on the
+same edit panel the confirmation is sitting on top of.
+
+### Drafted copy — the whole-story import (step 6, 2026-10-22)
+
+**Not approved.** In `config_storyadmin.sql` so the code runs on the branch. The Export/Import
+naming and the dropped Cancel button from step 5's review are already applied here; the strings
+themselves are still mine.
 
 | Key | Drafted value |
 | --- | --- |
-| `btnEditExportFile` | 📝 Download This Turn |
-| `btnEditImportFile` | 📤 Upload Edited Turn |
-| `txtEditImportModalTitle` | Upload Edited Turn |
-| `lblEditImportFile` | Your edited text file |
-| `txtEditImportModalHint` | Upload the .txt file you downloaded, with your edits in it. Keep the first line, the one with the turn ID, exactly as it was. |
-| `txtEditImportConfirmTitle` | Replace this turn's text? |
-| `txtEditImportConfirm` | Turn [turn_number] goes from [from_words] words to [to_words] words, from **[filename]**. Your current text is saved to this entry's history first, so you can put it back with the History button. |
-| `txtEditImportConflict` | ⚠️ This entry was also edited here in Discord after you downloaded that file ([edited_at]). Uploading replaces that newer text too. |
-| `btnEditImportConfirm` | Replace Text |
-| `txtEditImportSuccess` | ✅ Turn [turn_number] updated from your file. |
-| `txtEditImportNoChange` | That file matches this turn exactly as it is now, so nothing changed. |
-| `txtEditImportWrongEntry` | ❌ That file is turn [file_turn] (ID [file_id]), not this one. Download this turn and edit that file, or open turn [file_turn] to upload this one. |
-| `txtEditImportUnreadable` | ❌ That file does not start with a turn line like [[turn 12 \| #4417]], so there is no way to tell which entry it belongs to. Upload the file you downloaded here, edits and all. |
-| `txtEditImportTooLarge` | ❌ That file is too long to store as one turn. The limit is about [limit] characters. |
-
-Cancel on the confirm reuses `btnEditRestoreCancel`, and an emptied file reuses
-`txtEditEntryEmpty` ("Entry content cannot be empty."), rather than adding two more keys.
-
-### Drafted copy — the whole-story upload (step 6, 2026-10-22)
-
-**Not approved.** In `config_storyadmin.sql` so the code runs on the branch.
-
-| Key | Drafted value |
-| --- | --- |
-| `btnManageEntriesImport` | 📤 Upload Edited Story |
-| `txtImportStoryModalTitle` | Upload Edited Story |
+| `btnManageEntriesImport` | 📥 Import Edited Story |
+| `txtImportStoryModalTitle` | Import Edited Story |
 | `lblImportStoryFile` | Your edited text file |
-| `txtImportStoryModalHint` | Upload the .txt file you exported for editing, with your changes in it. Keep each turn line, the one with the turn ID, exactly as it is. |
+| `txtImportStoryModalHint` | Upload your edited text file. Keep each turn line, the one with the turn ID, exactly as it is. |
 | `txtImportStoryConfirmTitle` | Apply this file to the story? |
 | `txtImportStoryConfirm` | [changed_count] turn(s) would change, from **[filename]**. The current text of each one is saved to its history first, so you can put any of them back from Manage Entries. |
 | `txtImportStoryRow` | [turn_number]. [writer_name] — [from_words] to [to_words] words{? ([notes])?} |

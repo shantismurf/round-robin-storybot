@@ -26,8 +26,8 @@ const cfg = {
 // Manage Entries panel, and story/read.js never renders those rows. Only needed by the
 // full-panel row-budget test below.
 const manageCfg = {
-  btnEditExportFile: '📝 Download This Turn',
-  btnEditImportFile: '📤 Upload Edited Turn',
+  btnEditExportFile: '📤 Export for Editing',
+  btnEditImportFile: '📥 Import Edited Entry',
   btnManageEntriesDelete: 'Delete',
   btnManageEntriesRestore: 'Restore',
   btnManageEntriesChangeOrder: 'Change Order',
