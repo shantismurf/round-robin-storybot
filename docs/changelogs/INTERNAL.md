@@ -60,7 +60,11 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   can fix and one they cannot see), a block too long for the `TEXT` column, and a file with no
   turn lines at all. Applying is one transaction: the history row before the content it replaces,
   the status flips, the writer repointed with its own log row, then the whole reading order
-  rewritten from the plan's sequence.
+  rewritten from the plan's sequence. The upload modal carries no instructions line, and no file
+  label or nothing-changed string of its own: it reuses `lblEditImportFile` and
+  `txtEditImportNoChange` from the single-entry round trip, where LeeAnn had already approved that
+  text -- "use the text from the single import" (2026-10-22). Twenty config strings, where the
+  draft had twenty-three.
 - **The single-turn file round trip on the edit panel.** Download one turn as plain text, edit it
   anywhere with no page boundaries, upload it back. This is the actual fix for the page problem:
   the edit modal splits an entry into 3800-character pages because Discord's text input cannot
