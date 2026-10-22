@@ -364,11 +364,12 @@ generated `confirmed_turn_id` column and a unique key on it. A turn carries at m
 confirmed row, so ordering confirmed entries *is* ordering turns, and no contiguity
 invariant is needed.
 
-**Correction to phase 2's shipped text.** `story/_exportText.js` and the Unreleased
+**Correction to phase 2's shipped text.** ~~`story/_exportText.js` and the Unreleased
 changelog entry both justify matching on the entry id by claiming a turn can hold more
-than one confirmed entry. Migration 021 makes that false. Matching on the id is still
-right — ids are stable and turn numbers are about to start renumbering under reorder —
-but the stated reason needs replacing.
+than one confirmed entry.~~ **Done 2026-10-22.** Both now give the real reason: the turn
+number is a display number computed from `entry_order`, so it changes under a reorder,
+and once import can reorder, the file's turn numbers are input for the new order rather
+than identity. The entry id is the only part of that line that never changes.
 
 ### Reassignment, reordering, and the change log (decided 2026-10-21)
 
@@ -560,7 +561,11 @@ Sequence set by LeeAnn on 2026-10-21; this is the order to build in, not a menu.
    legend, `[[turn N | #id | writer]]` delimiters, the `[[exported-at]]` trailer, and
    the image-pattern widening that came with it.~~ **Built 2026-10-21**, also under
    Unreleased.
-3. **Medium** — the `entry_order` migration. Add the column and backfill it from the
+3. ~~**Medium** — the `entry_order` migration.~~ **Built 2026-10-22**, under Unreleased:
+   migration 026 adds and backfills the column, drops `order_in_turn` with its index, and
+   `story/_entryOrder.js` now holds the numbering subquery, the display sort and the
+   next-order helpers that the fifteen numbering queries and five display sorts call. The
+   original description follows. Add the column and backfill it from the
    current `started_at` ordering; drop `order_in_turn` **and its `unique_turn_order`
    index explicitly first**, with `IF EXISTS` guards; then switch the fifteen
    turn-numbering lines and the five display sorts over. See "Exactly which queries

@@ -5,6 +5,7 @@ import { getActiveThreadId } from '../storybot.js';
 import { buildEntryPages, buildEntryEmbed, postThreadEntry } from './_entryRenderer.js';
 import { resolveMentionsToPlainText } from './_entryMarkup.js';
 import { TURN_STATUS, ENTRY_STATUS, STORY_MODE } from '../constants.js';
+import { turnNumberSubquery, nextEntryOrderForEntry } from './_entryOrder.js';
 
 export const pendingReminderTimeouts = new Map();
 
@@ -184,18 +185,18 @@ export async function confirmEntry(connection, entryId, interaction) {
   await txn.beginTransaction();
 
   try {
+    // The entry takes its slot in the reading order as it becomes confirmed, not when the
+    // pending row was staged: a draft that is never submitted must not hold a slot, and the
+    // turn_number read just below counts rows by entry_order.
+    const entryOrder = await nextEntryOrderForEntry(txn, entryId);
     await txn.execute(`
-      UPDATE story_entry SET entry_status = ? WHERE story_entry_id = ?
-    `, [ENTRY_STATUS.CONFIRMED, entryId]);
+      UPDATE story_entry SET entry_status = ?, entry_order = ? WHERE story_entry_id = ?
+    `, [ENTRY_STATUS.CONFIRMED, entryOrder, entryId]);
 
     const [entryInfo] = await txn.execute(`
       SELECT se.turn_id, se.content, sw.story_id, sw.discord_user_id, sw.discord_display_name,
              s.story_thread_id, s.restricted_thread_id, s.rating, s.show_authors, s.scene_break_divider,
-             (SELECT COUNT(DISTINCT t2.turn_id)
-              FROM turn t2
-              JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-              JOIN story_entry se2 ON se2.turn_id = t2.turn_id AND se2.entry_status = ?
-              WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at) as turn_number
+             ${turnNumberSubquery()} as turn_number
       FROM story_entry se
       JOIN turn t ON se.turn_id = t.turn_id
       JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id

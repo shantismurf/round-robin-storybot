@@ -8,6 +8,7 @@ import { handleEntriesTextExportButton } from './_exportText.js';
 import { buildEntryEmbed, buildEntryPages, stepImagePage } from './_entryRenderer.js';
 import { withFreshAttachmentUrls } from './_exportImages.js';
 import { WRITER_STATUS, ENTRY_STATUS } from '../constants.js';
+import { turnNumberSubquery, entryOrderSort } from './_entryOrder.js';
 
 export { pendingReadData, lastReadPage };
 
@@ -219,17 +220,13 @@ if (isConfigured) {
 
     const [entries] = await connection.execute(
       `SELECT se.content, se.story_entry_id, se.created_at, sw.discord_user_id AS original_author_id,
-              (SELECT COUNT(DISTINCT t2.turn_id)
-               FROM turn t2
-               JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-               JOIN story_entry se2 ON se2.turn_id = t2.turn_id AND se2.entry_status = ?
-               WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at) AS turn_number,
+              ${turnNumberSubquery()} AS turn_number,
               sw.discord_display_name
        FROM story_entry se
        JOIN turn t ON se.turn_id = t.turn_id
        JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
        WHERE sw.story_id = ? AND se.entry_status = ?
-       ORDER BY t.started_at`,
+       ORDER BY ${entryOrderSort()}`,
       [ENTRY_STATUS.CONFIRMED, storyId, ENTRY_STATUS.CONFIRMED]
     );
 

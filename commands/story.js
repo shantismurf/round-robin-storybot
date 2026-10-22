@@ -521,7 +521,7 @@ async function handleAutocomplete(connection, interaction) {
       [rows] = await connection.execute(
         `SELECT turn_number, discord_display_name, content FROM (
            SELECT
-             DENSE_RANK() OVER (ORDER BY t.started_at) AS turn_number,
+             DENSE_RANK() OVER (ORDER BY se.entry_order) AS turn_number,
              sw.discord_display_name, se.content
            FROM story_entry se
            JOIN turn t ON se.turn_id = t.turn_id
@@ -536,7 +536,7 @@ async function handleAutocomplete(connection, interaction) {
       [rows] = await connection.execute(
         `SELECT turn_number, discord_display_name, content FROM (
            SELECT
-             DENSE_RANK() OVER (ORDER BY t.started_at) AS turn_number,
+             DENSE_RANK() OVER (ORDER BY se.entry_order) AS turn_number,
              sw.discord_display_name, sw.discord_user_id, se.content
            FROM story_entry se
            JOIN turn t ON se.turn_id = t.turn_id

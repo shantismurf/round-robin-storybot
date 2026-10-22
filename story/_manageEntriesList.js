@@ -9,6 +9,7 @@
 import { StringSelectMenuBuilder, ActionRowBuilder, MessageFlags } from 'discord.js';
 import { getConfigValue, replaceTemplateVariables } from '../utilities.js';
 import { ENTRY_STATUS } from '../constants.js';
+import { turnNumberSubquery, entryOrderSort, ORDERED_STATUSES } from './_entryOrder.js';
 
 export const ENTRY_PAGE_SIZE = 25;
 
@@ -32,7 +33,7 @@ const PICKER_CFG_KEYS = [
  *   are editable), turn numbering matches /story read's numbering exactly (CONFIRMED-only).
  */
 export async function fetchStoryEntries(connection, storyId, offset, limit, { authorUserId = null, includeDeleted = false } = {}) {
-  const statuses = includeDeleted ? [ENTRY_STATUS.CONFIRMED, ENTRY_STATUS.DELETED] : [ENTRY_STATUS.CONFIRMED];
+  const statuses = includeDeleted ? [...ORDERED_STATUSES] : [ENTRY_STATUS.CONFIRMED];
   const statusPlaceholders = statuses.map(() => '?').join(', ');
 
   let sql = `
@@ -42,13 +43,7 @@ export async function fetchStoryEntries(connection, storyId, offset, limit, { au
       LEFT(se.content, 50) AS preview,
       LENGTH(se.content) - LENGTH(REPLACE(se.content, ' ', '')) + 1 AS word_count,
       sw.discord_display_name AS writer_name,
-      (
-        SELECT COUNT(DISTINCT t2.turn_id)
-        FROM turn t2
-        JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-        JOIN story_entry se2 ON se2.turn_id = t2.turn_id AND se2.entry_status IN (${statusPlaceholders})
-        WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at
-      ) AS turn_number
+      ${turnNumberSubquery({ statusCount: statuses.length })} AS turn_number
     FROM story_entry se
     JOIN turn t ON se.turn_id = t.turn_id
     JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
@@ -61,7 +56,7 @@ export async function fetchStoryEntries(connection, storyId, offset, limit, { au
     params.push(authorUserId);
   }
 
-  sql += ` ORDER BY t.started_at ASC LIMIT ? OFFSET ?`;
+  sql += ` ORDER BY ${entryOrderSort()} ASC LIMIT ? OFFSET ?`;
   params.push(limit + 1, offset); // fetch one extra to detect more pages
 
   const [rows] = await connection.execute(sql, params);

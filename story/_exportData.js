@@ -2,6 +2,7 @@
 // file, so story/export.js (HTML, for AO3) and story/_exportText.js (plain text, for editing)
 // can share it without importing each other.
 import { WRITER_STATUS, ENTRY_STATUS } from '../constants.js';
+import { turnNumberSubquery, entryOrderSort } from './_entryOrder.js';
 
 /**
  * The story, its active writers and its confirmed entries in turn order — everything both
@@ -27,15 +28,12 @@ export async function fetchStoryForExport(connection, storyId, guildId) {
   // ignores it.
   const [entries] = await connection.execute(
     `SELECT se.story_entry_id, se.content, se.created_at, sw.discord_display_name, sw.pen_name,
-            (SELECT COUNT(DISTINCT t2.turn_id) FROM turn t2
-             JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-             JOIN story_entry se2 ON se2.turn_id = t2.turn_id AND se2.entry_status = ?
-             WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at) as turn_number
+            ${turnNumberSubquery()} as turn_number
      FROM story_entry se
      JOIN turn t ON se.turn_id = t.turn_id
      JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
      WHERE sw.story_id = ? AND se.entry_status = ?
-     ORDER BY t.started_at`,
+     ORDER BY ${entryOrderSort()}`,
     [ENTRY_STATUS.CONFIRMED, storyId, ENTRY_STATUS.CONFIRMED]
   );
 

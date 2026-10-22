@@ -70,6 +70,11 @@ CREATE TABLE IF NOT EXISTS story_entry (
   FOREIGN KEY (turn_id) REFERENCES turn(turn_id) ON DELETE CASCADE,
   content TEXT NOT NULL,
   entry_status ENUM('pending', 'confirmed', 'discarded', 'deleted') DEFAULT 'pending',
+  -- Story-wide reading order, dense 1..n, set when an entry becomes confirmed. Separate from
+  -- turn.started_at so a story can be reordered for publication without rewriting its history.
+  -- A soft-deleted entry keeps its value so Restore returns it to its slot, so any renumber
+  -- has to carry deleted rows too. Abandoned quick-mode drafts stay NULL. See migration 026.
+  entry_order INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

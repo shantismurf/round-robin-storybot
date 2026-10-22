@@ -33,6 +33,23 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
 2026-10-20. Design: docs/plans/PLAN-copyedit-round-trip.md.
 
 ### Added
+- **`story_entry.entry_order` — a story's reading order as a column of its own** (migration 026).
+  Display order was derived entirely from `turn.started_at`, which is also the record of when a
+  turn happened. Those are two different facts, and reordering a story for publication must not
+  rewrite its history, so order moved to its own column and `started_at` was left alone. The
+  column is on `story_entry` rather than `turn` because a skipped or timed-out turn produces no
+  entry, and because migration 021 limits a turn to one confirmed entry — so ordering confirmed
+  entries is the same thing as ordering turns, with no contiguity to maintain. Backfilled from
+  the existing `started_at` ordering, covering confirmed and deleted rows: a soft-deleted entry
+  keeps its slot so Restore returns it where it was, which also means every later renumber has
+  to carry deleted rows. Abandoned quick-mode drafts stay NULL. A new entry takes `MAX + 1` over
+  every status, inside the transaction that confirms it, so it can never land on a held slot.
+- **`story/_entryOrder.js`** — one definition of reading order. `turnNumberSubquery()`,
+  `confirmedEntryCountSubquery()` and `entryOrderSort()` replace fifteen hand-copied numbering
+  subqueries across twelve files and five separate `ORDER BY t.started_at` display sorts. That
+  duplication is exactly how numbering and display order drift apart, and the same pattern that
+  had already produced a stale config-key list and a duplicate modal in `story/read.js`.
+
 - **"Add Page" on the edit panel.** An entry's pages are a modal-size artifact, not stored
   structure: `story_entry.content` is one column and `chunkEntryContent()` splits it at render
   time to fit Discord's 4000-character text input. Growing an entry past its current page count
@@ -136,6 +153,16 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   that is the id the import matches on.
 
 ### Removed
+- **`story_entry.order_in_turn` and its `unique_turn_order` index**, dropped by migration 026.
+  The column was removed from `init.sql` in April 2026 along with every query that read it, but
+  no migration ever dropped it, so any database created before then was still carrying it
+  unused. Both drops are conditional, since a database created after April never had either.
+  The index is dropped explicitly rather than left to the column drop: in MariaDB, dropping a
+  column that belongs to a multi-column index removes the column *from* the index instead of
+  dropping the index, which would have left a `UNIQUE KEY` on `turn_id` alone — a constraint
+  nobody intended, and one that would stop a turn ever holding a second row. Reviving the column
+  instead was considered and rejected: its name scopes order to a turn when what is needed is
+  story-wide, and its unique key constrains the wrong pair.
 - **`txtExportTextFooter`, the plain-text export's last human line.** It reprinted the entry count
   under the body. Its only real purpose was showing the file wasn't truncated, and the
   `[[exported-at]]` stamp that follows it does that for the importer — so all it told a reader was

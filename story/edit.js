@@ -8,6 +8,7 @@ import { getActiveThreadId } from '../storybot.js';
 import { buildEntryPickerMessage } from './_manageEntriesList.js';
 import { handleEditHistoryButton } from './_editHistory.js';
 import { ENTRY_STATUS } from '../constants.js';
+import { turnNumberSubquery } from './_entryOrder.js';
 
 export { pendingEditData };
 
@@ -73,13 +74,7 @@ async function openEditSession(connection, interaction, guildId, storyId, turnNu
       `SELECT se.story_entry_id, se.content, se.created_at, se.entry_status,
               sw.discord_user_id AS original_author_id, sw.discord_display_name AS author_name,
               s.guild_story_id, s.title,
-              (SELECT COUNT(DISTINCT t2.turn_id)
-               FROM turn t2
-               JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-               JOIN story_entry se2 ON se2.turn_id = t2.turn_id
-                 AND se2.entry_status = ?
-               WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at
-              ) AS turn_number
+              ${turnNumberSubquery()} AS turn_number
        FROM story_entry se
        JOIN turn t ON se.turn_id = t.turn_id
        JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
@@ -100,14 +95,7 @@ async function openEditSession(connection, interaction, guildId, storyId, turnNu
        JOIN story s ON sw.story_id = s.story_id
        WHERE sw.story_id = ?
          AND se.entry_status = ?
-         AND (
-           SELECT COUNT(DISTINCT t2.turn_id)
-           FROM turn t2
-           JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-           JOIN story_entry se2 ON se2.turn_id = t2.turn_id
-             AND se2.entry_status = ?
-           WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at
-         ) = ?`,
+         AND ${turnNumberSubquery()} = ?`,
       [storyId, ENTRY_STATUS.CONFIRMED, ENTRY_STATUS.CONFIRMED, turnNumber]
     );
   }
@@ -698,13 +686,7 @@ async function handleEditModalSubmit(connection, interaction) {
        JOIN turn t ON se.turn_id = t.turn_id
        JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
        WHERE sw.story_id = ? AND se.entry_status = ?
-         AND (
-           SELECT COUNT(DISTINCT t2.turn_id)
-           FROM turn t2
-           JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-           JOIN story_entry se2 ON se2.turn_id = t2.turn_id AND se2.entry_status = ?
-           WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at
-         ) = ?`,
+         AND ${turnNumberSubquery()} = ?`,
       [state.storyId, ENTRY_STATUS.CONFIRMED, ENTRY_STATUS.CONFIRMED, state.turnNumber + 1]
     );
     if (nextRows.length > 0) {
@@ -734,11 +716,7 @@ async function handleRepostEntry(connection, interaction) {
     const [rows] = await connection.execute(
       `SELECT se.content, se.created_at, sw.discord_display_name, sw.discord_user_id AS original_author_id,
               s.story_thread_id, s.restricted_thread_id, s.rating, s.show_authors, s.scene_break_divider,
-              (SELECT COUNT(DISTINCT t2.turn_id)
-               FROM turn t2
-               JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-               JOIN story_entry se2 ON se2.turn_id = t2.turn_id AND se2.entry_status = ?
-               WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at) AS turn_number,
+              ${turnNumberSubquery()} AS turn_number,
               (SELECT see.edited_at FROM story_entry_edit see WHERE see.entry_id = se.story_entry_id ORDER BY see.edited_at DESC LIMIT 1) AS last_edited_at,
               (SELECT see.edited_by FROM story_entry_edit see WHERE see.entry_id = se.story_entry_id ORDER BY see.edited_at DESC LIMIT 1) AS last_editor_id
        FROM story_entry se

@@ -6,6 +6,7 @@ import { generateStoryExport } from './export.js';
 import { getActiveThreadId } from '../storybot.js';
 import { STORY_STATUS, WRITER_STATUS, ENTRY_STATUS, TURN_STATUS, STORY_MODE } from '../constants.js';
 import { buildCloseExportRow, EXPORT_ROW_CONFIG_KEYS, handleEntriesTextExportButton } from './_exportText.js';
+import { turnNumberSubquery, entryOrderSort } from './_entryOrder.js';
 
 // Direct stats query — independent of export generation, since export is now a manual, optional
 // step after close. Exported for story/_manageClose.js, which needs the same numbers for the
@@ -17,15 +18,12 @@ export async function getStoryStats(connection, storyId) {
   );
   const [entryRows] = await connection.execute(
     `SELECT se.content,
-            (SELECT COUNT(DISTINCT t2.turn_id) FROM turn t2
-             JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-             JOIN story_entry se2 ON se2.turn_id = t2.turn_id AND se2.entry_status = ?
-             WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at) as turn_number
+            ${turnNumberSubquery()} as turn_number
      FROM story_entry se
      JOIN turn t ON se.turn_id = t.turn_id
      JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
      WHERE sw.story_id = ? AND se.entry_status = ?
-     ORDER BY t.started_at`,
+     ORDER BY ${entryOrderSort()}`,
     [ENTRY_STATUS.CONFIRMED, storyId, ENTRY_STATUS.CONFIRMED]
   );
   const turnCount = entryRows.length ? entryRows[entryRows.length - 1].turn_number : 0;
