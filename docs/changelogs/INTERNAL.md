@@ -235,6 +235,18 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   still supplied by Coolify as a File Mount at `/app/config.json`. No bump: deployment tooling
   only, no change to the bot's code or behavior.
 
+### Added
+- **A style standard for the help pages**, `docs/reference/help_style_guide.md`, approved by
+  LeeAnn 2026-10-22. Six rules, the load-bearing one being that an emoji is a topic's name rather
+  than decoration: the same topic wears the same emoji everywhere in the help and two topics never
+  share one. Emoji organize the help, they do not mirror the app -- a heading may carry one the
+  button it describes does not. It also records the drift measured against those rules the day it
+  was written, none of it fixed yet because every item is user-facing text: the three admin pages
+  use three different emoji for one set, Turn Thread Privacy is two different emoji on two pages,
+  and one emoji covers five unrelated topics. The `Create style_roadmap.md` backlog item, which
+  predates this and already carried the app's button and emoji policy, now links it and records
+  what an audit of the 118 button labels actually found.
+
 ### Changed
 - **Add Page appears only on an entry's last page.** It appends an empty page to the end of the
   entry, so from page 3 of 5 it looked like it would insert a page there -- LeeAnn, 2026-10-22:

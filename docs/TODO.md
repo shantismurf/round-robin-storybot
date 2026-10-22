@@ -36,7 +36,29 @@ work — see [plans/PLAN-sequencing-and-priorities.md](plans/PLAN-sequencing-and
 
 ## Create style_roadmap.md
 
-Establish a project style standard document and reference it from CLAUDE.md. Should define at minimum:
+Establish a project style standard document and reference it from CLAUDE.md.
+
+**First slice done 2026-10-22:** the help pages have their own standard, approved by LeeAnn, at
+[reference/help_style_guide.md](reference/help_style_guide.md). It covers help content only — the
+twelve `PAGE_DEFS` pages and their config keys — and records the drift still to be fixed there.
+The app-wide document below is still owed, and the help guide should be folded into it or linked
+from it when it is written.
+
+**Measured 2026-10-22, before writing any of it: the app does not comply with the button rule
+below.** 50 of 118 `btn*` labels carry a leading emoji, including `✅ Finalize Entry`,
+`✋ Join This Story`, `⏭️ Pass My Turn` and `🗑️ Delete an Entry`. What the code actually
+practises is narrower and worth writing down as the real convention if it is kept: the button a
+reader reaches for first is styled, the button that then confirms it is always plain ("Yes,
+Finalize Entry", "Apply These Changes", "Confirm Restore", "Cancel"), and panel chrome — the
+Manage Turns/Entries/Users row, the Story Info / Settings / Metadata tabs, Back, Next — is plain.
+The exception is inside the Components V2 panels, which are genuinely split: `✅ Save Changes`
+and `⏸️ Pause` are styled while Delete Entry, Change Order, Change Writer and Back are not.
+Arrow navigation is also inconsistent (`← Prev`, `◀️ Prev`, `Next →`, `Next ▶️` all coexist).
+So the decision this document has to make is not "what is the rule" but "strip the 50, or keep
+them and narrow the rule to match" — LeeAnn has not ruled yet, and every one of the 50 is
+user-facing text that needs her approval individually or as a batch.
+
+Should define at minimum:
 - **No emojis in buttons** — button labels are plain text only
 - **Button colors** — use Discord ButtonStyle semantically: Success=green (active/positive), Secondary=gray (neutral/paused), Danger=red (closed/ended), Primary=blurple (call to action/joinable). Disabled state always renders gray regardless of style.
 - **Mode icons** — 🟣 Quick · 🟢 Normal · 🔵 Slow (hardcoded UI chrome, not config strings)

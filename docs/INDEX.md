@@ -84,6 +84,7 @@ Every file has a `Status` / `Created` / `Last Updated` (/ `Implemented`) header.
 | [system_roadmap.md](reference/system_roadmap.md) | Exported functions, state maps, event routing |
 | [config_roadmap.md](reference/config_roadmap.md) | Manifest of all database-stored config keys |
 | [ux_roadmap.md](reference/ux_roadmap.md) | Application workflows and interface structure |
+| [help_style_guide.md](reference/help_style_guide.md) | Style standard for the twelve help pages: emoji rules, structure conventions, and the drift still to fix |
 | [discordjs_reference.md](reference/discordjs_reference.md) | Verified discord.js API notes — check before trusting training data |
 | [autocomplete-sort-filter-reference.md](reference/autocomplete-sort-filter-reference.md) | Filter/sort rules per `/story` autocomplete subcommand |
 | [HOSTING.md](reference/HOSTING.md) | Production hosting (Pterodactyl) access/deploy reference |
