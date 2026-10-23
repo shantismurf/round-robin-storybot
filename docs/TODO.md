@@ -144,7 +144,7 @@ Full implementation plan extracted to [plans/PLAN-dm-support.md](plans/PLAN-dm-s
 
 # Future Features
 
-- stpry efiting expansion: explore the idea of reordering turns,  think about how to make it clear to users how to add content to entries that hit the page limit, editing multi page entries requires skill and understanding of how the system works. 
+- ~~story editing expansion: reordering turns, and making it clear how to add content to entries that hit the page limit~~ — **delivered in 3.10.0** (2026-10-23): Change Order moves a turn, Add Page grows an entry from its last page, and the file round trip takes a long entry out of Discord's page splitting entirely. Design in [plans/completed/PLAN-copyedit-round-trip.md](plans/completed/PLAN-copyedit-round-trip.md). Still open from the original note: the help for all of it is written, but nobody other than LeeAnn has used it yet.
 - Add an export help page with Work Skin creation instructions — walk users through copying the `#workskin` CSS block from their exported HTML into an AO3 Work Skin so entry formatting (tooltips, scene breaks, subtext) matches on AO3.
 - Series System — see [plans/PLAN-series-system.md](plans/PLAN-series-system.md)
 - Reactions Kudos — see [plans/PLAN-reactions-kudos.md](plans/PLAN-reactions-kudos.md)

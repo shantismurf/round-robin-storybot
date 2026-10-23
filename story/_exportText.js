@@ -9,7 +9,7 @@
 // This export is the opposite. It writes story_entry.content verbatim — no markdown conversion,
 // no marker substitution, no image handling — so the text in the file is exactly the text in the
 // database. That is what makes a round trip possible: the importer can compare what came back
-// against what went out without reversing a render. See docs/plans/PLAN-copyedit-round-trip.md.
+// against what went out without reversing a render. See docs/plans/completed/PLAN-copyedit-round-trip.md.
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
 import { getConfigValue, log, replaceTemplateVariables } from '../utilities.js';
 import { fetchStoryForExport, buildExportFilename } from './_exportData.js';
@@ -27,7 +27,7 @@ import { STORY_STATUS } from '../constants.js';
 // can reorder, the file's turn numbers are input for the new order, which makes matching on
 // them circular besides. A writer name is not unique either. The entry id never changes.
 // (An earlier version of this comment said a turn can hold several confirmed entries. It
-// cannot: migration 021 enforces one per turn. See docs/plans/PLAN-copyedit-round-trip.md.)
+// cannot: migration 021 enforces one per turn. See docs/plans/completed/PLAN-copyedit-round-trip.md.)
 // Turn number and entry id sit in fixed leading positions and the writer name goes last, so a
 // pen name containing a '|' or a '·' cannot shift what the parser reads as the id.
 const ENTRY_DELIMITER_RE = /^\[\[turn\s+(\d+)\s*\|\s*#(\d+)\s*(?:\|\s*([\s\S]*?))?\s*\]\]$/;

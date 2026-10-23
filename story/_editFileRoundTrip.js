@@ -17,7 +17,7 @@
  * it, because the id is what makes "this is the wrong file" and "this entry changed in Discord
  * since you downloaded it" answerable at all.
  *
- * See docs/plans/PLAN-copyedit-round-trip.md, build order step 5.
+ * See docs/plans/completed/PLAN-copyedit-round-trip.md, build order step 5.
  */
 
 import {

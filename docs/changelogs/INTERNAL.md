@@ -28,9 +28,25 @@ the thing you will search for later is the old name.
 
 Provenance: written alongside the work.
 
-Holding for 3.10.0: the editing revamp ships as one MINOR bump when the round trip lands, rather
-than moving the number on each step toward it. LeeAnn approved the hold and the 3.10.0 target on
-2026-10-20. Design: docs/plans/PLAN-copyedit-round-trip.md.
+Nothing yet. Open and deliberately not in 3.10.0: the emoji on the remaining 44 button labels,
+which stay as they are until there is a style plan -- see the `Create style_roadmap.md` section of
+`docs/TODO.md`.
+
+---
+
+## 3.10.0 — 2026-10-23
+
+Provenance: written alongside the work.
+
+MINOR. The editing revamp: an entry can be exported as plain text, edited anywhere, and imported
+back, one turn at a time or the whole story at once, and a story's reading order is now its own
+fact rather than a side effect of when each turn happened. Shipped as one bump rather than moving
+the number on each step toward it -- LeeAnn approved the hold and the 3.10.0 target on 2026-10-20,
+and the number again on 2026-10-22. Chapters and series are 4.0, where the unit of the product
+changes. Design: docs/plans/completed/PLAN-copyedit-round-trip.md.
+
+Everything below shipped together, including the items marked "no bump" when they landed on main
+ahead of this release.
 
 ### Added
 - **The whole-story import: an edited export comes back and rewrites the story's structure.**
@@ -234,8 +250,6 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   Coolify app's Build Pack is set to Dockerfile. `config.json` stays out of the image and is
   still supplied by Coolify as a File Mount at `/app/config.json`. No bump: deployment tooling
   only, no change to the bot's code or behavior.
-
-### Added
 - **A style standard for the help pages**, `docs/reference/help_style_guide.md`, approved by
   LeeAnn 2026-10-22. Six rules, the load-bearing one being that an emoji is a topic's name rather
   than decoration: the same topic wears the same emoji everywhere in the help and two topics never
@@ -246,8 +260,6 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   and one emoji covers five unrelated topics. The `Create style_roadmap.md` backlog item, which
   predates this and already carried the app's button and emoji policy, now links it and records
   what an audit of the 118 button labels actually found.
-
-### Added
 - **A help section for the story exports**, `lblHelp6Export` / `txtHelp6Export`, her copy. The
   three export buttons on `/story read` had no help anywhere -- the only export the help
   documented was the single-entry one. It renders between Reading a Story and Editing an Entry,
@@ -396,6 +408,18 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   reaches the hub log channel.
 
 ### Fixed
+- **Edit Next Entry advances more than once.** The button was built in `handleEditModalSubmit`,
+  the save-an-edit path, so it appeared only on the panel rendered after a save. Clicking it
+  opened the next entry through `openEditSession`, whose panel did not carry it, so a second
+  advance was impossible until something was saved -- reported by LeeAnn 2026-10-08, sitting in
+  no branch and, until now, in no backlog file either. The next entry is resolved in
+  `openEditSession` onto the session (`findNextEntryId` in `story/_entryOrder.js`, extracted from
+  the query that was inline in the save path) and the button is rendered by `buildEditMessage`
+  like every other button on the panel, so every route that opens an entry carries it and every
+  rebuild keeps it. It is refreshed after a Change Order, since moving the entry changes which
+  turn comes next. Still admin-only, as it was. Its label was a hardcoded `'Edit Next Entry →'`
+  string literal -- the last user-facing text in the edit panel that could not be changed without
+  a deploy -- and is now `btnEditNextEntry`, at the wording that shipped.
 - **Migration 001 would have crashed a fresh install.** Its backfill comment read "safe to
   re-run; only updates rows where 0", and `runMigrationFile` splits a migration on the statement
   separator *before* it strips comment text -- so the words "only updates rows where 0)" ended up

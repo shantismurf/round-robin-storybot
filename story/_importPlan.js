@@ -6,7 +6,7 @@
  * renumbers turns, re-credits entries and soft-deletes anything they dropped. Everything here is
  * decided from the file plus a snapshot of the story, so it can be tested exhaustively.
  *
- * Three rules shape it, all from docs/plans/PLAN-copyedit-round-trip.md:
+ * Three rules shape it, all from docs/plans/completed/PLAN-copyedit-round-trip.md:
  *
  *  - **The file's order is the story's order.** Reordering is done by moving a whole block, so
  *    the sequence of blocks in the file is the new reading order.

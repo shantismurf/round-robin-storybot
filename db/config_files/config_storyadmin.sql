@@ -244,7 +244,7 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 -- writer name re-credits a turn, and a block the editor deleted removes that turn -- which is why
 -- applying needs a confirmation that lists removals one by one rather than counting them.
 --
--- Her wording, approved 2026-10-22 -- see docs/plans/PLAN-copyedit-round-trip.md.
+-- Her wording, approved 2026-10-22 -- see docs/plans/completed/PLAN-copyedit-round-trip.md.
 ('btnManageEntriesImport', 'Import Edited Story', 'en', 1),
 ('txtImportStoryModalTitle', 'Import Edited Story', 'en', 1),
 -- No label or hint of its own: the modal reuses lblEditImportFile ("Attach edited text file")

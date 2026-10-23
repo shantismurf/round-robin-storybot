@@ -3,7 +3,7 @@
 -- Display order was derived entirely from turn.started_at, which is also the honest record of
 -- when a turn happened. Those are two different facts. Reordering a story for publication must
 -- not rewrite its history, so reading order gets a column of its own and started_at is left
--- alone. See docs/plans/PLAN-copyedit-round-trip.md.
+-- alone. See docs/plans/completed/PLAN-copyedit-round-trip.md.
 --
 -- The column lives on story_entry rather than turn for two reasons. A skipped or timed-out turn
 -- produces no entry at all, so order on turn would hand slots to turns that contribute nothing.

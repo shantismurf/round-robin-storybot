@@ -2,7 +2,7 @@
 --
 -- The table already held content versions. Reordering an entry and changing its writer are
 -- changes to the same entry and belong in the same history, so it gains a discriminator and
--- both sides of each change. See docs/plans/PLAN-copyedit-round-trip.md.
+-- both sides of each change. See docs/plans/completed/PLAN-copyedit-round-trip.md.
 --
 -- Why both sides on the row rather than only the previous value: the history panel pages one
 -- row at a time (LIMIT 1 OFFSET ?), so whatever is on the row is all it has to render with.

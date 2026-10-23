@@ -164,7 +164,7 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 -- back off on 2026-10-22, preferring to keep them out until there is a mindful style plan. See
 -- the comment above btnExportNoBreaks in config_metadata.sql.
 --
--- Her wording throughout, approved 2026-10-22 -- see docs/plans/PLAN-copyedit-round-trip.md.
+-- Her wording throughout, approved 2026-10-22 -- see docs/plans/completed/PLAN-copyedit-round-trip.md.
 ('btnEditExportFile', 'Export for Editing', 'en', 1),
 ('txtEditExportFileInstructions', 'Download the text of turn [turn_number] ([word_count] words) for editing. This is the raw text of the entry, so keep any formatting markdown intact. Do not remove the first line, which contains the internal turn ID, so that the entry can be imported correctly.', 'en', 1),
 ('btnEditImportFile', 'Import Edited Entry', 'en', 1),

@@ -17,7 +17,7 @@
  * bare count is not. Every removal is a soft delete and restorable from Manage Entries, but the
  * confirm is what means most accidents never need restoring.
  *
- * See docs/plans/PLAN-copyedit-round-trip.md, build order step 6.
+ * See docs/plans/completed/PLAN-copyedit-round-trip.md, build order step 6.
  */
 
 import {

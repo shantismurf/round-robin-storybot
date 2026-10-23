@@ -1,8 +1,9 @@
 # Copyedit Round Trip (Export → Edit → Import)
 
-Status: Built — all six steps under Unreleased, awaiting copy approval, the 3.10.0 bump and a live check
+Status: Implemented — shipped in 3.10.0
 Created: 2026-09-22
-Last Updated: 2026-10-22 (all six steps built, step 5 copy approved)
+Last Updated: 2026-10-23 (all copy approved, version bumped, awaiting a live check after the Redeploy)
+Implemented: 2026-10-23
 
 ## Problem
 

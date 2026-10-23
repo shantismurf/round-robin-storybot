@@ -15,7 +15,7 @@
 // signature to refresh and must never be sent to that endpoint, so DISCORD_ATTACHMENT_RE
 // stays narrow while the image patterns widen around it.
 //
-// See docs/plans/PLAN-copyedit-round-trip.md, "Images: tokens rejected, and the real gap".
+// See docs/plans/completed/PLAN-copyedit-round-trip.md, "Images: tokens rejected, and the real gap".
 
 // Extensions we accept. Deliberately a closed list: the point is to recognise image files,
 // not to follow whatever a URL claims to be.
