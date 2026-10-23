@@ -92,6 +92,9 @@ export const PAGE_DEFS = [
     titleKey: 'txtHelp6Title',
     entries: [
       { lbl: 'lblHelp6Read',      txt: 'txtHelp6Read' },
+      // Exporting sits between reading and editing because the plain-text export is the route
+      // into editing a long entry, and the help for it is what points there.
+      { lbl: 'lblHelp6Export',    txt: 'txtHelp6Export' },
       { lbl: 'lblHelp6Edit',      txt: 'txtHelp6Edit' },
       { lbl: 'lblHelp6EditPages', txt: 'txtHelp6EditPages' },
     ],

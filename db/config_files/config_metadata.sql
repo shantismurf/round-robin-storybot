@@ -3,13 +3,17 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('txtExportAO3Instructions', 'If you don''t see a download icon, click the ··· menu on the file and choose **Download**.\n\n**To post your story online:** Open the file in any text editor and copy everything between the `STORY START` and `STORY END` lines. For AO3, in the "Work Text" field, click the **HTML** button to switch to HTML mode, then paste. (Your title, tags, and summary go in AO3''s own fields — they''re at the top of the export file for easy reference.) Images are embedded inside the file itself, but sites like AO3 don''t accept embedded images — to include images in a posted work, upload them to an image host and add links there.', 'en', 1),
 ('btnExportPostPublicly', '📢 Post to Story Thread', 'en', 1),
 ('txtExportPostedPublicly', '✅ Story file posted to the story thread.', 'en', 1),
-('btnExportNoBreaks', '⬇ Export (no breaks)', 'en', 1),
-('btnExportWithBreaks', '⬇ Export (breaks with turns and names)', 'en', 1),
+-- Every export carries the same emoji and every import carries its own, her call 2026-10-22:
+-- the three exports had drifted to two different emoji across three releases. The wider question
+-- of whether buttons should carry emoji at all is still open -- see the Create style_roadmap.md
+-- section of docs/TODO.md.
+('btnExportNoBreaks', '📤 Export (no breaks)', 'en', 1),
+('btnExportWithBreaks', '📤 Export (breaks with turns and names)', 'en', 1),
 -- The plain-text editing export (story/_exportText.js). A different artifact from the two HTML
 -- exports above: unrendered story_entry.content, so what you edit is what is stored. The entry
 -- delimiter itself is NOT config — it is a structural token the importer parses, so a guild
 -- editing its wording would break import rather than translate it.
-('btnExportForEditing', '📝 Export Entries for Editing', 'en', 1),
+('btnExportForEditing', '📤 Export Entries for Editing', 'en', 1),
 ('txtExportTextInstructions', 'Download the text of all [entry_count] turn(s) ([word_count] words) for editing. This is the raw text of the entries, so keep any formatting markdown intact. Do not remove the first line of each turn, which contains the internal turn ID, so that entries can be imported correctly.', 'en', 1),
 ('txtExportTextNoEntries', 'This story has no confirmed entries to export yet.', 'en', 1),
 ('txtExportTextHeader', '[title] (story #[story_num])\n[turn_count] turn(s), [entry_count] entr(ies), [word_count] words - status: [status] - exported [exported]{?\nWriters: [authors]?}', 'en', 1),

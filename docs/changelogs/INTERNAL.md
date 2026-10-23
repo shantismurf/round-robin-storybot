@@ -247,7 +247,30 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   predates this and already carried the app's button and emoji policy, now links it and records
   what an audit of the 118 button labels actually found.
 
+### Added
+- **A help section for the story exports**, `lblHelp6Export` / `txtHelp6Export`, her copy. The
+  three export buttons on `/story read` had no help anywhere -- the only export the help
+  documented was the single-entry one. It renders between Reading a Story and Editing an Entry,
+  because the plain-text export is the route into editing a long entry and this is the section
+  that points there.
+
 ### Changed
+- **The help copy for reading and editing is hers now**, applied from the doc she edited in place:
+  `txtHelp6Read` (images show on the page where they appear, rather than as placeholders with alt
+  text, which is what the entry renderer actually does since 3.9.0), `txtHelp6Edit` (rewritten
+  around the two in-Discord routes, then the file round trip, and it now says admins can delete
+  and restore rather than only edit), and `txtHelp6EditPages` (the Add Page sentence points at
+  the last page, matching where the button now renders). `txtHelp5AdminControls` gained a **Manage
+  Entries** block between Manage Turns and Manage Users, covering Edit Entry, Change Order, Change
+  Writer and Import Edited Story. Three mechanical normalizations to her draft, all flagged to
+  her: the bullet emoji came off that block so it matches the two blocks around it, sentence
+  capitalization and terminal periods were made consistent with the rest of the page, and
+  "comfirm" became "confirm".
+- **Every export button carries the same emoji**, her call: `📤` on Export (no breaks), Export
+  (breaks with turns and names) and Export Entries for Editing, which had drifted to `⬇`, `⬇` and
+  `📝` across three releases, against `📥` on both imports. The help copy quotes the new labels.
+  Whether buttons should carry emoji at all is a separate open question -- 50 of 118 do, against a
+  written rule in the backlog saying none should.
 - **Every help page title and section heading now follows the emoji standard**, 17 rows in
   `config_help.sql`, approved line by line by LeeAnn 2026-10-22. The three Admin pages were 🔧,
   🎛️ and 🛠️ -- three emoji for one set, which is why the pages did not read as a series -- and
