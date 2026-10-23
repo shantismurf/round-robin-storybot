@@ -20,8 +20,8 @@ const cfg = {
   txtEditPageSplitInstructions: 'Edits on this page do not affect other pages in the entry.',
   lblPageJumpOption: 'Page [page]',
   lblPageJumpPlaceholder: 'Page [page] of [total]',
-  btnEditExportFile: '📤 Export for Editing',
-  btnEditImportFile: '📥 Import Edited Entry',
+  btnEditExportFile: 'Export for Editing',
+  btnEditImportFile: 'Import Edited Entry',
 };
 
 // Not part of EDIT_PANEL_CONFIG_KEYS: openEditSession fetches these on top of it for the

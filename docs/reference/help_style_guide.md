@@ -98,7 +98,7 @@ one.
 | 🚦 | gating or pacing | Story Mode, Ratings Filter |
 | 🧵 ⚡ 🐢 | the three modes | Normal (a thread per turn), Quick, Slow |
 | ✍️ | writing | the Writing Your Entry page |
-| 📤 | exporting | the Exporting a Story section, and every export button |
+| 📤 | exporting | the Exporting a Story section — the export buttons themselves are plain |
 | 📚 | reading and editing | that page |
 | 📖 | reading | Reading a Story |
 | ✏️ | editing | Editing an Entry |

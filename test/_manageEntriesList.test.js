@@ -14,7 +14,7 @@ const CFG = {
   txtManageEntriesEntryPlaceholder: 'Select an entry...',
   txtManageEntriesMoreEntries: 'More entries ([offset]+)...',
   txtManageEntriesDeletedFlag: '[DELETED]',
-  btnManageEntriesImport: '📥 Import Edited Story',
+  btnManageEntriesImport: 'Import Edited Story',
 };
 
 function makeEntry(overrides = {}) {

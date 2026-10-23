@@ -245,7 +245,7 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 -- applying needs a confirmation that lists removals one by one rather than counting them.
 --
 -- Her wording, approved 2026-10-22 -- see docs/plans/PLAN-copyedit-round-trip.md.
-('btnManageEntriesImport', '📥 Import Edited Story', 'en', 1),
+('btnManageEntriesImport', 'Import Edited Story', 'en', 1),
 ('txtImportStoryModalTitle', 'Import Edited Story', 'en', 1),
 -- No label or hint of its own: the modal reuses lblEditImportFile ("Attach edited text file")
 -- from the single-entry round trip, at her instruction -- "use the text from the single import"

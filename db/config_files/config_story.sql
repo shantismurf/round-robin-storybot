@@ -156,10 +156,14 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 -- the bot already uses. The buttons name the entry, not the turn, because they act on its
 -- content; the numbered thing inside the copy is still a turn.
 --
+-- Plain labels, no emoji: she tried the export and import buttons with one each and took them
+-- back off on 2026-10-22, preferring to keep them out until there is a mindful style plan. See
+-- the comment above btnExportNoBreaks in config_metadata.sql.
+--
 -- Her wording throughout, approved 2026-10-22 -- see docs/plans/PLAN-copyedit-round-trip.md.
-('btnEditExportFile', '📤 Export for Editing', 'en', 1),
+('btnEditExportFile', 'Export for Editing', 'en', 1),
 ('txtEditExportFileInstructions', 'Download the text of turn [turn_number] ([word_count] words) for editing. This is the raw text of the entry, so keep any formatting markdown intact. Do not remove the first line, which contains the internal turn ID, so that the entry can be imported correctly.', 'en', 1),
-('btnEditImportFile', '📥 Import Edited Entry', 'en', 1),
+('btnEditImportFile', 'Import Edited Entry', 'en', 1),
 ('txtEditImportModalTitle', 'Import Edited Entry', 'en', 1),
 -- The modal's only text, on the file field itself. The instructions line above it was dropped
 -- (LeeAnn, 2026-10-22): the export message already says to keep the first line, and

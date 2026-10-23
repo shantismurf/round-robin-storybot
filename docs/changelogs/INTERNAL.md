@@ -266,11 +266,15 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   her: the bullet emoji came off that block so it matches the two blocks around it, sentence
   capitalization and terminal periods were made consistent with the rest of the page, and
   "comfirm" became "confirm".
-- **Every export button carries the same emoji**, her call: `📤` on Export (no breaks), Export
-  (breaks with turns and names) and Export Entries for Editing, which had drifted to `⬇`, `⬇` and
-  `📝` across three releases, against `📥` on both imports. Whether buttons should carry emoji at
-  all is a separate open question -- 50 of 118 do, against a written rule in the backlog saying
-  none should.
+- **The export and import buttons are plain text.** All six: Export (no breaks), Export (breaks
+  with turns and names), Export Entries for Editing, Export for Editing, Import Edited Entry and
+  Import Edited Story. The three story-level exports had drifted to `⬇`, `⬇` and `📝` across three
+  releases, so they were first given one `📤` each to match -- which was worse, and she said so:
+  "I wanted to use only one emoji in the places that need them, not put it everywhere the word
+  export appears," and then "Id almost rather err on keeping them all out until we have a mindful
+  style plan." So they are out, and `docs/TODO.md` has said "button labels are plain text only"
+  since long before this. The other 44 styled buttons are untouched pending that plan. The help
+  section keeps its `📤` heading, because a help heading is where an emoji does work.
 - **Help body text names a button by its words, never by its emoji.** The copy had quoted the
   labels verbatim, so one sentence carried three identical `📤` the moment the export buttons were
   made to match -- LeeAnn: "asking you to make all the export buttons match looks ridiculous."

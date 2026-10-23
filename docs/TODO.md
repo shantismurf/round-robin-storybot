@@ -44,8 +44,16 @@ twelve `PAGE_DEFS` pages and their config keys — and records the drift still t
 The app-wide document below is still owed, and the help guide should be folded into it or linked
 from it when it is written.
 
+**Her posture, 2026-10-23:** "Really we need to be totally consistent and we are not. Id almost
+rather err on keeping them all out until we have a mindful style plan." Acted on for the six
+export and import buttons, which are plain text now -- she had tried one emoji each and took them
+back off, since giving every export the same icon "looks ridiculous" and put it "everywhere the
+word export appears" rather than only where one earns its place. The other 44 are untouched and
+wait on this document. Do not strip them without asking.
+
 **Measured 2026-10-22, before writing any of it: the app does not comply with the button rule
-below.** 50 of 118 `btn*` labels carry a leading emoji, including `✅ Finalize Entry`,
+below.** 44 of 118 `btn*` labels carry a leading emoji (50 before the export and import buttons
+were stripped), including `✅ Finalize Entry`,
 `✋ Join This Story`, `⏭️ Pass My Turn` and `🗑️ Delete an Entry`. What the code actually
 practises is narrower and worth writing down as the real convention if it is kept: the button a
 reader reaches for first is styled, the button that then confirms it is always plain ("Yes,
