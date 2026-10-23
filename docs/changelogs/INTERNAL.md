@@ -268,9 +268,17 @@ than moving the number on each step toward it. LeeAnn approved the hold and the 
   "comfirm" became "confirm".
 - **Every export button carries the same emoji**, her call: `📤` on Export (no breaks), Export
   (breaks with turns and names) and Export Entries for Editing, which had drifted to `⬇`, `⬇` and
-  `📝` across three releases, against `📥` on both imports. The help copy quotes the new labels.
-  Whether buttons should carry emoji at all is a separate open question -- 50 of 118 do, against a
-  written rule in the backlog saying none should.
+  `📝` across three releases, against `📥` on both imports. Whether buttons should carry emoji at
+  all is a separate open question -- 50 of 118 do, against a written rule in the backlog saying
+  none should.
+- **Help body text names a button by its words, never by its emoji.** The copy had quoted the
+  labels verbatim, so one sentence carried three identical `📤` the moment the export buttons were
+  made to match -- LeeAnn: "asking you to make all the export buttons match looks ridiculous."
+  Six quoted labels lost their emoji (`Export (no breaks)`, `Export (breaks with turns and
+  names)`, `Export Entries for Editing`, `Export for Editing`, `Import Edited Entry`, `Add Page`)
+  and the rule in `help_style_guide.md` now says so explicitly, with her reasoning: the words
+  already say which button is which, and three identical icons in a sentence say nothing. The
+  `txtHelp4Metadata` field list keeps its emoji, which is the one documented exception.
 - **Every help page title and section heading now follows the emoji standard**, 17 rows in
   `config_help.sql`, approved line by line by LeeAnn 2026-10-22. The three Admin pages were 🔧,
   🎛️ and 🛠️ -- three emoji for one set, which is why the pages did not read as a series -- and

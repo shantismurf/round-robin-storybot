@@ -26,7 +26,11 @@ helpful, but that doesn't always mean lockstep with what you see."
 ## Rules
 
 1. **Every page title and every section heading carries exactly one emoji, at the front.** Body
-   text carries none.
+   text carries none -- including when it names a button. A button is named by its words, in
+   bold, and not by its emoji. LeeAnn, 2026-10-22, on a sentence that quoted three export buttons
+   that had just been given the same emoji: "asking you to make all the export buttons match looks
+   ridiculous." Three identical icons in one sentence carry no information, and the words were
+   already saying which button was which.
 2. **An emoji is a topic's name, not decoration.** The same topic wears the same emoji everywhere
    in the help, and two different topics never share one. One deliberate exception, LeeAnn
    2026-10-22: `🚦` sits on both Story Mode and Ratings Filter, because a stoplight is the right
