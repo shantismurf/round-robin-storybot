@@ -8,7 +8,7 @@ import { getActiveThreadId } from '../storybot.js';
 import { buildEntryPickerMessage } from './_manageEntriesList.js';
 import { handleEditHistoryButton } from './_editHistory.js';
 import { ENTRY_STATUS } from '../constants.js';
-import { turnNumberSubquery, readEntryPosition, moveEntryToPosition } from './_entryOrder.js';
+import { turnNumberSubquery, readEntryPosition, moveEntryToPosition, findNextEntryId } from './_entryOrder.js';
 import { logEntryReorder, logEntryWriterChange, listStoryWritersForCredit, readEntryWriter } from './_entryChangeLog.js';
 import {
   EDIT_FILE_CONFIG_KEYS, buildFileRoundTripButtons, buildImportModal,
@@ -39,7 +39,7 @@ export const EDIT_PANEL_CONFIG_KEYS = [
   ...EDIT_FILE_CONFIG_KEYS,
   'lblEditPageSplitNotice', 'txtEditPageSplitInstructions',
   'btnEditPrev', 'btnEditNext', 'btnEditOpen', 'btnEditHistory', 'lblEditEntryContent',
-  'btnEditAddPage', 'txtEditModalPageHint',
+  'btnEditAddPage', 'txtEditModalPageHint', 'btnEditNextEntry',
   'lblEditEmbedTitle', 'txtEditEmbedFooter', 'lblEditModalTitle',
   'txtEditRestoreWarningMulti', 'txtEditRestoreWarningSingle',
   'btnEditHistNewer', 'btnEditHistPrevPage', 'btnEditRestore',
@@ -185,6 +185,14 @@ async function openEditSession(connection, interaction, guildId, storyId, turnNu
   const state = pendingEditData.get(interaction.user.id);
   if (state) state.editCfg = editCfg;
 
+  // Resolved here rather than where the panel is built, because the panel builder is synchronous
+  // and this needs the database. Admins only: it is a Manage Entries convenience, and a writer
+  // has no business being offered somebody else's turn to edit.
+  if (state) {
+    state.nextEntryId = isAdmin ? await findNextEntryId(connection, storyId, resolvedTurnNumber) : null;
+    log(`openEditSession: next entry for turn ${resolvedTurnNumber} is ${state.nextEntryId ?? 'none'} (isAdmin=${isAdmin})`, { show: false, guildName: interaction?.guild?.name });
+  }
+
   log(`openEditSession: opened entry ${entry.story_entry_id} for user ${interaction.user.username} on story ${storyId} (manageMode=${manageMode})`, { show: false, guildName: interaction?.guild?.name });
 
   await interaction.editReply(buildEditMessageForState(state));
@@ -318,9 +326,13 @@ export async function applyOrderChange(connection, interaction, state, rawValue)
     txn.release();
   }
 
-  // The panel header carries the turn number, so it has to be refreshed with the new one.
+  // The panel header carries the turn number, so it has to be refreshed with the new one -- and
+  // so does the next entry, since this entry now sits somewhere else in the reading order.
   state.turnNumber = result.to;
   state.hasHistory = true;
+  if (state.nextEntryId != null) {
+    state.nextEntryId = await findNextEntryId(connection, state.storyId, result.to);
+  }
   await state.originalInteraction.editReply({ ...buildEditMessageForState(state), content: '' });
   await interaction.followUp({
     content: replaceTemplateVariables(cfg.txtManageEntriesChangeOrderSuccess, {
@@ -406,13 +418,13 @@ export function buildEditMessageForState(state) {
     state.storyTitle, state.guildStoryId, state.editCfg ?? {},
     {
       manageMode: state.manageMode, entryStatus: state.entryStatus,
-      hasPicker: !!state.pickerContext,
+      hasPicker: !!state.pickerContext, nextEntryId: state.nextEntryId ?? null,
     }
   );
 }
 
 function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle, guildStoryId, editCfg, pickerOpts = {}) {
-  const { manageMode = false, entryStatus = null, hasPicker = false } = pickerOpts;
+  const { manageMode = false, entryStatus = null, hasPicker = false, nextEntryId = null } = pickerOpts;
   const chunk = chunks[chunkPage];
   const isMultiPage = chunks.length > 1;
 
@@ -566,6 +578,18 @@ function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle,
   // fifth would sit on Discord's hard limit with nothing left for the next addition. Back to List
   // goes last, where it reads as the way out.
   const tailButtons = buildFileRoundTripButtons(editCfg);
+  // Edit Next Entry belongs to the panel, not to the save-an-edit reply that used to carry it.
+  // There it only appeared after saving, so advancing worked exactly once: the entry it opened
+  // rendered the ordinary panel, with no way on until something was saved. LeeAnn, 2026-10-23:
+  // "its a quick fix for a simple behavior that always should have been there."
+  if (nextEntryId != null) {
+    tailButtons.push(
+      new ButtonBuilder()
+        .setCustomId(`story_edit_next_entry_${nextEntryId}`)
+        .setLabel(editCfg.btnEditNextEntry)
+        .setStyle(ButtonStyle.Primary)
+    );
+  }
   if (hasPicker) {
     tailButtons.push(
       new ButtonBuilder()
@@ -1003,27 +1027,6 @@ async function handleEditModalSubmit(connection, interaction) {
       .setLabel(btnRepostEntry)
       .setStyle(ButtonStyle.Secondary)
   );
-
-  // For admins: check if a next confirmed entry exists and offer to jump straight to editing it.
-  const isAdmin = await checkIsAdmin(connection, interaction, state.guildId);
-  if (isAdmin) {
-    const [nextRows] = await connection.execute(
-      `SELECT se.story_entry_id FROM story_entry se
-       JOIN turn t ON se.turn_id = t.turn_id
-       JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
-       WHERE sw.story_id = ? AND se.entry_status = ?
-         AND ${turnNumberSubquery()} = ?`,
-      [state.storyId, ENTRY_STATUS.CONFIRMED, ENTRY_STATUS.CONFIRMED, state.turnNumber + 1]
-    );
-    if (nextRows.length > 0) {
-      extraButtons.push(
-        new ButtonBuilder()
-          .setCustomId(`story_edit_next_entry_${nextRows[0].story_entry_id}`)
-          .setLabel('Edit Next Entry →')
-          .setStyle(ButtonStyle.Primary)
-      );
-    }
-  }
 
   const extraRow = new ActionRowBuilder().addComponents(...extraButtons);
   await interaction.editReply({ ...editMsg, components: [...editMsg.components, extraRow] });

@@ -114,6 +114,10 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('btnEditOpen', 'Edit', 'en', 1),
 ('btnEditHistory', 'History', 'en', 1),
 ('btnEditAddPage', '➕ Add Page', 'en', 1),
+-- Moved into config from a hardcoded string literal in story/edit.js, 2026-10-23. Wording is
+-- unchanged from what shipped. It was the last user-facing text in the edit panel that could not
+-- be changed without a deploy.
+('btnEditNextEntry', 'Edit Next Entry →', 'en', 1),
 ('lblEditEntryContent', 'Entry content', 'en', 1),
 -- Added: an entry's pages are a modal-size artifact, not stored structure, so growing an entry
 -- past its current page count used to mean saving and reopening to force a re-chunk. btnEditAddPage

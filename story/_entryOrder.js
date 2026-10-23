@@ -126,6 +126,26 @@ export async function nextEntryOrderForEntry(connection, entryId) {
 export const ORDERED_STATUSES = Object.freeze([ENTRY_STATUS.CONFIRMED, ENTRY_STATUS.DELETED]);
 
 /**
+ * The confirmed entry one turn after this one, or null at the end of the story. Used to offer an
+ * admin the next entry to edit without going back to a picker.
+ *
+ * @returns {Promise<number|null>} that entry's story_entry_id
+ */
+export async function findNextEntryId(connection, storyId, turnNumber) {
+  if (!Number.isInteger(turnNumber)) return null;
+  const [rows] = await connection.execute(
+    `SELECT se.story_entry_id
+     FROM story_entry se
+     JOIN turn t ON se.turn_id = t.turn_id
+     JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
+     WHERE sw.story_id = ? AND se.entry_status = ?
+       AND ${turnNumberSubquery()} = ?`,
+    [storyId, ENTRY_STATUS.CONFIRMED, ENTRY_STATUS.CONFIRMED, turnNumber + 1]
+  );
+  return rows.length > 0 ? rows[0].story_entry_id : null;
+}
+
+/**
  * Where one entry sits in its story: its raw `entry_order`, the turn number a reader sees, and
  * how many turns the story has. Position is counted over confirmed rows, so a deleted entry
  * holding a slot does not inflate the numbers anyone is shown.

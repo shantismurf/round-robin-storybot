@@ -22,6 +22,7 @@ const cfg = {
   lblPageJumpPlaceholder: 'Page [page] of [total]',
   btnEditExportFile: 'Export for Editing',
   btnEditImportFile: 'Import Edited Entry',
+  btnEditNextEntry: 'Edit Next Entry →',
 };
 
 // Not part of EDIT_PANEL_CONFIG_KEYS: openEditSession fetches these on top of it for the
@@ -151,11 +152,27 @@ describe('buildEditMessage', () => {
     assert.ok(ids.includes('story_edit_import_file'));
   });
 
-  test('Back to List stays last in the tail row', () => {
-    const msg = buildEditMessage(singlePage(), 0, false, 7, 'My Story', 42, { ...cfg, ...manageCfg }, { hasPicker: true });
+  // The button used to be built in the save-an-edit path, so it appeared only after a save and
+  // advancing worked exactly once. It belongs to the panel now, and the panel is built the same
+  // way wherever the session was opened from.
+  test('Edit Next Entry renders when the session resolved a next entry', () => {
+    const msg = buildEditMessage(singlePage(), 0, false, 7, 'My Story', 42, cfg, { nextEntryId: 918 });
     const tail = msg.components.at(-1).toJSON().components;
     assert.deepEqual(tail.map(c => c.custom_id),
-      ['story_edit_export_file', 'story_edit_import_file', 'story_edit_backlist']);
+      ['story_edit_export_file', 'story_edit_import_file', 'story_edit_next_entry_918']);
+    assert.equal(tail.at(-1).label, 'Edit Next Entry →');
+  });
+
+  test('no Edit Next Entry at the end of the story, or for a non-admin', () => {
+    const ids = customIds(buildEditMessage(singlePage(), 0, false, 7, 'My Story', 42, cfg));
+    assert.ok(!ids.some(id => id.startsWith('story_edit_next_entry_')));
+  });
+
+  test('Back to List stays last in the tail row', () => {
+    const msg = buildEditMessage(singlePage(), 0, false, 7, 'My Story', 42, { ...cfg, ...manageCfg }, { hasPicker: true, nextEntryId: 918 });
+    const tail = msg.components.at(-1).toJSON().components;
+    assert.deepEqual(tail.map(c => c.custom_id),
+      ['story_edit_export_file', 'story_edit_import_file', 'story_edit_next_entry_918', 'story_edit_backlist']);
   });
 });
 
