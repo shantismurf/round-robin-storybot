@@ -673,6 +673,7 @@ async function handleManageModalSubmit(connection, interaction) {
       log(`handleManageModalSubmit: settings staged storyId=${state.storyId} user=${interaction.user.username} turnLength=${state.turnLength} timeoutReminder=${state.timeoutReminder} maxWriters=${state.maxWriters}`, { show: false, guildName: interaction?.guild?.name });
 
     } else if (customId === 'story_manage_metadata_modal') {
+      const cfg = state.cfg;
       const dynamic = interaction.fields.getStringSelectValues('story_manage_metadata_dynamic')?.[0];
       const selectedRating = interaction.fields.getStringSelectValues('story_manage_metadata_rating')?.[0];
       const warningsRaw = interaction.fields.getCheckboxGroup('story_manage_metadata_warnings') ?? [];
