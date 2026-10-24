@@ -1,5 +1,5 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags, EmbedBuilder, StringSelectMenuBuilder } from 'discord.js';
-import { getConfigValue, log, sanitizeModalInput, resolveStoryId, chunkEntryContent, restoreChunkEdges, splitAtParagraphs, checkIsAdmin, checkIsCreator, replaceTemplateVariables } from '../utilities.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags, EmbedBuilder, StringSelectMenuBuilder, LabelBuilder } from 'discord.js';
+import { getConfigValue, log, sanitizeModalInput, resolveStoryId, chunkEntryContent, restoreChunkEdges, splitAtParagraphs, checkIsAdmin, checkIsCreator, replaceTemplateVariables, EDIT_PAGE_LIMIT } from '../utilities.js';
 import { postThreadEntry } from './_entryRenderer.js';
 import { resolveMentionsToPlainText } from './_entryMarkup.js';
 import { pendingReadData, pendingEditData } from './_state.js';
@@ -8,8 +8,49 @@ import { getActiveThreadId } from '../storybot.js';
 import { buildEntryPickerMessage } from './_manageEntriesList.js';
 import { handleEditHistoryButton } from './_editHistory.js';
 import { ENTRY_STATUS } from '../constants.js';
+import { turnNumberSubquery, readEntryPosition, moveEntryToPosition, findNextEntryId } from './_entryOrder.js';
+import { logEntryReorder, logEntryWriterChange, listStoryWritersForCredit, readEntryWriter } from './_entryChangeLog.js';
+import {
+  EDIT_FILE_CONFIG_KEYS, buildFileRoundTripButtons, buildImportModal,
+  handleExportFile, handleImportModalSubmit, handleImportConfirm,
+} from './_editFileRoundTrip.js';
 
 export { pendingEditData };
+
+// Every config key buildEditMessage() and buildEntryModal() read. Exported because story/read.js
+// opens the same panel and the same modal from its own Edit button and so needs the identical
+// set — it previously kept a hand-maintained copy of this list, which silently went stale the
+// moment a key was added here (the modal would then render key names instead of text).
+// Change Order and Change Writer, which only a manage-mode session renders -- the one part of the
+// panel that genuinely differs, since it is an admin capability rather than a way in.
+export const MANAGE_CHANGE_CONFIG_KEYS = [
+  'btnManageEntriesChangeOrder', 'txtManageEntriesChangeOrderModalTitle',
+  'lblManageEntriesChangeOrderTurn', 'txtManageEntriesChangeOrderPlaceholder',
+  'txtManageEntriesChangeOrderSuccess', 'txtManageEntriesChangeOrderInvalid',
+  'txtManageEntriesChangeOrderNoChange',
+  'btnManageEntriesChangeWriter', 'txtManageEntriesChangeWriterSelect',
+  'txtManageEntriesChangeWriterPlaceholder', 'txtManageEntriesChangeWriterSuccess',
+  'txtManageEntriesChangeWriterSame', 'txtManageEntriesChangeWriterLatest',
+];
+
+// The file round trip's keys are part of this list rather than beside it: the buttons are on
+// every edit panel, wherever it was opened from, so the keys the panel needs are one list.
+export const EDIT_PANEL_CONFIG_KEYS = [
+  ...EDIT_FILE_CONFIG_KEYS,
+  'lblEditPageSplitNotice', 'txtEditPageSplitInstructions',
+  'btnEditPrev', 'btnEditNext', 'btnEditOpen', 'btnEditHistory', 'lblEditEntryContent',
+  'btnEditAddPage', 'txtEditModalPageHint', 'btnEditNextEntry',
+  'lblEditEmbedTitle', 'txtEditEmbedFooter', 'lblEditModalTitle',
+  'txtEditRestoreWarningMulti', 'txtEditRestoreWarningSingle',
+  'btnEditHistNewer', 'btnEditHistPrevPage', 'btnEditRestore',
+  'btnEditHistNextPage', 'btnEditHistOlder', 'btnEditBackToEntry',
+  'lblPageJumpPlaceholder', 'lblPageJumpOption',
+  'txtEditRestoreConfirmMulti',
+  'txtEditRestoreConfirmTitle', 'btnEditRestoreConfirm', 'btnEditRestoreCancel',
+  'txtEditHistoryVersionTitle', 'txtEditHistoryEditedBy',
+  'txtEditHistoryChangeTitle', 'txtEditHistoryChangeBy',
+  'txtEditHistoryWriterChanged', 'txtEditHistoryMoved',
+];
 
 async function handleEdit(connection, interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -56,13 +97,7 @@ async function openEditSession(connection, interaction, guildId, storyId, turnNu
       `SELECT se.story_entry_id, se.content, se.created_at, se.entry_status,
               sw.discord_user_id AS original_author_id, sw.discord_display_name AS author_name,
               s.guild_story_id, s.title,
-              (SELECT COUNT(DISTINCT t2.turn_id)
-               FROM turn t2
-               JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-               JOIN story_entry se2 ON se2.turn_id = t2.turn_id
-                 AND se2.entry_status = ?
-               WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at
-              ) AS turn_number
+              ${turnNumberSubquery()} AS turn_number
        FROM story_entry se
        JOIN turn t ON se.turn_id = t.turn_id
        JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
@@ -83,14 +118,7 @@ async function openEditSession(connection, interaction, guildId, storyId, turnNu
        JOIN story s ON sw.story_id = s.story_id
        WHERE sw.story_id = ?
          AND se.entry_status = ?
-         AND (
-           SELECT COUNT(DISTINCT t2.turn_id)
-           FROM turn t2
-           JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-           JOIN story_entry se2 ON se2.turn_id = t2.turn_id
-             AND se2.entry_status = ?
-           WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at
-         ) = ?`,
+         AND ${turnNumberSubquery()} = ?`,
       [storyId, ENTRY_STATUS.CONFIRMED, ENTRY_STATUS.CONFIRMED, turnNumber]
     );
   }
@@ -146,25 +174,238 @@ async function openEditSession(connection, interaction, guildId, storyId, turnNu
   });
 
   const editCfg = await getConfigValue(connection, [
-    'lblEditPageSplitNotice', 'txtEditPageSplitInstructions',
-    'btnEditPrev', 'btnEditNext', 'btnEditOpen', 'btnEditHistory', 'lblEditEntryContent',
-    'txtEditRestoreWarningMulti', 'txtEditRestoreWarningSingle',
-    'btnEditHistNewer', 'btnEditHistPrevPage', 'btnEditRestore',
-    'btnEditHistNextPage', 'btnEditHistOlder', 'btnEditBackToEntry', 'btnEditBackToList',
-    'lblPageJumpPlaceholder', 'lblPageJumpOption',
-    'txtEditRestoreConfirmMulti',
-    'txtEditRestoreConfirmTitle', 'btnEditRestoreConfirm', 'btnEditRestoreCancel',
+    ...EDIT_PANEL_CONFIG_KEYS,
+    'btnEditBackToList',
     'btnManageEntriesDelete', 'btnManageEntriesRestore',
     'txtManageEntryDeleteSuccess', 'txtManageEntryRestoreSuccess',
     'txtManageEntryAlreadyDeleted', 'txtManageEntryAlreadyConfirmed',
+    ...MANAGE_CHANGE_CONFIG_KEYS,
   ], guildId);
 
   const state = pendingEditData.get(interaction.user.id);
   if (state) state.editCfg = editCfg;
 
+  // Resolved here rather than where the panel is built, because the panel builder is synchronous
+  // and this needs the database. Admins only: it is a Manage Entries convenience, and a writer
+  // has no business being offered somebody else's turn to edit.
+  if (state) {
+    state.nextEntryId = isAdmin ? await findNextEntryId(connection, storyId, resolvedTurnNumber) : null;
+    log(`openEditSession: next entry for turn ${resolvedTurnNumber} is ${state.nextEntryId ?? 'none'} (isAdmin=${isAdmin})`, { show: false, guildName: interaction?.guild?.name });
+  }
+
   log(`openEditSession: opened entry ${entry.story_entry_id} for user ${interaction.user.username} on story ${storyId} (manageMode=${manageMode})`, { show: false, guildName: interaction?.guild?.name });
 
   await interaction.editReply(buildEditMessageForState(state));
+}
+
+// ---------------------------------------------------------------------------
+// Change Order / Change Writer (manage mode)
+// ---------------------------------------------------------------------------
+
+/**
+ * Entry point for the move modal's submit, routed from commands/story.js. Its own handler
+ * rather than a branch of handleEditModalSubmit, which is about entry content and would have to
+ * grow a mode flag to carry this.
+ */
+export async function handleChangeOrderModalSubmit(connection, interaction) {
+  await interaction.deferUpdate();
+  const state = pendingEditData.get(interaction.user.id);
+  if (!state) {
+    log(`handleChangeOrderModalSubmit: no session for ${interaction.user.username}`, { show: true, guildName: interaction?.guild?.name });
+    return;
+  }
+  const raw = interaction.fields.getTextInputValue('target_turn');
+  await applyOrderChange(connection, interaction, state, raw);
+}
+
+/**
+ * Entry point for the upload modal's submit, routed from commands/story.js alongside the move
+ * modal's. The file round trip lives in story/_editFileRoundTrip.js; this is only the session
+ * lookup, which is what every modal submit on this panel has to do first.
+ */
+export async function handleImportFileModalSubmit(connection, interaction) {
+  await interaction.deferUpdate();
+  const state = pendingEditData.get(interaction.user.id);
+  if (!state) {
+    log(`handleImportFileModalSubmit: no session for ${interaction.user.username}`, { show: true, guildName: interaction?.guild?.name });
+    return;
+  }
+  await handleImportModalSubmit(connection, interaction, state);
+}
+
+// The move modal. The turn number is what the editor sees everywhere else, so that is what the
+// field asks for -- entry_order is never shown or typed.
+export function buildChangeOrderModal(state) {
+  const cfg = state.editCfg ?? {};
+  const input = new TextInputBuilder()
+    .setCustomId('target_turn')
+    .setStyle(TextInputStyle.Short)
+    .setMaxLength(6)
+    .setPlaceholder(cfg.txtManageEntriesChangeOrderPlaceholder)
+    .setValue(String(state.orderPosition ?? state.turnNumber ?? ''));
+
+  return new ModalBuilder()
+    .setCustomId('story_edit_order_submit')
+    .setTitle(cfg.txtManageEntriesChangeOrderModalTitle)
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel(replaceTemplateVariables(cfg.lblManageEntriesChangeOrderTurn, {
+          total: String(state.orderTotal ?? 0),
+        }))
+        .setTextInputComponent(input)
+    );
+}
+
+// Whether a turn is the story's most recent one. PickNextWriter decides who is up by reading the
+// latest turn's writer (story/_turn.js), so changing that turn's writer shifts the rotation,
+// while changing an older one is inert. Compared by turn_id for the same reason PickNextWriter
+// orders by it rather than by started_at.
+async function isLatestTurnOfStory(connection, storyId, turnId) {
+  if (!turnId) return false;
+  const [rows] = await connection.execute(
+    `SELECT t.turn_id
+     FROM turn t
+     JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
+     WHERE sw.story_id = ?
+     ORDER BY t.turn_id DESC
+     LIMIT 1`,
+    [storyId]
+  );
+  return rows.length > 0 && String(rows[0].turn_id) === String(turnId);
+}
+
+/**
+ * Apply a typed turn number from the move modal: renumber, log the move, refresh the panel.
+ * The whole move is one transaction because the shift and the entry's own new value are only
+ * correct together.
+ */
+export async function applyOrderChange(connection, interaction, state, rawValue) {
+  const cfg = state.editCfg ?? {};
+  const guildName = interaction?.guild?.name;
+  const target = Number.parseInt(String(rawValue).trim(), 10);
+
+  const txn = await connection.getConnection();
+  await txn.beginTransaction();
+  let result;
+  try {
+    result = await moveEntryToPosition(txn, state.entryId, target);
+    if (!result || result.invalid) {
+      await txn.rollback();
+      log(`applyOrderChange: rejected "${rawValue}" for entry ${state.entryId} (total ${result?.totalPositions ?? '?'})`, { show: true, guildName });
+      return await interaction.followUp({
+        content: replaceTemplateVariables(cfg.txtManageEntriesChangeOrderInvalid, {
+          total: String(result?.totalPositions ?? state.orderTotal ?? 0),
+        }),
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    if (result.unchanged) {
+      await txn.rollback();
+      log(`applyOrderChange: entry ${state.entryId} is already turn ${result.to}, nothing to move`, { show: true, guildName });
+      return await interaction.followUp({
+        content: replaceTemplateVariables(cfg.txtManageEntriesChangeOrderNoChange, {
+          to_position: String(result.to),
+        }),
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    await logEntryReorder(txn, {
+      entryId: state.entryId,
+      editorId: interaction.user.id,
+      editorName: interaction.member?.displayName ?? interaction.user.username,
+      from: result.from,
+      to: result.to,
+      guildName,
+    });
+    await txn.commit();
+  } catch (err) {
+    await txn.rollback();
+    log(`applyOrderChange failed for entry ${state.entryId}: ${err?.stack ?? err}`, { show: true, guildName });
+    throw err;
+  } finally {
+    txn.release();
+  }
+
+  // The panel header carries the turn number, so it has to be refreshed with the new one -- and
+  // so does the next entry, since this entry now sits somewhere else in the reading order.
+  state.turnNumber = result.to;
+  state.hasHistory = true;
+  if (state.nextEntryId != null) {
+    state.nextEntryId = await findNextEntryId(connection, state.storyId, result.to);
+  }
+  await state.originalInteraction.editReply({ ...buildEditMessageForState(state), content: '' });
+  await interaction.followUp({
+    content: replaceTemplateVariables(cfg.txtManageEntriesChangeOrderSuccess, {
+      to_position: String(result.to),
+    }),
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+/**
+ * Point this entry's turn at another writer of the same story, and log both sides.
+ * One column on turn — every display resolves the name through the join, so nothing else needs
+ * updating and there is no denormalised copy to chase.
+ */
+async function applyWriterChange(connection, interaction, state, newWriterId) {
+  const cfg = state.editCfg ?? {};
+  const guildName = interaction?.guild?.name;
+  log(`applyWriterChange entry: entry ${state.entryId} -> writer ${newWriterId} by ${interaction.user.username}`, { show: false, guildName });
+
+  const current = await readEntryWriter(connection, state.entryId);
+  if (!current) {
+    log(`applyWriterChange: entry ${state.entryId} not found`, { show: true, guildName });
+    return;
+  }
+
+  if (String(current.id) === String(newWriterId)) {
+    return await interaction.followUp({
+      content: replaceTemplateVariables(cfg.txtManageEntriesChangeWriterSame, { to_writer: current.name }),
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const writers = await listStoryWritersForCredit(connection, current.storyId);
+  const chosen = writers.find(w => String(w.id) === String(newWriterId));
+  if (!chosen) {
+    log(`applyWriterChange: writer ${newWriterId} is not a writer of story ${current.storyId}`, { show: true, guildName });
+    return;
+  }
+
+  const txn = await connection.getConnection();
+  await txn.beginTransaction();
+  try {
+    await txn.execute(
+      `UPDATE turn SET story_writer_id = ? WHERE turn_id = ?`,
+      [newWriterId, current.turnId]
+    );
+    await logEntryWriterChange(txn, {
+      entryId: state.entryId,
+      editorId: interaction.user.id,
+      editorName: interaction.member?.displayName ?? interaction.user.username,
+      previousWriter: current,
+      newWriter: chosen,
+      guildName,
+    });
+    await txn.commit();
+  } catch (err) {
+    await txn.rollback();
+    log(`applyWriterChange failed for entry ${state.entryId}: ${err?.stack ?? err}`, { show: true, guildName });
+    throw err;
+  } finally {
+    txn.release();
+  }
+
+  state.hasHistory = true;
+  await state.originalInteraction.editReply({ ...buildEditMessageForState(state), content: '' });
+  await interaction.followUp({
+    content: replaceTemplateVariables(cfg.txtManageEntriesChangeWriterSuccess, {
+      turn_number: String(state.turnNumber),
+      from_writer: current.name,
+      to_writer: chosen.name,
+    }),
+    flags: MessageFlags.Ephemeral,
+  });
 }
 
 // Convenience wrapper for the (much more common) case of rendering from a live pendingEditData
@@ -175,20 +416,37 @@ export function buildEditMessageForState(state) {
   return buildEditMessage(
     state.chunks, state.chunkPage, state.hasHistory, state.turnNumber,
     state.storyTitle, state.guildStoryId, state.editCfg ?? {},
-    { manageMode: state.manageMode, entryStatus: state.entryStatus, hasPicker: !!state.pickerContext }
+    {
+      manageMode: state.manageMode, entryStatus: state.entryStatus,
+      hasPicker: !!state.pickerContext, nextEntryId: state.nextEntryId ?? null,
+    }
   );
 }
 
 function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle, guildStoryId, editCfg, pickerOpts = {}) {
-  const { manageMode = false, entryStatus = null, hasPicker = false } = pickerOpts;
+  const { manageMode = false, entryStatus = null, hasPicker = false, nextEntryId = null } = pickerOpts;
   const chunk = chunks[chunkPage];
   const isMultiPage = chunks.length > 1;
-  const pageLabel = isMultiPage ? ` · Page ${chunkPage + 1} of ${chunks.length}` : '';
+
+  // Page tokens are omitted on a single-page entry so the {?...?} block in lblEditEmbedTitle
+  // strips itself, rather than this building the " · Page x of y" suffix inline.
+  const pageTokens = isMultiPage
+    ? { page: String(chunkPage + 1), total: String(chunks.length) }
+    : {};
 
   const embed = new EmbedBuilder()
-    .setTitle(`#${guildStoryId} ${storyTitle} · Turn #${turnNumber}${pageLabel}`)
-    .setDescription(chunk.text)
-    .setFooter({ text: `${chunk.text.length} / 3800 on this page of ${chunks[chunks.length - 1].end} in the full entry.` })
+    .setTitle(replaceTemplateVariables(editCfg.lblEditEmbedTitle, {
+      story_num: String(guildStoryId), title: storyTitle, turn: String(turnNumber), ...pageTokens
+    }))
+    // A page added by btnEditAddPage is empty until it's saved, and setDescription() rejects an
+    // empty string (the validator requires length >= 1), so an em space stands in. CLAUDE.md
+    // permits the unicode space character as the one hard-coded exception.
+    .setDescription(chunk.text || ' ')
+    .setFooter({ text: replaceTemplateVariables(editCfg.txtEditEmbedFooter, {
+      chars: String(chunk.text.length),
+      limit: String(EDIT_PAGE_LIMIT),
+      total_chars: String(chunks[chunks.length - 1].end)
+    }) })
     .setColor(0xffd700);
 
   if (isMultiPage) {
@@ -205,8 +463,8 @@ function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle,
     let rangeStart = Math.max(0, chunkPage - Math.floor(maxOptions / 2));
     const rangeEnd = Math.min(chunks.length, rangeStart + maxOptions);
     rangeStart = Math.max(0, rangeEnd - maxOptions);
-    const optionTemplate = editCfg.lblPageJumpOption ?? 'Page [page]';
-    const placeholderTemplate = editCfg.lblPageJumpPlaceholder ?? 'Page [page] of [total]';
+    const optionTemplate = editCfg.lblPageJumpOption;
+    const placeholderTemplate = editCfg.lblPageJumpPlaceholder;
     const options = [];
     for (let i = rangeStart; i < rangeEnd; i++) {
       const label = replaceTemplateVariables(optionTemplate, { page: String(i + 1) }).slice(0, 100);
@@ -250,6 +508,23 @@ function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle,
       .setDisabled(false)
   );
 
+  // Appends an empty page at the end of the entry and opens it, so it is only offered while the
+  // last page is the one on screen -- LeeAnn, 2026-10-22: "Add Page should only appear on the last
+  // page of an entry edit". Offered from page 3 of 5 it reads as "make room here" and does
+  // something else entirely; room in the middle of an entry is the page's own headroom, or the
+  // file round trip. A single-page entry is on its last page, so it still has the button.
+  // Note this row carries up to 5 buttons (Prev/Next/Edit/Add Page/History), which is Discord's
+  // per-row maximum -- adding another means splitting the row.
+  if (chunkPage === chunks.length - 1) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId('story_edit_add_page')
+        .setLabel(editCfg.btnEditAddPage)
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(false)
+    );
+  }
+
   if (hasHistory) {
     buttons.push(
       new ButtonBuilder()
@@ -265,6 +540,9 @@ function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle,
   // Admin-only actions (Manage Entries) — Delete/Restore toggle entry_status directly and are
   // independent of edit history (Restore works even on an entry that's never been edited).
   if (manageMode) {
+    // Four of the row's five slots. Change Order and Change Writer are disabled on a deleted
+    // entry: it is not in the reading order to move, and crediting it can wait until it is
+    // restored. Same reasoning as Delete being disabled on an entry that is already deleted.
     components.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('story_edit_manage_delete')
@@ -275,20 +553,52 @@ function buildEditMessage(chunks, chunkPage, hasHistory, turnNumber, storyTitle,
         .setCustomId('story_edit_manage_restore')
         .setLabel(editCfg.btnManageEntriesRestore)
         .setStyle(ButtonStyle.Secondary)
-        .setDisabled(entryStatus !== ENTRY_STATUS.DELETED)
+        .setDisabled(entryStatus !== ENTRY_STATUS.DELETED),
+      new ButtonBuilder()
+        .setCustomId('story_edit_manage_order')
+        .setLabel(editCfg.btnManageEntriesChangeOrder)
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(entryStatus === ENTRY_STATUS.DELETED),
+      new ButtonBuilder()
+        .setCustomId('story_edit_manage_writer')
+        .setLabel(editCfg.btnManageEntriesChangeWriter)
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(entryStatus === ENTRY_STATUS.DELETED)
     ));
   }
 
-  // Shown whenever this session was reached via either entry picker (admin or author), so there's
-  // a way back to it — not shown when reached directly by turn number or Read's Edit button.
+  // The file round trip is on every edit panel, however it was opened -- LeeAnn, 2026-10-22: "the
+  // Edit interface should not be rendered differently if accessed from different places". There is
+  // deliberately no option to leave it off, so the panel cannot drift apart again by caller.
+  //
+  // Back to List joins it on the last row, shown whenever this session was reached via either
+  // entry picker (admin or author), so there's a way back to it -- not when reached directly by
+  // turn number or Read's Edit button. They are separate concerns sharing a row because the
+  // manage-mode panel is at four already (page-jump select, nav, admin actions, this one) and a
+  // fifth would sit on Discord's hard limit with nothing left for the next addition. Back to List
+  // goes last, where it reads as the way out.
+  const tailButtons = buildFileRoundTripButtons(editCfg);
+  // Edit Next Entry belongs to the panel, not to the save-an-edit reply that used to carry it.
+  // There it only appeared after saving, so advancing worked exactly once: the entry it opened
+  // rendered the ordinary panel, with no way on until something was saved. LeeAnn, 2026-10-23:
+  // "its a quick fix for a simple behavior that always should have been there."
+  if (nextEntryId != null) {
+    tailButtons.push(
+      new ButtonBuilder()
+        .setCustomId(`story_edit_next_entry_${nextEntryId}`)
+        .setLabel(editCfg.btnEditNextEntry)
+        .setStyle(ButtonStyle.Primary)
+    );
+  }
   if (hasPicker) {
-    components.push(new ActionRowBuilder().addComponents(
+    tailButtons.push(
       new ButtonBuilder()
         .setCustomId('story_edit_backlist')
         .setLabel(editCfg.btnEditBackToList)
         .setStyle(ButtonStyle.Secondary)
-    ));
+    );
   }
+  if (tailButtons.length > 0) components.push(new ActionRowBuilder().addComponents(...tailButtons));
 
   return { embeds: [embed], components };
 }
@@ -399,25 +709,88 @@ async function handleEditButton(connection, interaction) {
     const msg = await buildEntryPickerMessage(connection, guildId, picker.storyId, picker.listOffset ?? 0, picker.role, picker.role === 'author' ? userId : null);
     await state.originalInteraction.editReply(msg);
 
+  } else if (customId === 'story_edit_manage_order') {
+    // No defer — showModal must be the first response.
+    const place = await readEntryPosition(connection, state.entryId);
+    if (!place) {
+      return await interaction.reply({
+        content: await getConfigValue(connection, 'txtEditEntryNotFound', interaction.guild.id),
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    state.orderTotal = place.totalPositions;
+    state.orderPosition = place.position;
+    log(`story_edit_manage_order: entry ${state.entryId} is turn ${place.position} of ${place.totalPositions}`, { show: false, guildName: interaction?.guild?.name });
+    await interaction.showModal(buildChangeOrderModal(state));
+
+  } else if (customId === 'story_edit_manage_writer') {
+    await interaction.deferUpdate();
+    const writer = await readEntryWriter(connection, state.entryId);
+    const writers = await listStoryWritersForCredit(connection, writer?.storyId ?? state.storyId);
+    const choices = writers.filter(w => w.id !== writer?.id);
+    if (choices.length === 0) {
+      // Nobody else to credit it to, so the entry already belongs to the only writer there is.
+      return await interaction.followUp({
+        content: replaceTemplateVariables(state.editCfg.txtManageEntriesChangeWriterSame, {
+          to_writer: writer?.name ?? '',
+        }),
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    // Whether this is the story's latest turn decides one line of the prompt: PickNextWriter
+    // reads the most recent turn's writer, so changing that one also changes who is up next.
+    const isLatest = await isLatestTurnOfStory(connection, writer?.storyId ?? state.storyId, writer?.turnId);
+    const select = new StringSelectMenuBuilder()
+      .setCustomId('story_edit_writer_select')
+      .setPlaceholder(state.editCfg.txtManageEntriesChangeWriterPlaceholder)
+      .addOptions(choices.map(w => ({ label: w.name.slice(0, 100), value: w.id })));
+    const prompt = replaceTemplateVariables(state.editCfg.txtManageEntriesChangeWriterSelect, {
+      turn_number: String(state.turnNumber),
+    });
+    const latestNote = isLatest ? `\n${state.editCfg.txtManageEntriesChangeWriterLatest}` : '';
+    log(`story_edit_manage_writer: entry ${state.entryId}, ${choices.length} candidate writer(s), isLatestTurn=${isLatest}`, { show: false, guildName: interaction?.guild?.name });
+    await interaction.followUp({
+      content: `${prompt}${latestNote}`,
+      components: [new ActionRowBuilder().addComponents(select)],
+      flags: MessageFlags.Ephemeral,
+    });
+
+  } else if (customId === 'story_edit_export_file') {
+    await interaction.deferUpdate();
+    await handleExportFile(connection, interaction, state);
+
+  } else if (customId === 'story_edit_import_file') {
+    // No defer -- showModal must be the first response.
+    log(`story_edit_import_file: entry ${state.entryId} opening import modal`, { show: false, guildName: interaction?.guild?.name });
+    await interaction.showModal(buildImportModal(state.editCfg));
+
+  } else if (customId === 'story_edit_import_confirm') {
+    await interaction.deferUpdate();
+    await handleImportConfirm(connection, interaction, state, buildEditMessageForState);
+
+  } else if (customId === 'story_edit_writer_select') {
+    await interaction.deferUpdate();
+    await applyWriterChange(connection, interaction, state, interaction.values[0]);
+
   } else if (customId === 'story_edit_open_modal') {
     // No defer — showModal must be the first response
-    // Use entryId in customId to prevent Discord from caching modal content across entries
-    const isMultiPage = state.chunks.length > 1;
-    const modalTitle = isMultiPage
-      ? `Edit Entry — Page ${state.chunkPage + 1} of ${state.chunks.length}`
-      : 'Edit Entry';
-    const modal = new ModalBuilder()
-      .setCustomId(`story_edit_modal_${state.entryId}_p${state.chunkPage}`)
-      .setTitle(modalTitle);
-    const input = new TextInputBuilder()
-      .setCustomId('entry_content')
-      .setLabel(state.editCfg?.lblEditEntryContent ?? 'Entry content')
-      .setStyle(TextInputStyle.Paragraph)
-      .setMaxLength(4000)
-      .setValue(state.chunks[state.chunkPage].text.slice(0, 4000))
-      .setPlaceholder(`${state.chunks[state.chunkPage].text.length} / 3800 on this page of ${state.chunks[state.chunks.length - 1].end} total. Save and reopen this page to add more.`);
-    modal.addComponents(new ActionRowBuilder().addComponents(input));
-    await interaction.showModal(modal);
+    await interaction.showModal(buildEntryModal(state));
+
+  } else if (customId === 'story_edit_add_page') {
+    // Appends an empty page at the end of the entry and opens it, so growing an entry no longer
+    // means saving and reopening to force a re-chunk. start === end === content length makes the
+    // splice in handleEditModalSubmit a pure append. isNew marks it so an empty submit can drop
+    // the page instead of erroring, and so the save knows to add the paragraph break.
+    //
+    // No defer — showModal must be the first response, which also means the embed behind the
+    // modal still shows the previous page. If the writer cancels, the empty page stays in state
+    // but contributes nothing to any later save (it spans no characters), and the next
+    // openEditSession re-chunks from content and drops it.
+    const contentLength = state.currentContent.length;
+    state.chunks.push({ text: '', start: contentLength, end: contentLength, isNew: true });
+    state.chunkPage = state.chunks.length - 1;
+    log(`story_edit_add_page: entry ${state.entryId} now has ${state.chunks.length} page(s) in session (user ${interaction.user.username})`, { show: false, guildName: interaction?.guild?.name });
+    await interaction.showModal(buildEntryModal(state));
 
   } else if (customId.startsWith('story_edit_next_entry_')) {
     const nextEntryId = parseInt(customId.split('_').at(-1));
@@ -437,6 +810,54 @@ async function handleEditButton(connection, interaction) {
   }
 }
 
+// The paragraph break needed in front of text appended to the end of an entry, so the appended
+// page starts a new paragraph without stacking blank lines on whatever the entry already ends with.
+function leadingBreakFor(content) {
+  if (!content) return '';
+  if (content.endsWith('\n\n')) return '';
+  if (content.endsWith('\n')) return '\n';
+  return '\n\n';
+}
+
+// The edit modal, shared by the Edit button and Add Page. The entryId and page are in the
+// customId so Discord can't cache modal content across entries or pages.
+//
+// The per-page guidance is a LabelBuilder description, not a TextInputBuilder placeholder: a
+// placeholder only renders over an empty field, and setValue() below always pre-fills one, so
+// the previous placeholder-based hint was never visible to anyone.
+export function buildEntryModal(state) {
+  const cfg = state.editCfg ?? {};
+  const isMultiPage = state.chunks.length > 1;
+  const pageTokens = isMultiPage
+    ? { page: String(state.chunkPage + 1), total: String(state.chunks.length) }
+    : {};
+  const chunk = state.chunks[state.chunkPage];
+
+  const input = new TextInputBuilder()
+    .setCustomId('entry_content')
+    .setStyle(TextInputStyle.Paragraph)
+    .setMaxLength(4000)
+    .setValue(chunk.text.slice(0, 4000));
+
+  return new ModalBuilder()
+    .setCustomId(`story_edit_modal_${state.entryId}_p${state.chunkPage}`)
+    .setTitle(replaceTemplateVariables(cfg.lblEditModalTitle, pageTokens))
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel(cfg.lblEditEntryContent)
+        .setDescription(replaceTemplateVariables(cfg.txtEditModalPageHint, {
+          page: String(state.chunkPage + 1),
+          total: String(state.chunks.length),
+          chars: String(chunk.text.length),
+          limit: String(EDIT_PAGE_LIMIT),
+          // Only on the last page, where the button exists: the hint's optional block drops out
+          // without it, so no page points at a button it is not showing.
+          ...(state.chunkPage === state.chunks.length - 1 ? { add_label: cfg.btnEditAddPage } : {}),
+        }))
+        .setTextInputComponent(input)
+    );
+}
+
 async function handleEditModalSubmit(connection, interaction) {
   const userId = interaction.user.id;
   const state = pendingEditData.get(userId);
@@ -452,6 +873,17 @@ async function handleEditModalSubmit(connection, interaction) {
     4000, true
   );
   if (!editedChunk) {
+    // A page added by Add Page that comes back empty means "never mind", not an error — drop the
+    // page and refresh the panel. Emptying a page that holds real text is still rejected, since
+    // that would silently delete part of the entry.
+    const pendingPage = state.chunks[state.chunkPage];
+    if (pendingPage?.isNew) {
+      state.chunks.splice(state.chunkPage, 1);
+      state.chunkPage = Math.max(0, state.chunks.length - 1);
+      log(`handleEditModalSubmit: discarded unsaved added page on entry ${state.entryId} (user ${interaction.user.username})`, { show: false, guildName: interaction?.guild?.name });
+      await interaction.deferUpdate();
+      return await interaction.editReply(buildEditMessageForState(state));
+    }
     return await interaction.reply({ content: await getConfigValue(connection, 'txtEditEntryEmpty', state.guildId), flags: MessageFlags.Ephemeral });
   }
 
@@ -486,10 +918,18 @@ async function handleEditModalSubmit(connection, interaction) {
       'txtExportPlaceholderUser', 'txtExportPlaceholderChannel', 'txtExportPlaceholderRole'
     ], state.guildId)
   );
-  // Put back the seam whitespace the modal trimmed, or the page's closing paragraph break is lost.
-  const savedChunk = restoreChunkEdges(chunk.text, resolvedChunk);
-  log(`handleEditModalSubmit: entry ${state.entryId} page ${state.chunkPage} saved ${savedChunk.length} chars (modal returned ${editedChunk.length}, after mentions ${resolvedChunk.length})`, { show: false, guildName: interaction?.guild?.name });
-  const newContent = currentContent.slice(0, chunk.start) + savedChunk + currentContent.slice(chunk.end);
+  // A page added by Add Page has no existing text and no seam of its own, so it carries the
+  // paragraph break that would normally separate it from the page before. It also appends at the
+  // freshly-read content length rather than the offset captured when the button was pressed, so
+  // an edit landing in between can't make it splice at a stale position.
+  const savedChunk = chunk.isNew
+    ? leadingBreakFor(currentContent) + resolvedChunk.trim()
+    // Put back the seam whitespace the modal trimmed, or the page's closing paragraph break is lost.
+    : restoreChunkEdges(chunk.text, resolvedChunk);
+  log(`handleEditModalSubmit: entry ${state.entryId} page ${state.chunkPage}${chunk.isNew ? ' (added)' : ''} saved ${savedChunk.length} chars (modal returned ${editedChunk.length}, after mentions ${resolvedChunk.length})`, { show: false, guildName: interaction?.guild?.name });
+  const newContent = chunk.isNew
+    ? currentContent + savedChunk
+    : currentContent.slice(0, chunk.start) + savedChunk + currentContent.slice(chunk.end);
 
   const editorName = interaction.member?.displayName ?? interaction.user.username;
 
@@ -537,18 +977,30 @@ async function handleEditModalSubmit(connection, interaction) {
   // as that shifts boundaries and causes orphaned content on subsequent edits).
   // Measure what was actually stored (seam whitespace restored, mentions resolved), not the raw
   // modal value, or the later pages' boundaries drift.
-  const delta = savedChunk.length - (chunk.end - chunk.start);
-  state.chunks[state.chunkPage] = {
-    text: savedChunk,
-    start: chunk.start,
-    end: chunk.start + savedChunk.length
-  };
-  for (let i = state.chunkPage + 1; i < state.chunks.length; i++) {
-    state.chunks[i] = {
-      ...state.chunks[i],
-      start: state.chunks[i].start + delta,
-      end: state.chunks[i].end + delta
+  //
+  // A page added by Add Page is rewritten from where the append actually landed, and loses its
+  // isNew flag: without that, editing the same page again before reopening would append a second
+  // copy instead of replacing it. It is always the last page, so nothing after it needs shifting.
+  if (chunk.isNew) {
+    state.chunks[state.chunkPage] = {
+      text: savedChunk,
+      start: currentContent.length,
+      end: currentContent.length + savedChunk.length
     };
+  } else {
+    const delta = savedChunk.length - (chunk.end - chunk.start);
+    state.chunks[state.chunkPage] = {
+      text: savedChunk,
+      start: chunk.start,
+      end: chunk.start + savedChunk.length
+    };
+    for (let i = state.chunkPage + 1; i < state.chunks.length; i++) {
+      state.chunks[i] = {
+        ...state.chunks[i],
+        start: state.chunks[i].start + delta,
+        end: state.chunks[i].end + delta
+      };
+    }
   }
   state.currentContent = newContent;
   state.hasHistory = true;
@@ -576,33 +1028,6 @@ async function handleEditModalSubmit(connection, interaction) {
       .setStyle(ButtonStyle.Secondary)
   );
 
-  // For admins: check if a next confirmed entry exists and offer to jump straight to editing it.
-  const isAdmin = await checkIsAdmin(connection, interaction, state.guildId);
-  if (isAdmin) {
-    const [nextRows] = await connection.execute(
-      `SELECT se.story_entry_id FROM story_entry se
-       JOIN turn t ON se.turn_id = t.turn_id
-       JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
-       WHERE sw.story_id = ? AND se.entry_status = ?
-         AND (
-           SELECT COUNT(DISTINCT t2.turn_id)
-           FROM turn t2
-           JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-           JOIN story_entry se2 ON se2.turn_id = t2.turn_id AND se2.entry_status = ?
-           WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at
-         ) = ?`,
-      [state.storyId, ENTRY_STATUS.CONFIRMED, ENTRY_STATUS.CONFIRMED, state.turnNumber + 1]
-    );
-    if (nextRows.length > 0) {
-      extraButtons.push(
-        new ButtonBuilder()
-          .setCustomId(`story_edit_next_entry_${nextRows[0].story_entry_id}`)
-          .setLabel('Edit Next Entry →')
-          .setStyle(ButtonStyle.Primary)
-      );
-    }
-  }
-
   const extraRow = new ActionRowBuilder().addComponents(...extraButtons);
   await interaction.editReply({ ...editMsg, components: [...editMsg.components, extraRow] });
 }
@@ -620,11 +1045,7 @@ async function handleRepostEntry(connection, interaction) {
     const [rows] = await connection.execute(
       `SELECT se.content, se.created_at, sw.discord_display_name, sw.discord_user_id AS original_author_id,
               s.story_thread_id, s.restricted_thread_id, s.rating, s.show_authors, s.scene_break_divider,
-              (SELECT COUNT(DISTINCT t2.turn_id)
-               FROM turn t2
-               JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-               JOIN story_entry se2 ON se2.turn_id = t2.turn_id AND se2.entry_status = ?
-               WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at) AS turn_number,
+              ${turnNumberSubquery()} AS turn_number,
               (SELECT see.edited_at FROM story_entry_edit see WHERE see.entry_id = se.story_entry_id ORDER BY see.edited_at DESC LIMIT 1) AS last_edited_at,
               (SELECT see.edited_by FROM story_entry_edit see WHERE see.entry_id = se.story_entry_id ORDER BY see.edited_at DESC LIMIT 1) AS last_editor_id
        FROM story_entry se

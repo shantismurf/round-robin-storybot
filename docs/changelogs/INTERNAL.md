@@ -28,7 +28,412 @@ the thing you will search for later is the old name.
 
 Provenance: written alongside the work.
 
+Nothing yet. Open and deliberately not in 3.10.0: the emoji on the remaining 44 button labels,
+which stay as they are until there is a style plan -- see the `Create style_roadmap.md` section of
+`docs/TODO.md`.
+
+---
+
+## 3.10.0 — 2026-10-23
+
+Provenance: written alongside the work.
+
+MINOR. The editing revamp: an entry can be exported as plain text, edited anywhere, and imported
+back, one turn at a time or the whole story at once, and a story's reading order is now its own
+fact rather than a side effect of when each turn happened. Shipped as one bump rather than moving
+the number on each step toward it -- LeeAnn approved the hold and the 3.10.0 target on 2026-10-20,
+and the number again on 2026-10-22. Chapters and series are 4.0, where the unit of the product
+changes. Design: docs/plans/completed/PLAN-copyedit-round-trip.md.
+
+Everything below shipped together, including the items marked "no bump" when they landed on main
+ahead of this release.
+
+### Added
+- **The whole-story import: an edited export comes back and rewrites the story's structure.**
+  The file the story export already produces, edited anywhere and uploaded from the Manage
+  Entries picker. Its block order becomes the story's reading order, a changed writer name in a
+  turn line re-credits that turn, and a block the editor deleted removes it -- a soft delete, so
+  it keeps its slot between the turns it sat between and Restore brings it back there. A block
+  for an entry that is currently deleted brings it back, which is the same rule read the other
+  way. Everything decidable from the file alone is decided in `story/_importPlan.js`, which has
+  no database and no Discord in it, because this is the part that has to be right.
+  Nothing is written until a per-turn confirmation -- one line per changed turn
+  (`20. Maria - 1,420 to 1,380 words (moved to turn 2)`, numbered as the editor's own file numbers
+  that turn, with a removal on a line that carries no second word count), removals listed individually rather
+  than counted, since a word processor that eats the tail of a file then arrives as a list of
+  turns the editor recognises. A move is measured against the other turns rather than against the
+  turn's own old number: dragging one block to the front renumbers everything behind it, so the
+  naive comparison reports a move per turn in the story and a change count to match, where what
+  the editor did was one move. `movedEntryIds` reports the fewest turns whose removal leaves the
+  rest in their original sequence. A turn edited in Discord after the file was exported is marked on
+  its line, the one thing in the summary the editor cannot have known about; the embed turns red
+  when anything is being removed or overwritten unknowingly. Six things refuse the file outright
+  rather than offering a summary to approve: an id that is not a turn of this story, the same id
+  twice, a writer name nobody in the story has (matched against every writer ever joined to the
+  story, uncapped -- the same list feeds the Change Writer picker, where it is capped at Discord's
+  25 options, and a story with more writers than that would otherwise refuse its own unedited
+  export), a block emptied of its prose (deleting the whole
+  block is how a turn is removed, and saying so is the difference between an accident the editor
+  can fix and one they cannot see), a block too long for the `TEXT` column, and a file with no
+  turn lines at all. A refusal reports **every** problem in the file rather than the first, as one
+  bulleted report -- a header line, then a bullet per kind naming every turn or writer that hit it
+  (`- Turn ID Mismatch: 22, 49, 27 not found in story`) -- because the editor fixes them in the
+  word processor and uploads again, and one upload per typo on a 50,000-word file is a chore. The
+  bullet wording carries no *is* or *are*, so one item and twenty read the same with no plural
+  forms to maintain. A report too long for a message goes over as a `.txt` attachment. Applying is one transaction: the history row before the content it replaces,
+  the status flips, the writer repointed with its own log row, then the whole reading order
+  rewritten from the plan's sequence. The upload modal carries no instructions line, and no file
+  label or nothing-changed string of its own: it reuses `lblEditImportFile` and
+  `txtEditImportNoChange` from the single-entry round trip, where LeeAnn had already approved that
+  text -- "use the text from the single import" (2026-10-22). Twenty config strings, where the
+  draft had twenty-three.
+- **The single-turn file round trip on the edit panel.** Download one turn as plain text, edit it
+  anywhere with no page boundaries, upload it back. This is the actual fix for the page problem:
+  the edit modal splits an entry into 3800-character pages because Discord's text input cannot
+  hold more, so a change across a page seam has to be made twice and a find-and-replace over a
+  whole entry cannot be made at all. Two buttons rather than one framing it as a single "edit as
+  file" action -- LeeAnn, 2026-10-21: the gap between downloading and uploading is "several
+  minutes, if not hours or days", and an interaction token on the download message is dead in
+  about fifteen minutes, so the import has to start from the panel. **Export for Editing** and
+  **Import Edited Entry**, not Download and Upload -- that is the word pair the rest of the bot
+  already uses, and the buttons name the entry rather than the turn because they act on its
+  content. The file is the whole-story export's format narrowed to one entry: the
+  `[[turn N | #id | writer]]` delimiter first, the prose verbatim, then the `[[exported-at]]`
+  trailer. It keeps the delimiter even with one entry in it, because the id is what makes "this
+  is the wrong file" and "this entry changed in Discord since you exported it" answerable. Import
+  goes through a modal file field (`FileUploadBuilder` wrapped in a `LabelBuilder`, verified
+  against the installed builders) carrying one line of text on the field itself. Nothing is
+  written until a confirm that states the word count either side and says the current text goes
+  to the entry's history first; the conflict warning rides on that same confirm rather than
+  opening a second one, and names the Save button under it by substituting that button's own
+  label, so the two cannot disagree. One message covers both ways a file
+  can fail to be this entry's -- it is another entry's, or it has no turn line at all -- because
+  either way the first line is wrong and the fix is the same. A file matching the entry as it
+  stands changes nothing and says so, and content over 65,000 bytes is refused rather than
+  silently truncated by the `TEXT` column. No Cancel button anywhere in the flow: it is all
+  ephemeral, so dismissing the message is the way out. An import is a new submission of the whole entry, so
+  it goes through the same mention resolution a modal save does. `story/_editFileRoundTrip.js`
+  holds all of it; the two buttons share the panel's last row with Back to List, which keeps the
+  worst-case panel at four of Discord's five action rows.
+- **Change Order and Change Writer on the Manage Entries edit panel** (migration 027). Two
+  buttons on the manage row, so a story can be reordered and an entry re-credited without
+  touching the database by hand. Change Order asks for a turn number -- the number an editor
+  already sees everywhere else, never a raw `entry_order` -- and permutes `entry_order` so the
+  sequence stays dense: one shift across the displaced range, then the entry's own new value,
+  in one transaction. The shift deliberately covers every status, deleted rows included, because
+  a soft-deleted entry keeps its slot so Restore stays a plain status flip; a renumber that
+  carried only confirmed rows would leave a held slot behind to collide with a live one. Change
+  Writer repoints `turn.story_writer_id`, which every display resolves through a join, so there
+  is no denormalised copy to chase. Its picker offers every writer ever joined to the story
+  rather than only active ones -- crediting an entry is not a question of who may write next --
+  and on the story's most recent turn it says that changing the writer also changes who is up,
+  since `PickNextWriter` reads the latest turn's writer. Both buttons are disabled on a deleted
+  entry. Neither is called "Reassign": `btnTurnReassign` already means "Reassign to Previous" in
+  Manage Turns.
+- **`story_entry_edit` became a per-entry event log** (migration 027). It held content versions
+  only. A reorder and a writer change are changes to the same entry and belong in the same
+  history, so the table gained `change_type` (NULL means content version, which is what every
+  existing row is), both writers' ids and names, and both positions. `content` became nullable.
+  Both sides live on the row rather than only the previous value because the history panel pages
+  one row at a time and has nothing else to render from, and the names are snapshots for the same
+  reason `edited_by_name` is one: a writer who later leaves, or renames their pen name, must not
+  rewrite what the history says happened. Typed columns rather than a detail JSON like
+  `guild_event` has, because the panel reads these rows on every page turn and mysql2 3.23
+  changing how it returns MariaDB JSON columns already took out every background job once.
+- **`story/_entryChangeLog.js`** — the writers of those non-content rows (`logEntryReorder`,
+  `logEntryWriterChange`), plus `listStoryWritersForCredit` for the picker and `readEntryWriter`
+  for the log's previous side.
+- **A test that reads every migration file the way the runner does.** `runMigrationFile` splits
+  on the statement separator and strips comment text afterwards, so a separator written inside a
+  comment cuts that comment in half and glues its tail to the front of the next statement. The
+  note at the top of migration 026 did exactly that by naming the character it was warning
+  about, which would have failed at deploy with no way to run the migration by hand; it was
+  fixed before the migration shipped, and `test/migrationFiles.test.js` now asserts that every
+  statement in every migration begins with a SQL keyword. Migration 001 carries the same defect
+  in a parenthetical and is listed as a known exception: it is stamped as applied on every
+  existing database, so nothing has hit it, but a fresh install would.
+- **`story_entry.entry_order` — a story's reading order as a column of its own** (migration 026).
+  Display order was derived entirely from `turn.started_at`, which is also the record of when a
+  turn happened. Those are two different facts, and reordering a story for publication must not
+  rewrite its history, so order moved to its own column and `started_at` was left alone. The
+  column is on `story_entry` rather than `turn` because a skipped or timed-out turn produces no
+  entry, and because migration 021 limits a turn to one confirmed entry — so ordering confirmed
+  entries is the same thing as ordering turns, with no contiguity to maintain. Backfilled from
+  the existing `started_at` ordering, covering confirmed and deleted rows: a soft-deleted entry
+  keeps its slot so Restore returns it where it was, which also means every later renumber has
+  to carry deleted rows. Abandoned quick-mode drafts stay NULL. A new entry takes `MAX + 1` over
+  every status, inside the transaction that confirms it, so it can never land on a held slot.
+- **`story/_entryOrder.js`** — one definition of reading order. `turnNumberSubquery()`,
+  `confirmedEntryCountSubquery()` and `entryOrderSort()` replace fifteen hand-copied numbering
+  subqueries across twelve files and five separate `ORDER BY t.started_at` display sorts. That
+  duplication is exactly how numbering and display order drift apart, and the same pattern that
+  had already produced a stale config-key list and a duplicate modal in `story/read.js`.
+
+- **"Add Page" on the edit panel.** An entry's pages are a modal-size artifact, not stored
+  structure: `story_entry.content` is one column and `chunkEntryContent()` splits it at render
+  time to fit Discord's 4000-character text input. Growing an entry past its current page count
+  therefore meant saving and reopening to force a re-chunk, and the only hint to that effect
+  (`txtEditModalPageHint`'s predecessor) was a `TextInputBuilder` placeholder, which never renders
+  because the modal always pre-fills the field with `setValue()`. The workaround in practice was
+  padding an entry with junk text to force an extra page. `btnEditAddPage` appends an empty page
+  and opens it. It appends at the content length read inside the submit handler rather than the
+  offset captured when the button was pressed, so an edit landing in between cannot make it splice
+  at a stale position, and it supplies the paragraph break the page has no seam of its own to carry.
+  An added page submitted empty is discarded rather than rejected — on a new page, empty means
+  "never mind". Emptying a page that holds real text is still refused.
+- **`EDIT_PAGE_LIMIT`** (`utilities.js`) — the 3800-character page budget, now exported and used as
+  `chunkEntryContent`'s default. The two UI strings that quote the number read it from here, so the
+  text cannot claim a limit the splitter does not use.
+- **`EDIT_PANEL_CONFIG_KEYS`** (`story/edit.js`) — one exported list of every config key the edit
+  panel and modal read. `story/read.js` kept a hand-maintained copy, which went stale the moment a
+  key was added in `edit.js`: the modal would then render key names instead of text.
+- **"Export Entries for Editing" — a plain-text export of a story's entries.** Offered beside the
+  two HTML exports on `/story read` and on the close announcement. The HTML export is rendered
+  (markdown converted, `[[break]]` replaced by the story's divider, `[[a|b]]` turned into a tooltip
+  span, images embedded as data URIs), which is right for publishing to AO3 and wrong for editing,
+  because what you edit is not what is stored. This one writes `story_entry.content` verbatim, so a
+  copyedit can be compared against what went out without reversing a render.
+  The file opens with the title, counts, status, export date and the writer list, then a legend
+  describing the markers and the markdown it supports — the format spec the file carries for
+  whoever (or whatever) edits it.
+  Each entry is preceded by `[[turn N | #entryId | writer]]`. The entry id is what a future import
+  will match on, because it is the only part of that line that never changes: the turn number is a
+  display number computed from the entry order, so one entry is turn 4 before a reorder and turn 7
+  after it, and once import can reorder, the file's turn numbers are input for the new order rather
+  than identity. A writer name is not unique either. Turn and id sit in fixed leading positions
+  with the name last, so a pen name containing a `|` cannot shift what the parser reads as the id. The delimiter is fixed in
+  code rather than config, matching `[[break]]` in `story/_entryMarkup.js` — it is a structural
+  token, and a guild rewording it would break import rather than translate it. `show_authors` is
+  honoured for both the writer list and the per-entry
+  labels, because this file is reachable from the public close post.
+  The header's writer list is everyone who has an entry in the work, in order of their first one,
+  derived from the entries rather than from `fetchStoryForExport`'s writer list. That list is
+  active members only, which is the wrong set for a header that credits the prose in the file: a
+  writer who has since left still wrote some of it, and a member who joined but never wrote did
+  not. The HTML export's own writer line and the `writerCount` both exports return are unchanged.
+- **Image links may now be any https image URL, not only Discord CDN attachments.** A writer
+  can point at an image they host themselves, and change one by editing the `[caption](url)`
+  text — which is what makes images survive the copyedit round trip, since there is no token
+  or images table to keep in step.
+  New **`story/_imageUrls.js`** is the single definition of "this URL is an image", replacing
+  seven separate hard-coded `cdn.discordapp.com/attachments/` patterns across four files
+  (`_exportImages.js`, `export.js`, `_entryRenderer.js`, `_storyStatus.js`) that had already
+  drifted in their delimiter sets.
+  It keeps two jobs deliberately apart: what counts as an image (any https image URL) and what
+  needs a fresh Discord signature (Discord CDN only). `collectImageUrls` now returns
+  `externalUrls` alongside `attachmentUrls`, and only the latter reaches Discord's refresh
+  endpoint — an external link has no signature to refresh.
+  Validation is on shape, never by fetching: https only, a known image extension, and no bare
+  IP literal or loopback host, since the bot fetches these URLs itself and a link is a request
+  it makes on someone else's behalf. A hostname that resolves to a private address still gets
+  through — stopping that needs resolve-then-connect control Node's fetch does not offer — so
+  the existing `image/*` content-type check, timeout and size caps in `fetchImage` remain the
+  rest of that defence. Nothing is checked for existence: a link that rots later renders as the
+  same visible placeholder it always did, and a writer never waits on an HTTP round trip to
+  save an entry.
+- **`buildExportStamp`/`parseExportStamp`** (`story/_exportText.js`) — the editing export now
+  ends with a machine-readable `[[exported-at <ISO instant>]]` trailer. The header's human date
+  is untouched and stays day-precision; the trailer carries the precision import needs to ask
+  whether an entry was edited in Discord after the file was exported. An older file without one
+  still imports, it just cannot be conflict-checked.
+- **`story/_exportData.js`** — `fetchStoryForExport`, the one query path both exports use, lifted
+  out of `export.js` so the two export modules share it without importing each other.
+- **`buildCloseExportRow` and `EXPORT_ROW_CONFIG_KEYS`** (`story/_exportText.js`) — the close
+  announcement's export row, which `story/close.js` and `story/_manageClose.js` each held a
+  byte-identical copy of, so adding a third button meant editing it twice.
+
+- **`Dockerfile` and `.dockerignore` for the Coolify host.** The bot moved from bot-hosting.net
+  to Coolify on the Hetzner server on 2026-10-12. Coolify's default Nixpacks build reinstalled
+  every npm package on each deploy (about 100 seconds), because copying the changed code
+  invalidated its install cache. The Dockerfile installs packages in their own layer before
+  copying the code, so a code-only deploy reuses the cached install. It takes effect once the
+  Coolify app's Build Pack is set to Dockerfile. `config.json` stays out of the image and is
+  still supplied by Coolify as a File Mount at `/app/config.json`. No bump: deployment tooling
+  only, no change to the bot's code or behavior.
+- **A style standard for the help pages**, `docs/reference/help_style_guide.md`, approved by
+  LeeAnn 2026-10-22. Six rules, the load-bearing one being that an emoji is a topic's name rather
+  than decoration: the same topic wears the same emoji everywhere in the help and two topics never
+  share one. Emoji organize the help, they do not mirror the app -- a heading may carry one the
+  button it describes does not. It also records the drift measured against those rules the day it
+  was written, none of it fixed yet because every item is user-facing text: the three admin pages
+  use three different emoji for one set, Turn Thread Privacy is two different emoji on two pages,
+  and one emoji covers five unrelated topics. The `Create style_roadmap.md` backlog item, which
+  predates this and already carried the app's button and emoji policy, now links it and records
+  what an audit of the 118 button labels actually found.
+- **A help section for the story exports**, `lblHelp6Export` / `txtHelp6Export`, her copy. The
+  three export buttons on `/story read` had no help anywhere -- the only export the help
+  documented was the single-entry one. It renders between Reading a Story and Editing an Entry,
+  because the plain-text export is the route into editing a long entry and this is the section
+  that points there.
+
+### Changed
+- **The help copy for reading and editing is hers now**, applied from the doc she edited in place:
+  `txtHelp6Read` (images show on the page where they appear, rather than as placeholders with alt
+  text, which is what the entry renderer actually does since 3.9.0), `txtHelp6Edit` (rewritten
+  around the two in-Discord routes, then the file round trip, and it now says admins can delete
+  and restore rather than only edit), and `txtHelp6EditPages` (the Add Page sentence points at
+  the last page, matching where the button now renders). `txtHelp5AdminControls` gained a **Manage
+  Entries** block between Manage Turns and Manage Users, covering Edit Entry, Change Order, Change
+  Writer and Import Edited Story. Three mechanical normalizations to her draft, all flagged to
+  her: the bullet emoji came off that block so it matches the two blocks around it, sentence
+  capitalization and terminal periods were made consistent with the rest of the page, and
+  "comfirm" became "confirm".
+- **The export and import buttons are plain text.** All six: Export (no breaks), Export (breaks
+  with turns and names), Export Entries for Editing, Export for Editing, Import Edited Entry and
+  Import Edited Story. The three story-level exports had drifted to `⬇`, `⬇` and `📝` across three
+  releases, so they were first given one `📤` each to match -- which was worse, and she said so:
+  "I wanted to use only one emoji in the places that need them, not put it everywhere the word
+  export appears," and then "Id almost rather err on keeping them all out until we have a mindful
+  style plan." So they are out, and `docs/TODO.md` has said "button labels are plain text only"
+  since long before this. The other 44 styled buttons are untouched pending that plan. The help
+  section keeps its `📤` heading, because a help heading is where an emoji does work.
+- **Help body text names a button by its words, never by its emoji.** The copy had quoted the
+  labels verbatim, so one sentence carried three identical `📤` the moment the export buttons were
+  made to match -- LeeAnn: "asking you to make all the export buttons match looks ridiculous."
+  Six quoted labels lost their emoji (`Export (no breaks)`, `Export (breaks with turns and
+  names)`, `Export Entries for Editing`, `Export for Editing`, `Import Edited Entry`, `Add Page`)
+  and the rule in `help_style_guide.md` now says so explicitly, with her reasoning: the words
+  already say which button is which, and three identical icons in a sentence say nothing. The
+  `txtHelp4Metadata` field list keeps its emoji, which is the one documented exception.
+- **Every help page title and section heading now follows the emoji standard**, 17 rows in
+  `config_help.sql`, approved line by line by LeeAnn 2026-10-22. The three Admin pages were 🔧,
+  🎛️ and 🛠️ -- three emoji for one set, which is why the pages did not read as a series -- and
+  are now all 🛡️, administration, with the em-dash doing the distinguishing. 🔑 became
+  permissions (Who can use `/story manage`, Story Admin Role) and handed Turn Thread Privacy to
+  🔒, privacy everywhere. 📖 went back to meaning reading alone: the contents menu is 🪺, a
+  robin's nest for a round robin bot, the Overview page is 🧭, Reading & Editing took 📚 and Find
+  & Join took 🔍. Normal Mode is 🧵, a thread per turn, which frees 📜 for Ground Rules. 👑 is the
+  story creator and fills Story Creator's Join Options, the one heading that had no emoji at all.
+  Your Dashboard is 🎛️ in both the places it appears rather than 📅 in one and 🗂️ in the other.
+  Story Mode and Ratings Filter deliberately keep the same 🚦 -- her call, and recorded in the
+  guide as an exception rather than left to look like drift: a stoplight is right for either,
+  since one paces a story and the other gates what may be in it. The full vocabulary is in
+  `docs/reference/help_style_guide.md`, and the file's own header comment now points at it.
+- **Add Page appears only on an entry's last page.** It appends an empty page to the end of the
+  entry, so from page 3 of 5 it looked like it would insert a page there -- LeeAnn, 2026-10-22:
+  "its just not intuitive. Add Page should only appear on the last page of an entry edit." The
+  button is now pushed onto the panel only when the page on screen is the last one.
+  `txtEditModalPageHint`'s closing sentence became a `{?...?}` optional block whose `[add_label]`
+  token is supplied only on that page, so no page points at a button it is not showing; the
+  wording is hers, unchanged, and the label is substituted from `btnEditAddPage` rather than
+  spelled out.
+- **The edit panel is the same panel from every route it is opened by.** The file round trip's two
+  buttons were gated off the panel that `/story read`'s Edit button opens, because `read.js` fetches
+  `EDIT_PANEL_CONFIG_KEYS` and the new labels were not in it -- so the same interface rendered two
+  ways depending on how the writer got there, and the help page documents both routes as
+  equivalent. LeeAnn, 2026-10-22: "the Edit interface should not be rendered differently if
+  accessed from different places." `EDIT_FILE_CONFIG_KEYS` is now spread into
+  `EDIT_PANEL_CONFIG_KEYS`, and `buildEditMessage` no longer takes an option for the buttons at
+  all, so a caller cannot render a panel without them. That spread made the `edit.js` /
+  `_editFileRoundTrip.js` import cycle load-order dependent (`Cannot access
+  'EDIT_FILE_CONFIG_KEYS' before initialization` from whichever file was loaded first), so
+  `handleImportConfirm` now takes `buildEditMessageForState` as an argument instead of importing
+  it, which also puts the dependency the right way round -- the panel knows about the file round
+  trip, not the other way about.
+- **`parseEntryDelimiter` now returns the writer name** from a turn line, as `writerName` (null
+  when the file carries none, which is what a story with `show_authors` off exports). The
+  whole-story import reads it as the reassignment instruction, so "no name" had to be
+  distinguishable from a name. The name stays the last field of the line, which is why a pen name
+  containing a `|` still cannot shift what the parser reads as the id.
+- **The edit-history panel now renders a change row as a change, not as an empty version.** A
+  reorder or a writer change has no content to show, page through or restore, so those rows get
+  their own title and byline and a one line description of what changed, and their Restore button
+  is disabled rather than hidden -- LeeAnn, 2026-10-22: a move or a writer change is set again
+  with the button that set it, and undo exists only for bringing back a deleted entry. The
+  restore execution refuses a non-content row as well, so a stale button cannot write a NULL over
+  an entry. Four strings that were inline template literals in `story/_editHistory.js` moved into
+  config at their shipped wording (`txtEditHistoryVersionTitle`, `txtEditHistoryEditedBy`, and the
+  two restore warnings, which already existed as `txtEditRestoreWarning{Multi,Single}` and were
+  being hardcoded alongside them).
+- **Export filenames now carry the story number you can see, and the time.** Both exports built
+  their name from the internal `story_id`, so the number in the filename matched nothing visible
+  in the UI, and neither carried a timestamp — exporting the same story twice left `(1)` and `(2)`
+  in a downloads folder with nothing to tell them apart, which matters now that files round-trip
+  for editing. They now share one builder (`buildExportFilename` in `story/_exportData.js`) and
+  come out as `storybot3_a_test_story_entries_2026-10-21_2348.txt`: `guild_story_id`, the
+  sanitized title, an optional part, then the export instant in UTC on a 24-hour clock. No colon,
+  because Windows forbids one in a filename and macOS has historically read it as a path
+  separator; no trailing `Z`, because it reads as jargon to almost everyone who sees the file.
+- **The filename sanitizer stopped mangling titles.** It replaced every non-alphanumeric
+  character, turning "The Dragon's Keep (Part 2)" into `the_dragon_s_keep__part_2_`. It now
+  removes only what a filesystem refuses (`\ / : * ? " < > |` and control characters), collapses
+  whitespace runs to one underscore, and truncates at 60 characters with any dangling separator
+  trimmed.
+- **The plain-text export's download message was rewritten** in the editor's own words, replacing
+  wording ("the formatting markers will still mean what they mean") that said nothing. It now
+  says what to do: keep the markdown intact, and do not remove each turn's first line, because
+  that is the id the import matches on.
+- **The export file's legend now explains how to rearrange a story, because now you can.** It
+  told the editor not to renumber, merge or reorder entries, which was true until the whole-story
+  import landed and turned the same paragraph into an instruction not to use it. It now names the
+  `#id` after the `#` as the one thing that must survive unchanged, says the turn number and the
+  writer name are there to be read and are recomputed on import, and gives the three structural
+  edits as block operations: move a whole block to reorder, change the name on a turn line to
+  re-credit, delete a whole block to remove a turn (restorable from Manage Entries). It closes by
+  saying a summary of changes comes back for confirmation before anything is applied. LeeAnn's
+  wording over three passes on 2026-10-22, recorded in full in the plan doc.
+
+### Removed
+- **`story_entry.order_in_turn` and its `unique_turn_order` index**, dropped by migration 026.
+  The column was removed from `init.sql` in April 2026 along with every query that read it, but
+  no migration ever dropped it, so any database created before then was still carrying it
+  unused. Both drops are conditional, since a database created after April never had either.
+  The index is dropped explicitly rather than left to the column drop: in MariaDB, dropping a
+  column that belongs to a multi-column index removes the column *from* the index instead of
+  dropping the index, which would have left a `UNIQUE KEY` on `turn_id` alone — a constraint
+  nobody intended, and one that would stop a turn ever holding a second row. Reviving the column
+  instead was considered and rejected: its name scopes order to a turn when what is needed is
+  story-wide, and its unique key constrains the wrong pair.
+- **`txtExportTextFooter`, the plain-text export's last human line.** It reprinted the entry count
+  under the body. Its only real purpose was showing the file wasn't truncated, and the
+  `[[exported-at]]` stamp that follows it does that for the importer — so all it told a reader was
+  that they had reached the end of the file they were already looking at.
+
+- **The edit modal's per-page guidance is a `LabelBuilder` description, not a placeholder.** It sits
+  under the field label and is always visible, with 1024 characters of room against a placeholder's
+  100. This moves the one modal in this file from the deprecated `addComponents` path to
+  `addLabelComponents`.
+- **`story/read.js`'s Edit button shares `edit.js`'s modal builder.** It had assembled a third copy
+  of the same modal with its own hard-coded title, label and placeholder, and its placeholder
+  described the save-and-reopen workaround that Add Page replaces.
+- **Four user-facing strings moved out of code into config:** `lblEditEmbedTitle`,
+  `txtEditEmbedFooter`, `lblEditModalTitle` and `txtEditModalPageHint`. Wording is unchanged from
+  what shipped. The page suffix is a `{?...?}` optional block, stripped when an entry is one page,
+  rather than a suffix assembled inline.
+- **`story/read.js`'s Edit button label** was the hard-coded string `'Edit'`; it now reads the
+  existing `btnEditOpen`, which holds the same word.
+- **`?? 'fallback'` defaults dropped** from `lblEditEntryContent`, `lblPageJumpOption`,
+  `lblPageJumpPlaceholder`, `lblPageJumpOptionTurn` and read's own `lblPageJumpPlaceholder`. Config rules forbid them, and they were masking a missing key —
+  `getConfigValue` already logs a `show: true` error and returns the key name on a miss, which also
+  reaches the hub log channel.
+
 ### Fixed
+- **Edit Next Entry advances more than once.** The button was built in `handleEditModalSubmit`,
+  the save-an-edit path, so it appeared only on the panel rendered after a save. Clicking it
+  opened the next entry through `openEditSession`, whose panel did not carry it, so a second
+  advance was impossible until something was saved -- reported by LeeAnn 2026-10-08, sitting in
+  no branch and, until now, in no backlog file either. The next entry is resolved in
+  `openEditSession` onto the session (`findNextEntryId` in `story/_entryOrder.js`, extracted from
+  the query that was inline in the save path) and the button is rendered by `buildEditMessage`
+  like every other button on the panel, so every route that opens an entry carries it and every
+  rebuild keeps it. It is refreshed after a Change Order, since moving the entry changes which
+  turn comes next. Still admin-only, as it was. Its label was a hardcoded `'Edit Next Entry →'`
+  string literal -- the last user-facing text in the edit panel that could not be changed without
+  a deploy -- and is now `btnEditNextEntry`, at the wording that shipped.
+- **Migration 001 would have crashed a fresh install.** Its backfill comment read "safe to
+  re-run; only updates rows where 0", and `runMigrationFile` splits a migration on the statement
+  separator *before* it strips comment text -- so the words "only updates rows where 0)" ended up
+  glued to the front of the `UPDATE` that follows, which MariaDB rejects. Every existing database
+  has 001 stamped as applied, so nothing ever hit it, but a new install runs the migrations for
+  real. Found 2026-10-22 while fixing the same mistake in migration 026 before it shipped, and
+  `test/migrationFiles.test.js` now checks every migration the way the runner reads it, with
+  nothing exempt.
+- **Discord's `___text___` (underline + italic) lost an underscore in the HTML export.** The
+  underline pre-pass is lazy, so `__(.*?)__` took the first two underscores and the shortest
+  run to the next pair, rendering `___both___` as underlined `_both` with a stray trailing
+  underscore. A `___(.+?)___` pass now runs first. Plain `__underline__` was never affected.
+  Fixed in this batch rather than deferred because it affects the round trip: markdown edited
+  in an export file has to render back correctly.
 - **Every background job failed on the new host with `"[object Object]" is not valid JSON`.**
   The `job.payload` column is `JSON`, which MariaDB stores as LONGTEXT, so mysql2 always returned
   it as a string and `processJob` ran `JSON.parse` on it. mysql2 3.23.0 (July 2026) started
@@ -40,17 +445,6 @@ Provenance: written alongside the work.
   the visible case). `processJob` now accepts either a string or an object, and parses inside
   the try so a bad payload goes through normal retries. Jobs stuck since the move are re-queued
   on the next restart and run late. No bump: no intended behavior change.
-
-No bump: deployment tooling only, no change to the bot's code or behavior.
-
-### Added
-- **`Dockerfile` and `.dockerignore` for the Coolify host.** The bot moved from bot-hosting.net
-  to Coolify on the Hetzner server on 2026-10-12. Coolify's default Nixpacks build reinstalled
-  every npm package on each deploy (about 100 seconds), because copying the changed code
-  invalidated its install cache. The Dockerfile installs packages in their own layer before
-  copying the code, so a code-only deploy reuses the cached install. It takes effect once the
-  Coolify app's Build Pack is set to Dockerfile. `config.json` stays out of the image and is
-  still supplied by Coolify as a File Mount at `/app/config.json`.
 
 ---
 

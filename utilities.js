@@ -434,7 +434,13 @@ export async function getConfigValue(connection, key, guildId = 1) {
  * @param {number} maxChunkSize - max chars per chunk (default 3800, leaves modal headroom)
  * @returns {{ text: string, start: number, end: number }[]}
  */
-export function chunkEntryContent(content, maxChunkSize = 3800) {
+// The per-page character budget for the edit modal. Discord caps a text input at 4000; the
+// gap leaves room for the seam whitespace restoreChunkEdges() puts back. Exported so the UI
+// strings that quote this number (txtEditEmbedFooter, txtEditModalPageHint) can't drift from
+// the value actually used to split.
+export const EDIT_PAGE_LIMIT = 3800;
+
+export function chunkEntryContent(content, maxChunkSize = EDIT_PAGE_LIMIT) {
   if (content.length <= maxChunkSize) {
     return [{ text: content, start: 0, end: content.length }];
   }

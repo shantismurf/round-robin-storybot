@@ -14,6 +14,7 @@ const CFG = {
   txtManageEntriesEntryPlaceholder: 'Select an entry...',
   txtManageEntriesMoreEntries: 'More entries ([offset]+)...',
   txtManageEntriesDeletedFlag: '[DELETED]',
+  btnManageEntriesImport: 'Import Edited Story',
 };
 
 function makeEntry(overrides = {}) {
@@ -32,6 +33,21 @@ function makeEntry(overrides = {}) {
 function selectJSON(msg) {
   return msg.components[0].components[0].toJSON();
 }
+
+describe('renderEntryListPage — the whole-story upload', () => {
+  // The upload rewrites order, credits and existence across every entry, so it belongs to the
+  // admin picker and must never appear on the author's own-entries list.
+  test('the admin picker offers it, the author picker does not', () => {
+    const admin = renderEntryListPage(CFG, [makeEntry()], false, 0, 'admin', 55);
+    assert.deepEqual(
+      admin.components[1].toJSON().components.map(c => c.custom_id),
+      ['story_import_story_55']
+    );
+
+    const author = renderEntryListPage(CFG, [makeEntry()], false, 0, 'author', 55);
+    assert.equal(author.components.length, 1, 'the author picker gained a row it should not have');
+  });
+});
 
 describe('fetchStoryEntries', () => {
   test('admin call (includeDeleted, no author filter): status set appears in both subquery and outer WHERE, no author param', async () => {

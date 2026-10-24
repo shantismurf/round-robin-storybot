@@ -1,7 +1,8 @@
 import { log } from '../utilities.js';
+import { DISCORD_ATTACHMENT_RE, extractImageUrls, isDiscordAttachmentUrl } from './_imageUrls.js';
 
-// Matches Discord CDN attachment URLs as they appear in raw entry markdown
-export const ATTACHMENT_URL_REGEX = /https:\/\/cdn\.discordapp\.com\/attachments\/[^\s)\]<>"']+/g;
+// Re-exported under its old name for call sites that mean the refresh scope specifically.
+export const ATTACHMENT_URL_REGEX = DISCORD_ATTACHMENT_RE;
 // Matches custom emoji in raw entry markdown: <:name:id> and <a:name:id>
 const EMOJI_REGEX = /<(a?):([^:>]+):(\d+)>/g;
 
@@ -14,17 +15,26 @@ export function emojiUrl(id, animated) {
   return `https://cdn.discordapp.com/emojis/${id}.${animated ? 'gif' : 'png'}`;
 }
 
-// Collect unique attachment and emoji URLs from raw markdown texts.
-// Returns { attachmentUrls, emojiUrls } — attachment URLs need signature refresh, emoji URLs do not.
+// Collect unique image and emoji URLs from raw markdown texts.
+// Returns { attachmentUrls, externalUrls, emojiUrls }. The split is the point: only
+// attachmentUrls go to Discord's refresh endpoint, because only a Discord CDN link has a
+// signature to refresh. externalUrls are downloaded as-is. Both are embedded in the export.
 export function collectImageUrls(texts) {
   const attachmentUrls = new Set();
+  const externalUrls = new Set();
   const emojiUrls = new Set();
   for (const text of texts) {
     if (!text) continue;
-    for (const match of text.matchAll(ATTACHMENT_URL_REGEX)) attachmentUrls.add(match[0]);
+    for (const url of extractImageUrls(text)) {
+      (isDiscordAttachmentUrl(url) ? attachmentUrls : externalUrls).add(url);
+    }
     for (const match of text.matchAll(EMOJI_REGEX)) emojiUrls.add(emojiUrl(match[3], match[1] === 'a'));
   }
-  return { attachmentUrls: [...attachmentUrls], emojiUrls: [...emojiUrls] };
+  return {
+    attachmentUrls: [...attachmentUrls],
+    externalUrls: [...externalUrls],
+    emojiUrls: [...emojiUrls],
+  };
 }
 
 // Ask Discord for fresh signed URLs for expired attachment links (stored entry URLs
@@ -115,6 +125,7 @@ export function wsrvResizeUrl(url, width) {
  */
 export async function buildImageStore({
   attachmentUrls,
+  externalUrls,
   emojiUrls,
   refreshMap,
   maxBytes,
@@ -168,6 +179,21 @@ export async function buildImageStore({
       }
     } else {
       store(url, result, 'direct');
+    }
+  }
+
+  // External images have no signature to refresh and no Discord media proxy behind them, so
+  // an oversize one goes straight to wsrv.nl rather than trying discordProxyResizeUrl first
+  // (which would no-op on a non-Discord host anyway).
+  for (const url of externalUrls ?? []) {
+    const perImageCap = Math.min(Number.isFinite(maxBytes) ? maxBytes : Infinity, budgetLeft());
+    let result = await fetchImage(url, perImageCap, fetchFn, { guildName });
+    if (result?.oversize) {
+      log(`buildImageStore: external ${url} is oversize (${result.bytes} bytes), trying resize`, { show: false, guildName });
+      result = await fetchImage(wsrvResizeUrl(url, resizeWidth), perImageCap, fetchFn, { guildName });
+      store(url, result, 'wsrv.nl resize (external)');
+    } else {
+      store(url, result, 'external');
     }
   }
 

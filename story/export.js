@@ -4,8 +4,10 @@ import { marked } from 'marked';
 import { ratingCodes, ratingLabelKey, formatWarnings, warningOptions, dynamicOptions } from './_metadata.js';
 import { applyEntryMarkup, isSceneBreakLine, resolveMentionsToPlainText } from './_entryMarkup.js';
 import { getActiveThreadId } from '../storybot.js';
-import { STORY_STATUS, WRITER_STATUS, ENTRY_STATUS, STORY_MODE } from '../constants.js';
+import { STORY_STATUS, STORY_MODE } from '../constants.js';
 import { collectImageUrls, refreshAttachmentUrls, buildImageStore, buildImageDataBlock, emojiUrl } from './_exportImages.js';
+import { ANCHOR_IMAGE_RE, BANG_IMAGE_RE } from './_imageUrls.js';
+import { fetchStoryForExport, buildExportFilename } from './_exportData.js';
 
 // Renders an embedded image (data-storybot-img id, filled by the loader script at the
 // bottom of the export) or a visible placeholder span when the image couldn't be embedded.
@@ -98,6 +100,10 @@ export async function discordMarkdownToHtml(text, guild = null, dividerText = nu
   }
   text = processed.join('\n');
 
+  // Discord ___underline italic___ → <u><em>, before the __ pass below. It has to come
+  // first: the lazy /__(.*?)__/ would take the first two underscores and the shortest run
+  // to the next pair, turning ___both___ into <u>_both</u> plus a stray trailing underscore.
+  text = text.replace(/___(.+?)___/gs, '<u><em>$1</em></u>');
   // Discord __underline__ → <u> before marked sees it (marked treats __ as bold)
   text = text.replace(/__(.*?)__/gs, '<u>$1</u>');
   // Discord ||spoiler|| → styled span
@@ -106,18 +112,18 @@ export async function discordMarkdownToHtml(text, guild = null, dividerText = nu
   text = applyEntryMarkup(text, { target: 'html' });
   // Strip any legacy ![]() image syntax so marked doesn't try to render it
   // (we'll handle image URLs after marked runs, to avoid marked escaping injected HTML)
-  text = text.replace(/!\[\]\((https:\/\/cdn\.discordapp\.com\/attachments\/[^\s)]+)\)/g, '$1');
+  text = text.replace(BANG_IMAGE_RE, '$1');
 
   // Run through marked with breaks:true so single newlines render as line breaks (matching Discord behaviour)
   let html = marked.parse(text, { breaks: true });
 
-  // Convert Discord CDN attachment links to embedded images after marked has run.
-  // New format [display text](cdn_url): marked renders as <a href="url">text</a> — use text as alt.
+  // Convert image links to embedded images after marked has run.
+  // New format [display text](url): marked renders as <a href="url">text</a> — use text as alt.
   // Legacy format bare url: marked auto-links as <a href="url">url</a> — omit alt when text === url.
   // marked HTML-escapes '&' in href attributes, so unescape before the imageStore lookup
   // (keys are the raw URLs collected from entry markdown).
   html = html.replace(
-    /<a href="(https:\/\/cdn\.discordapp\.com\/attachments\/[^\s"]+)"[^>]*>([^<]*)<\/a>/g,
+    ANCHOR_IMAGE_RE,
     (_, hrefUrl, linkText) => {
       const url = hrefUrl.replace(/&amp;/g, '&');
       const text = linkText.trim();
@@ -135,33 +141,9 @@ export async function discordMarkdownToHtml(text, guild = null, dividerText = nu
  * Returns null if story not found, or an object with { hasEntries, buffer, filename, title, turnCount, wordCount, writerCount }.
  */
 export async function generateStoryExport(connection, storyId, guildId, guild = null, { suppressBreaks = false } = {}) {
-  const [storyRows] = await connection.execute(
-    `SELECT story_id, guild_story_id, title, created_at, story_status, mode, closed_at, show_authors,
-            summary, tags, rating, warnings, main_pairing, other_relationships, characters, dynamic, scene_break_divider
-     FROM story WHERE story_id = ? AND guild_id = ?`,
-    [storyId, guildId]
-  );
-  if (storyRows.length === 0) return null;
-  const story = storyRows[0];
-
-  const [writers] = await connection.execute(
-    `SELECT discord_display_name, pen_name FROM story_writer WHERE story_id = ? AND sw_status = ? ORDER BY joined_at ASC`,
-    [storyId, WRITER_STATUS.ACTIVE]
-  );
-
-  const [entries] = await connection.execute(
-    `SELECT se.content, se.created_at, sw.discord_display_name, sw.pen_name,
-            (SELECT COUNT(DISTINCT t2.turn_id) FROM turn t2
-             JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-             JOIN story_entry se2 ON se2.turn_id = t2.turn_id AND se2.entry_status = ?
-             WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at) as turn_number
-     FROM story_entry se
-     JOIN turn t ON se.turn_id = t.turn_id
-     JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
-     WHERE sw.story_id = ? AND se.entry_status = ?
-     ORDER BY t.started_at`,
-    [ENTRY_STATUS.CONFIRMED, storyId, ENTRY_STATUS.CONFIRMED]
-  );
+  const fetched = await fetchStoryForExport(connection, storyId, guildId);
+  if (!fetched) return null;
+  const { story, writers, entries } = fetched;
 
   const writerCount = writers.length;
   if (entries.length === 0) {
@@ -186,10 +168,13 @@ export async function generateStoryExport(connection, storyId, guildId, guild = 
     ...dynamicOptions,
   ], guildId);
 
-  const { attachmentUrls, emojiUrls } = collectImageUrls([...entries.map(e => e.content), story.summary]);
+  const { attachmentUrls, externalUrls, emojiUrls } = collectImageUrls([...entries.map(e => e.content), story.summary]);
+  // Only attachmentUrls go to the refresh endpoint — an external link has no Discord
+  // signature to refresh. See story/_imageUrls.js for why the two stay separate.
   const refreshMap = await refreshAttachmentUrls(guild?.client?.rest, attachmentUrls, { guildName: guild?.name });
   const imageStore = await buildImageStore({
     attachmentUrls,
+    externalUrls,
     emojiUrls,
     refreshMap,
     maxBytes: parseInt(cfg.cfgExportImageMaxBytes, 10),
@@ -206,7 +191,9 @@ export async function generateStoryExport(connection, storyId, guildId, guild = 
   const isClosed = story.story_status === STORY_STATUS.CLOSED;
   const secondDateLabel = isClosed ? cfg.txtExportCompletedLabel : cfg.txtExportUpdatedLabel;
   const secondDate = isClosed && story.closed_at ? fmt(story.closed_at) : fmt(entries[entries.length - 1].created_at);
-  const exportDate = fmt(new Date());
+  // One instant for the in-file date and the filename, so they cannot disagree.
+  const exportedAt = new Date();
+  const exportDate = fmt(exportedAt);
 
   const writersList = writers.map(w => `${w.pen_name || w.discord_display_name} (${w.discord_display_name})`).join(', ');
   const modeLabel = story.mode === STORY_MODE.QUICK ? cfg.txtExportModeQuick : story.mode === STORY_MODE.SLOW ? cfg.txtExportModeSlow : cfg.txtExportModeNormal;
@@ -349,7 +336,9 @@ export async function generateStoryExport(connection, storyId, guildId, guild = 
 </html>`;
 
   const buffer = Buffer.from(html, 'utf8');
-  const filename = `storybot${storyId}_${story.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`;
+  const filename = buildExportFilename({
+    guildStoryId: story.guild_story_id, title: story.title, exportedAt, ext: 'html',
+  });
   return { hasEntries: true, title: story.title, turnCount, wordCount, writerCount, buffer, filename };
 }
 

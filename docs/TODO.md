@@ -36,7 +36,37 @@ work — see [plans/PLAN-sequencing-and-priorities.md](plans/PLAN-sequencing-and
 
 ## Create style_roadmap.md
 
-Establish a project style standard document and reference it from CLAUDE.md. Should define at minimum:
+Establish a project style standard document and reference it from CLAUDE.md.
+
+**First slice done 2026-10-22:** the help pages have their own standard, approved by LeeAnn, at
+[reference/help_style_guide.md](reference/help_style_guide.md). It covers help content only — the
+twelve `PAGE_DEFS` pages and their config keys — and records the drift still to be fixed there.
+The app-wide document below is still owed, and the help guide should be folded into it or linked
+from it when it is written.
+
+**Her posture, 2026-10-23:** "Really we need to be totally consistent and we are not. Id almost
+rather err on keeping them all out until we have a mindful style plan." Acted on for the six
+export and import buttons, which are plain text now -- she had tried one emoji each and took them
+back off, since giving every export the same icon "looks ridiculous" and put it "everywhere the
+word export appears" rather than only where one earns its place. The other 44 are untouched and
+wait on this document. Do not strip them without asking.
+
+**Measured 2026-10-22, before writing any of it: the app does not comply with the button rule
+below.** 44 of 118 `btn*` labels carry a leading emoji (50 before the export and import buttons
+were stripped), including `✅ Finalize Entry`,
+`✋ Join This Story`, `⏭️ Pass My Turn` and `🗑️ Delete an Entry`. What the code actually
+practises is narrower and worth writing down as the real convention if it is kept: the button a
+reader reaches for first is styled, the button that then confirms it is always plain ("Yes,
+Finalize Entry", "Apply These Changes", "Confirm Restore", "Cancel"), and panel chrome — the
+Manage Turns/Entries/Users row, the Story Info / Settings / Metadata tabs, Back, Next — is plain.
+The exception is inside the Components V2 panels, which are genuinely split: `✅ Save Changes`
+and `⏸️ Pause` are styled while Delete Entry, Change Order, Change Writer and Back are not.
+Arrow navigation is also inconsistent (`← Prev`, `◀️ Prev`, `Next →`, `Next ▶️` all coexist).
+So the decision this document has to make is not "what is the rule" but "strip the 50, or keep
+them and narrow the rule to match" — LeeAnn has not ruled yet, and every one of the 50 is
+user-facing text that needs her approval individually or as a batch.
+
+Should define at minimum:
 - **No emojis in buttons** — button labels are plain text only
 - **Button colors** — use Discord ButtonStyle semantically: Success=green (active/positive), Secondary=gray (neutral/paused), Danger=red (closed/ended), Primary=blurple (call to action/joinable). Disabled state always renders gray regardless of style.
 - **Mode icons** — 🟣 Quick · 🟢 Normal · 🔵 Slow (hardcoded UI chrome, not config strings)
@@ -114,7 +144,7 @@ Full implementation plan extracted to [plans/PLAN-dm-support.md](plans/PLAN-dm-s
 
 # Future Features
 
-- stpry efiting expansion: explore the idea of reordering turns,  think about how to make it clear to users how to add content to entries that hit the page limit, editing multi page entries requires skill and understanding of how the system works. 
+- ~~story editing expansion: reordering turns, and making it clear how to add content to entries that hit the page limit~~ — **delivered in 3.10.0** (2026-10-23): Change Order moves a turn, Add Page grows an entry from its last page, and the file round trip takes a long entry out of Discord's page splitting entirely. Design in [plans/completed/PLAN-copyedit-round-trip.md](plans/completed/PLAN-copyedit-round-trip.md). Still open from the original note: the help for all of it is written, but nobody other than LeeAnn has used it yet.
 - Add an export help page with Work Skin creation instructions — walk users through copying the `#workskin` CSS block from their exported HTML into an AO3 Work Skin so entry formatting (tooltips, scene breaks, subtext) matches on AO3.
 - Series System — see [plans/PLAN-series-system.md](plans/PLAN-series-system.md)
 - Reactions Kudos — see [plans/PLAN-reactions-kudos.md](plans/PLAN-reactions-kudos.md)

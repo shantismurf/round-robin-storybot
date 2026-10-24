@@ -113,7 +113,29 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('btnEditNext', 'Next →', 'en', 1),
 ('btnEditOpen', 'Edit', 'en', 1),
 ('btnEditHistory', 'History', 'en', 1),
+('btnEditAddPage', '➕ Add Page', 'en', 1),
+-- Moved into config from a hardcoded string literal in story/edit.js, 2026-10-23. Wording is
+-- unchanged from what shipped. It was the last user-facing text in the edit panel that could not
+-- be changed without a deploy.
+('btnEditNextEntry', 'Edit Next Entry →', 'en', 1),
 ('lblEditEntryContent', 'Entry content', 'en', 1),
+-- Added: an entry's pages are a modal-size artifact, not stored structure, so growing an entry
+-- past its current page count used to mean saving and reopening to force a re-chunk. btnEditAddPage
+-- appends an empty page and opens it, and txtEditModalPageHint says so inside the modal. The hint
+-- is a LabelBuilder description rather than a placeholder because a placeholder never renders over
+-- a pre-filled value, which is why the old save-and-reopen hint was invisible.
+--
+-- The Add Page sentence is wrapped in optional markers and its [add_label] token is supplied only
+-- while the page on screen is the entry's last one, which is the only place the button now appears
+-- (LeeAnn, 2026-10-22). Her wording is unchanged -- on page 3 of 5 the hint simply stops pointing
+-- at a button that is not there. The label is substituted from btnEditAddPage rather than spelled
+-- out, the same way txtEditImportConflict names the Save button.
+('txtEditModalPageHint', 'Page [page] of [total] · [chars] of [limit] characters used.{? Save any changes, then use [add_label] for more room.?}', 'en', 1),
+-- Moved into config from inline template literals in edit.js. Wording is unchanged from what
+-- shipped. The {?...?} block is stripped when page/total are absent from the map (single-page entry).
+('lblEditEmbedTitle', '#[story_num] [title] · Turn #[turn]{? · Page [page] of [total]?}', 'en', 1),
+('txtEditEmbedFooter', '[chars] / [limit] on this page of [total_chars] in the full entry.', 'en', 1),
+('lblEditModalTitle', 'Edit Entry{? — Page [page] of [total]?}', 'en', 1),
 ('txtEditRestoreWarningMulti', '*This version spans multiple pages. Restoring will replace your entire current entry and will alter the story''s turn count.*', 'en', 1),
 ('txtEditRestoreWarningSingle', '*Restoring will replace your entire current entry and will alter the story''s turn count.*', 'en', 1),
 ('btnEditHistNewer', '← Newer', 'en', 1),
@@ -129,6 +151,43 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 -- Added: Manage Entries consolidation — author entry picker (/story edit with no turn given)
 -- and the "Back to entries list" button shared by both the admin and author pickers
 ('btnEditBackToList', '← Back to List', 'en', 1),
+-- Added: the single-entry file round trip on the edit panel (copyedit round trip step 5). Two
+-- buttons, not one: the gap between exporting an entry and importing it back is hours or days,
+-- and an interaction token on the export message dies in about fifteen minutes, so the import
+-- has to start from the panel.
+--
+-- Export/Import, not Download/Upload -- LeeAnn, 2026-10-22: that is the word pair the rest of
+-- the bot already uses. The buttons name the entry, not the turn, because they act on its
+-- content; the numbered thing inside the copy is still a turn.
+--
+-- Plain labels, no emoji: she tried the export and import buttons with one each and took them
+-- back off on 2026-10-22, preferring to keep them out until there is a mindful style plan. See
+-- the comment above btnExportNoBreaks in config_metadata.sql.
+--
+-- Her wording throughout, approved 2026-10-22 -- see docs/plans/completed/PLAN-copyedit-round-trip.md.
+('btnEditExportFile', 'Export for Editing', 'en', 1),
+('txtEditExportFileInstructions', 'Download the text of turn [turn_number] ([word_count] words) for editing. This is the raw text of the entry, so keep any formatting markdown intact. Do not remove the first line, which contains the internal turn ID, so that the entry can be imported correctly.', 'en', 1),
+('btnEditImportFile', 'Import Edited Entry', 'en', 1),
+('txtEditImportModalTitle', 'Import Edited Entry', 'en', 1),
+-- The modal's only text, on the file field itself. The instructions line above it was dropped
+-- (LeeAnn, 2026-10-22): the export message already says to keep the first line, and
+-- txtEditImportError quotes the exact line back if the wrong file turns up anyway.
+('lblEditImportFile', 'Attach edited text file', 'en', 1),
+-- A question, like the bot's other action confirms (Pause Writer?, Remove Writer?, Delete Turn
+-- N?), rather than a repeat of the modal title above it -- LeeAnn, 2026-10-22.
+('txtEditImportConfirmTitle', 'Replace this entry''s content?', 'en', 1),
+('txtEditImportConfirm', 'Your edits will change turn [turn_id] from [from_words] to [to_words] words. After saving, this edit can be reverted from the turn''s History.', 'en', 1),
+-- Appended to the same confirmation rather than being a second screen, so [save_label] is the
+-- button already sitting under it. The label is substituted from its own config value rather
+-- than spelled out here, the same way txtUnsavedChangesBody does it in story/manage.js, so
+-- renaming the button cannot leave this sentence pointing at a button that no longer exists.
+('txtEditImportConflict', 'The entry has been edited since this export was saved. Click **[save_label]** to continue.', 'en', 1),
+('txtEditImportSuccess', '✅ Turn [turn_number] updated from your file.', 'en', 1),
+('txtEditImportNoChange', 'No changes were detected or applied.', 'en', 1),
+-- One message for both "that file is for another entry" and "that file has no turn line at
+-- all": either way the first line is not this entry's, and the fix is the same.
+('txtEditImportError', 'Turn ID Mismatch: The file does not match the current turn. The first line of the file must read `[export_header]` to match the current turn.', 'en', 1),
+('txtEditImportTooLarge', '❌ That file is too long to store as one turn. The limit is about [limit] characters.', 'en', 1),
 ('lblEditMyEntryOption', 'Turn [turn_number] — [word_count] words — [preview]', 'en', 1),
 ('txtEditMyEntriesSelect', 'Edit Your Entry (Admins, use `/story manage` for more options):', 'en', 1),
 ('txtEditMyEntriesNone', 'You have no editable entries in this story yet.', 'en', 1),

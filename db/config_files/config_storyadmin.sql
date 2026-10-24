@@ -159,6 +159,25 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('btnManageEntriesDelete', 'Delete Entry', 'en', 1),
 ('btnManageEntriesRestore', 'Restore Entry', 'en', 1),
 ('btnManageEntriesBack', 'Back', 'en', 1),
+-- Added: Change Order / Change Writer on the Manage Entries edit panel (copyedit round trip).
+-- "Turn" rather than "entry" for the numbered thing a reader sees -- LeeAnn, 2026-10-22. Reassign
+-- was already taken by Manage Turns (btnTurnReassign, "Reassign to Previous"), so these are
+-- Change Order and Change Writer.
+('btnManageEntriesChangeOrder', 'Change Order', 'en', 1),
+('txtManageEntriesChangeOrderModalTitle', 'Change Order', 'en', 1),
+('lblManageEntriesChangeOrderTurn', 'Move to turn number (1-[total])', 'en', 1),
+('txtManageEntriesChangeOrderPlaceholder', 'e.g. 4', 'en', 1),
+('txtManageEntriesChangeOrderSuccess', '✅ Moved to turn [to_position]. The turns in between have been renumbered.', 'en', 1),
+('txtManageEntriesChangeOrderInvalid', '❌ Enter a turn number between 1 and [total].', 'en', 1),
+('txtManageEntriesChangeOrderNoChange', '❌ This entry is already turn [to_position].', 'en', 1),
+('btnManageEntriesChangeWriter', 'Change Writer', 'en', 1),
+('txtManageEntriesChangeWriterSelect', 'Who should turn [turn_number] belong to?', 'en', 1),
+('txtManageEntriesChangeWriterPlaceholder', 'Select a writer...', 'en', 1),
+('txtManageEntriesChangeWriterSuccess', '✅ Turn [turn_number] now belongs to **[to_writer]** (was [from_writer]).', 'en', 1),
+('txtManageEntriesChangeWriterSame', '❌ This entry already belongs to [to_writer].', 'en', 1),
+-- Shown only when the entry being reassigned is the story's most recent turn, where the writer
+-- change also moves the rotation pointer.
+('txtManageEntriesChangeWriterLatest', '-# This is the most recent turn, so changing its writer also changes whose turn comes next.', 'en', 1),
 ('txtStoryCloseNotAuthorized', 'You do not have permission to close this story. Only the story creator or an admin can close a story.', 'en', 1),
 ('txtSetupRoundupDayInvalid', '❌ Day must be a number between 0 (Sunday) and 6 (Saturday).', 'en', 1),
 ('txtSetupRoundupHourInvalid', '❌ Hour must be a number between 0 and 23 (UTC).', 'en', 1),
@@ -220,6 +239,49 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('txtManageEntriesMoreEntries', 'More entries ([offset]+)...', 'en', 1),
 ('txtManageEntriesEntryPlaceholder', 'Select an entry...', 'en', 1),
 ('txtManageEntriesDeletedFlag', '[DELETED]', 'en', 1),
+-- Added: the whole-story import on the Manage Entries picker (copyedit round trip step 6). The
+-- file exported for editing comes back and its block order becomes the story order, a changed
+-- writer name re-credits a turn, and a block the editor deleted removes that turn -- which is why
+-- applying needs a confirmation that lists removals one by one rather than counting them.
+--
+-- Her wording, approved 2026-10-22 -- see docs/plans/completed/PLAN-copyedit-round-trip.md.
+('btnManageEntriesImport', 'Import Edited Story', 'en', 1),
+('txtImportStoryModalTitle', 'Import Edited Story', 'en', 1),
+-- No label or hint of its own: the modal reuses lblEditImportFile ("Attach edited text file")
+-- from the single-entry round trip, at her instruction -- "use the text from the single import"
+-- (2026-10-22) -- and the hint line above it was dropped there for the same reason it is dropped
+-- here, that the label says enough on its own.
+('txtImportStoryConfirmTitle', 'Apply this file to the story?', 'en', 1),
+('txtImportStoryConfirm', '[changed_count] turn(s) would change from **[filename]**. All changes can be individually reverted from Manage Entries, if needed.', 'en', 1),
+-- One line per changed turn. The {? ?} block drops out when a turn only changed its text.
+('txtImportStoryRow', '[turn_number]. [writer_name] — [from_words] to [to_words] words{? ([notes])?}', 'en', 1),
+-- A removed turn has no second word count, so it gets its own line rather than reporting 0
+-- words -- LeeAnn, 2026-10-22.
+('txtImportStoryRowRemoved', '[turn_number]. [writer_name] — [from_words] words{? ([notes])?}', 'en', 1),
+('txtImportStoryNoteMoved', 'moved to turn [to_position]', 'en', 1),
+('txtImportStoryNoteWriter', 'now [to_writer]', 'en', 1),
+('txtImportStoryNoteRemoved', 'removed', 'en', 1),
+('txtImportStoryNoteRestored', 'restored', 'en', 1),
+('txtImportStoryNoteConflict', 'edited since exported', 'en', 1),
+('txtImportStoryUnchangedCount', '[unchanged_count] turn(s) were unchanged.', 'en', 1),
+('txtImportStoryOverflow', 'The full list is attached.', 'en', 1),
+('btnImportStoryConfirm', 'Apply These Changes', 'en', 1),
+('txtImportStorySuccess', '✅ Story updated from file: [changed_count] turn(s) changed.', 'en', 1),
+-- No nothing-changed line of its own either: txtEditImportNoChange says it for both flows.
+-- One report for the whole file rather than a refusal per problem -- LeeAnn, 2026-10-22: "a full
+-- error report is nice". The header is hers verbatim. Each line below is a bullet naming every
+-- turn or writer of its kind, so the editor fixes the lot in one pass, and the wording is kept
+-- free of is/are so one item and twenty read the same. Approved 2026-10-22.
+('txtImportStoryErrorHeader', 'The uploaded file encountered the following errors:', 'en', 1),
+('txtImportStoryErrorNoTurnLines', '- No Turn Lines: the file has no turn lines in it', 'en', 1),
+('txtImportStoryErrorUnknownId', '- Turn ID Mismatch: [file_ids] not found in story', 'en', 1),
+('txtImportStoryErrorDuplicateId', '- Duplicate Turn ID: [file_ids] found more than once', 'en', 1),
+('txtImportStoryErrorUnknownWriter', '- Unknown Writer: [writer_names] not joined to this story', 'en', 1),
+('txtImportStoryErrorEmptyTurn', '- Empty Turn: [file_turns] missing text under the turn line', 'en', 1),
+('txtImportStoryErrorTooLong', '- Turn Too Long: [file_turns] over the [limit] character limit', 'en', 1),
+-- Not part of the report: the upload itself never arrived or could not be fetched, so there is
+-- nothing in it to list.
+('txtImportStoryErrorUnreadable', 'The uploaded file could not be read.', 'en', 1),
 -- Added Silo 3: storyadmin.js setup
 ('txtSetupAgeRestrictNote', '*(Age-restrict this channel if the server is not already 18+)*', 'en', 1),
 ('txtSetupNoMediaNote', 'ℹ️ No media channel set — images will not be processed.', 'en', 1),

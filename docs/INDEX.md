@@ -52,6 +52,7 @@ Every file has a `Status` / `Created` / `Last Updated` (/ `Implemented`) header.
 
 | File | Implemented | Summary |
 |---|---|---|
+| [PLAN-copyedit-round-trip.md](plans/completed/PLAN-copyedit-round-trip.md) | 2026-10-23 | The editing revamp shipped as 3.10.0: Add Page, the plain-text entries export, `entry_order` as the reading order, Change Order and Change Writer with a change log, and the file round trip one turn at a time or the whole story at once |
 | [PLAN-ao3-to-pen-name-rename.md](plans/completed/PLAN-ao3-to-pen-name-rename.md) | 2026-07-01 | `AO3_name` column/field renamed to `pen_name` throughout |
 | [PLAN-mention-display-text.md](plans/completed/PLAN-mention-display-text.md) | 2026-08-26 | `@user`/`#channel`/`@role` mentions in story entries resolved to plain display text at write time; covers Discord's channel-obfuscation change |
 | [PLAN-rating-barrier-migration.md](plans/completed/PLAN-rating-barrier-migration.md) | 2026-07-10 | Story thread migration when rating crosses the NR/M barrier |
@@ -84,6 +85,7 @@ Every file has a `Status` / `Created` / `Last Updated` (/ `Implemented`) header.
 | [system_roadmap.md](reference/system_roadmap.md) | Exported functions, state maps, event routing |
 | [config_roadmap.md](reference/config_roadmap.md) | Manifest of all database-stored config keys |
 | [ux_roadmap.md](reference/ux_roadmap.md) | Application workflows and interface structure |
+| [help_style_guide.md](reference/help_style_guide.md) | Style standard for the twelve help pages: emoji rules, structure conventions, and the drift still to fix |
 | [discordjs_reference.md](reference/discordjs_reference.md) | Verified discord.js API notes — check before trusting training data |
 | [autocomplete-sort-filter-reference.md](reference/autocomplete-sort-filter-reference.md) | Filter/sort rules per `/story` autocomplete subcommand |
 | [HOSTING.md](reference/HOSTING.md) | Production hosting (Pterodactyl) access/deploy reference |

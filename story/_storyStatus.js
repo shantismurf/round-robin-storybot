@@ -4,6 +4,7 @@ import { ratingCodes, ratingBadgeKey, warningOptions, dynamicOptions, formatWarn
 import { resolveGroundRules, parseGroundRulesText, effectiveGroundRulesText, buildGroundRulesEmbed } from './_groundRules.js';
 import { getActiveThreadId } from '../storybot.js';
 import { STORY_STATUS, TURN_STATUS, WRITER_STATUS, STORY_MODE, ENTRY_STATUS } from '../constants.js';
+import { extractImageUrls } from './_imageUrls.js';
 
 /**
  * Truncates free-text metadata to a render cap, with an ellipsis when it had to cut. Several of
@@ -111,15 +112,17 @@ export async function updateStoryStatusMessage(connection, guild, storyId) {
     );
     const entryCount = confirmedEntries.length;
     const contributingWriterIds = new Set(confirmedEntries.map(e => e.story_writer_id));
-    const cdnImageRegex = /https:\/\/cdn\.discordapp\.com\/attachments\/[^\s<"]+/g;
     let wordCount = 0;
     let imageCount = 0;
     for (const e of confirmedEntries) {
-      const images = e.content.match(cdnImageRegex) ?? [];
+      const images = extractImageUrls(e.content);
       imageCount += images.length;
-      // Strip image URLs before counting words so they don't inflate the count
-      const textOnly = e.content.replace(cdnImageRegex, '').trim();
-      wordCount += textOnly.split(/\s+/).filter(w => w.length > 0).length;
+      // Strip the image URLs before counting words so they don't inflate the count. Only the
+      // URLs — a [caption](url) link keeps its caption, which is prose the writer wrote and
+      // has always counted toward the total.
+      let textOnly = e.content;
+      for (const url of images) textOnly = textOnly.split(url).join('');
+      wordCount += textOnly.trim().split(/\s+/).filter(w => w.length > 0).length;
     }
 
     const ratingBadgeCfgKey = ratingBadgeKey(story.rating ?? 'NR');

@@ -17,7 +17,6 @@
 // point the manage panel should route story_manage_close_confirm/_cancel back to the shared
 // close.js handlers directly, and this file should be deleted.
 
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { getConfigValue, log, replaceTemplateVariables } from '../utilities.js';
 import { endTurnThread, closeStoryInternals } from './_turn.js';
 import { postStoryFeedClosedAnnouncement } from '../announcements.js';
@@ -25,6 +24,7 @@ import { getActiveThreadId } from '../storybot.js';
 import { getStoryStats } from './close.js';
 import { finalMessage } from './_metadataModals.js';
 import { STORY_STATUS, TURN_STATUS, STORY_MODE } from '../constants.js';
+import { buildCloseExportRow, EXPORT_ROW_CONFIG_KEYS } from './_exportText.js';
 
 export async function handleManageCloseConfirm(connection, interaction, state) {
   log(`handleManageCloseConfirm entry user=${interaction.user.username} story=${state.storyId}`, { show: false, guildName: interaction?.guild?.name });
@@ -60,19 +60,9 @@ export async function handleManageCloseConfirm(connection, interaction, state) {
 
     const { turnCount, wordCount, writerCount } = await getStoryStats(connection, storyId);
 
-    const [btnExportNoBreaks, btnExportWithBreaks] = await Promise.all([
-      getConfigValue(connection, 'btnExportNoBreaks', guildId),
-      getConfigValue(connection, 'btnExportWithBreaks', guildId),
-    ]);
-    const exportRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`story_export_close_noturns_${storyId}`)
-        .setLabel(btnExportNoBreaks)
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`story_export_close_withturns_${storyId}`)
-        .setLabel(btnExportWithBreaks)
-        .setStyle(ButtonStyle.Secondary)
+    const exportRow = buildCloseExportRow(
+      await getConfigValue(connection, EXPORT_ROW_CONFIG_KEYS, guildId),
+      storyId
     );
 
     // closeStoryInternals already retitled every existing thread (unrestricted and/or

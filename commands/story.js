@@ -8,7 +8,8 @@ import { handleJoin, handleJoinSetAO3Button, handleJoinAO3ModalSubmit, handleJoi
 import { handleWrite, handleWriteModalSubmit, handleEntryConfirmation, handleViewLastEntry, handleFinalizeEntry, handleFinalizeConfirm, handleFinalizeImageConfirm, handlePreviewNav, handleSkipTurn, handleSkipConfirm, handleThreadDeleteNow } from '../story/write.js';
 import { pendingPreviewData } from '../story/_state.js';
 import { handleRead, handleReadNav } from '../story/read.js';
-import { handleEdit, handleEditButton, handleEditModalSubmit, handleRepostEntry } from '../story/edit.js';
+import { handleEdit, handleEditButton, handleEditModalSubmit, handleChangeOrderModalSubmit, handleImportFileModalSubmit, handleRepostEntry } from '../story/edit.js';
+import { handleImportStoryButton, handleImportStoryModalSubmit } from '../story/_importStory.js';
 import { handleListStories, handleListNavigation, handleFilterButton, renderStoryListReply } from '../story/list.js';
 import { handleManage, handleManageButton, handleTurnActionSelectMenu, handleTagReviewButton, handleManageModalSubmit } from '../story/manage.js';
 import { handleManageEntriesButton, handleManageEntriesSelectMenu } from '../story/_manageEntries.js';
@@ -203,6 +204,18 @@ async function handleModalSubmit(connection, interaction) {
     await handleJoinAO3ModalSubmit(connection, interaction);
   } else if (interaction.customId.startsWith('story_manage_')) {
     await handleManageModalSubmit(connection, interaction);
+  } else if (interaction.customId === 'story_edit_order_submit') {
+    await handleChangeOrderModalSubmit(connection, interaction);
+
+  } else if (interaction.customId === 'story_edit_import_submit') {
+    await handleImportFileModalSubmit(connection, interaction);
+
+  } else if (interaction.customId.startsWith('story_import_story_submit_')) {
+    await interaction.deferUpdate();
+    await handleImportStoryModalSubmit(
+      connection, interaction,
+      parseInt(interaction.customId.replace('story_import_story_submit_', ''), 10)
+    );
   } else if (interaction.customId.startsWith('story_edit_modal_')) {
     await handleEditModalSubmit(connection, interaction);
   } else if (interaction.customId.startsWith('story_tag_submit_modal_')) {
@@ -251,6 +264,8 @@ async function handleButtonInteraction(connection, interaction) {
     await handleCloseCancel(connection, interaction);
   } else if (interaction.customId.startsWith('story_export_close_')) {
     await handleCloseExportButton(connection, interaction);
+  } else if (interaction.customId.startsWith('story_import_story_')) {
+    await handleImportStoryButton(connection, interaction);
   } else if (interaction.customId.startsWith('story_manage_review_tags_read_')) {
     await handleEditTagsButton(connection, interaction);
   } else if (interaction.customId.startsWith('story_manage_')) {
@@ -331,7 +346,9 @@ async function handleSelectMenuInteraction(connection, interaction) {
   } else if (interaction.customId === 'story_read_jump') {
     await handleReadNav(connection, interaction);
 
-  } else if (interaction.customId === 'story_edit_jump' || interaction.customId.startsWith('story_edit_mypick_select_')) {
+  } else if (interaction.customId === 'story_edit_jump'
+      || interaction.customId === 'story_edit_writer_select'
+      || interaction.customId.startsWith('story_edit_mypick_select_')) {
     await handleEditButton(connection, interaction);
 
   } else if (interaction.customId.startsWith('story_manage_entries_list_select_')) {
@@ -521,7 +538,7 @@ async function handleAutocomplete(connection, interaction) {
       [rows] = await connection.execute(
         `SELECT turn_number, discord_display_name, content FROM (
            SELECT
-             DENSE_RANK() OVER (ORDER BY t.started_at) AS turn_number,
+             DENSE_RANK() OVER (ORDER BY se.entry_order) AS turn_number,
              sw.discord_display_name, se.content
            FROM story_entry se
            JOIN turn t ON se.turn_id = t.turn_id
@@ -536,7 +553,7 @@ async function handleAutocomplete(connection, interaction) {
       [rows] = await connection.execute(
         `SELECT turn_number, discord_display_name, content FROM (
            SELECT
-             DENSE_RANK() OVER (ORDER BY t.started_at) AS turn_number,
+             DENSE_RANK() OVER (ORDER BY se.entry_order) AS turn_number,
              sw.discord_display_name, sw.discord_user_id, se.content
            FROM story_entry se
            JOIN turn t ON se.turn_id = t.turn_id
