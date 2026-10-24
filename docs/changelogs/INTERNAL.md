@@ -34,7 +34,7 @@ which stay as they are until there is a style plan -- see the `Create style_road
 
 ---
 
-## 3.10.0 — 2026-10-23
+## 3.10.0 — 2026-10-24
 
 Provenance: written alongside the work.
 
