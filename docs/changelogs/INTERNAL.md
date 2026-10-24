@@ -54,6 +54,28 @@ No bump: deployment tooling only, no change to the bot's code or behavior.
 
 ---
 
+## 3.9.2 — 2026-10-24
+
+Provenance: written alongside the work.
+
+### Fixed
+- **Moving a story's rating across the mature threshold crashed with `cfg is not defined`.**
+  The rating-change confirmation in `handleManageModalSubmit`, restored in f029459
+  (2026-09-24), read its strings from a bare `cfg`. That branch of the dispatcher never
+  declared one: its five sibling branches each open with `const cfg = state.cfg;`, and the
+  nearest declaration is block-scoped to the settings branch sixty lines above, so the
+  reference was a `ReferenceError` from the day it shipped. The block runs only when
+  `crossesBarrier` is true, which is why every other metadata save was fine and this went
+  a month without being seen. The throw landed before the confirm prompt was sent, so the
+  new rating was never staged and nothing reached the database: the admin got
+  `errProcessingRequest`, the story kept its old rating, and there was no way at all to move
+  a story across the threshold from Manage. `state.pendingRatingChange`, set one line
+  earlier, is read only by the confirm button that never rendered, so it sat inert until the
+  panel closed and never leaked into a save. Reported from the Bagginshield Book Club server
+  on 2026-10-24.
+
+---
+
 ## 3.9.1 — 2026-10-13
 
 Provenance: written alongside the work.
