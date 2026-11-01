@@ -28,9 +28,23 @@ the thing you will search for later is the old name.
 
 Provenance: written alongside the work.
 
-Nothing yet. Open and deliberately not in 3.10.0: the emoji on the remaining 44 button labels,
-which stay as they are until there is a style plan -- see the `Create style_roadmap.md` section of
+Open and deliberately not in 3.10.0: the emoji on the remaining 44 button labels, which stay as
+they are until there is a style plan -- see the `Create style_roadmap.md` section of
 `docs/TODO.md`.
+
+### Changed
+- **Hosting moved to Hetzner + Coolify (2026-10-12).** The bot process moved off bot-hosting.net
+  onto the Hetzner VM that already ran the database, and now runs as a Coolify
+  application with full root access. `config.json` is a Coolify File Mount, and
+  `db.host` is now `10.0.1.1`. Docs only, no code change: `docs/reference/HOSTING.md` rewritten
+  (bot-hosting.net details moved to a Legacy section), plus the Host/Startup bullets in
+  `CLAUDE.md`, the PR template's post-merge checklist, and `docs/INDEX.md`. The
+  bot-hosting.net slot is stopped, not deleted.
+
+### Added
+- **Plan: staging bot and Claude Code on the VM** (`docs/plans/PLAN-staging-and-agent-on-vm.md`).
+  Setup steps for a walled-off agent user, staging DB and staging bot, plus the seed/reset
+  script as the next build. Docs only.
 
 ---
 
