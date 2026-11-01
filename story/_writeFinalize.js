@@ -6,6 +6,7 @@ import { buildEntryPages, buildEntryEmbed, postThreadEntry, stepImagePage } from
 import { resolveMentionsToPlainText } from './_entryMarkup.js';
 import { pendingPreviewData } from './_state.js';
 import { TURN_STATUS, ENTRY_STATUS } from '../constants.js';
+import { confirmedEntryCountSubquery, nextEntryOrder } from './_entryOrder.js';
 
 // Build entry content from the writer's turn-thread posts, in posting order. Shared by the
 // finalize preview and the confirm write so the preview always shows what will be saved.
@@ -238,11 +239,7 @@ export async function doFinalizeEntry(connection, interaction, storyId, writerId
   try {
     const [turnInfo] = await connection.execute(
       `SELECT t.turn_id, t.thread_id, sw.discord_user_id, sw.story_id, s.guild_story_id,
-              (SELECT COUNT(DISTINCT t2.turn_id)
-               FROM turn t2
-               JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-               JOIN story_entry se2 ON se2.turn_id = t2.turn_id AND se2.entry_status = ?
-               WHERE sw2.story_id = sw.story_id AND t2.started_at < t.started_at) + 1 AS turn_number
+              ${confirmedEntryCountSubquery()} + 1 AS turn_number
        FROM turn t
        JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
        JOIN story s ON sw.story_id = s.story_id
@@ -347,9 +344,14 @@ export async function doFinalizeEntry(connection, interaction, storyId, writerId
         await interaction.editReply({ content: await getConfigValue(connection, 'txtWriteTurnEnded', interaction.guild.id), components: [] });
         return;
       }
+      // MAX + 1 over every status, so a new entry can never land on the slot a deleted one is
+      // holding for its Restore. Inside this transaction, so two finalizes cannot both read the
+      // same maximum.
+      const entryOrder = await nextEntryOrder(txn, storyId);
       await txn.execute(
-        `INSERT INTO story_entry (turn_id, content, entry_status, created_at) VALUES (?, ?, ?, NOW())`,
-        [turn.turn_id, entryContent, ENTRY_STATUS.CONFIRMED]
+        `INSERT INTO story_entry (turn_id, content, entry_status, entry_order, created_at)
+         VALUES (?, ?, ?, ?, NOW())`,
+        [turn.turn_id, entryContent, ENTRY_STATUS.CONFIRMED, entryOrder]
       );
       const nextWriterId = await PickNextWriter(txn, storyId);
       nextTurnResult = nextWriterId
@@ -375,13 +377,19 @@ export async function doFinalizeEntry(connection, interaction, storyId, writerId
       log(`doFinalizeEntry: NextTurn failed for story ${storyId} after turn ${turn.turn_id} was finalized — story has no active turn: ${nextTurnResult?.error}`, { show: true, guildName: interaction?.guild?.name, hub: true });
     }
 
+    // Counted by entry_order rather than by time, so the number matches what every display
+    // shows after a reorder.
     const [turnNumResult] = await connection.execute(
-      `SELECT COUNT(DISTINCT t2.turn_id) AS turn_number
-       FROM turn t2
-       JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-       JOIN story_entry se2 ON se2.turn_id = t2.turn_id AND se2.entry_status = ?
-       WHERE sw2.story_id = ? AND t2.started_at <= (SELECT started_at FROM turn WHERE turn_id = ?)`,
-      [ENTRY_STATUS.CONFIRMED, storyId, turn.turn_id]
+      `SELECT COUNT(*) AS turn_number
+       FROM story_entry se
+       JOIN turn t ON se.turn_id = t.turn_id
+       JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
+       WHERE sw.story_id = ? AND se.entry_status = ?
+         AND se.entry_order <= (
+           SELECT se_this.entry_order FROM story_entry se_this
+           WHERE se_this.turn_id = ? AND se_this.entry_status = ?
+         )`,
+      [storyId, ENTRY_STATUS.CONFIRMED, turn.turn_id, ENTRY_STATUS.CONFIRMED]
     );
     const turn_number = turnNumResult[0].turn_number;
 

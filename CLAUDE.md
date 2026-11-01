@@ -17,7 +17,7 @@
   - deploy_commands: registers slash commands (instant in test_mode).
 - **MariaDB:** Uses explicit transactions (`BEGIN`/`COMMIT`/`ROLLBACK`) for all story state changes.
   - The migration runner splits on ; before stripping comments, so any ; inside a comment text corrupts the next statement. NO SEMI-COLONS IN SQL CODE COMMENTS!
-- discord.js 14.26.4: modals DO support selects/radio groups. Before writing or reviewing ANY discord.js component/modal code, read `docs/reference/discordjs_reference.md` and verify against `node_modules/discord.js/src/`, never training data.
+- discord.js 14.27.0: modals DO support selects/radio groups, and file uploads (`FileUploadBuilder`, `ModalSubmitFields.getUploadedFiles()`). Before writing or reviewing ANY discord.js component/modal code, read `docs/reference/discordjs_reference.md` and verify against `node_modules/discord.js/src/`, never training data.
 
 ## High-level Architecture 
 - **index.js (The Gateway):** Primary bot entry point. Routes all interactions (isCommand, isButton, isModalSubmit) by customId. Executes `deploy.js` on bot start for database migrations, config table sync, slash command registration, and faq post sync.

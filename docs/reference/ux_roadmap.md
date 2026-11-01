@@ -33,8 +33,14 @@ For system architecture and routing, see `system_roadmap.md`.
 
 /story read [story_id]
   → Paginated embed (splitAtParagraphs)
+  → story_read_jump → page-select menu
+  → story_read_edit_<entryId> → opens the Story Edit session below (first page of each entry)
+  → story_read_download_noturns / story_read_download_withturns → html export, ephemeral file
+  → story_read_download_entries → plain-text entries export, the file the whole-story import reads
   → story_read_post_public_* → posts to feed
   → story_repost_entry_*
+  → (the same three export buttons ride the close announcement, as
+    story_export_close_noturns/withturns/entries_<storyId> — one shared row builder)
 
 /story manage [story_id]
   → ManagePanel embed (shared embed builder, toggle buttons: mode, order, joins, show names, privacy)
@@ -53,7 +59,13 @@ For system architecture and routing, see `system_roadmap.md`.
   → story_manage_entries_open → Manage Entries panel: flat, paginated picker of every entry in
     the story (all writers, includes deleted — story_manage_entries_list_select_<storyId>) →
     picking an entry opens it directly in the Story Edit session (below) with manageMode: full
-    paging/history, plus admin-only Delete/Restore buttons and a "← Back to List" button
+    paging/history, plus admin-only Delete/Restore/Change Order/Change Writer buttons and a
+    "← Back to List" button
+  → story_manage_entries_import (on the picker) → modal with a file upload → the edited entries
+    export comes back as the whole story: block order becomes the reading order, a changed writer
+    name on a turn line re-credits that turn, a deleted block removes that turn. Refuses a file
+    with any problem and reports every problem at once; otherwise a per-turn summary to confirm
+    (story_import_story_confirm / story_import_story_cancel) before anything is written
   → story_manage_turns_open → Manage Turns panel
   → story_manage_review_tags (when pending tags > 0) → Manage Tags panel (approve/reject queue)
   → story_manage_close_open → reuses /story close confirm/cancel flow (story_close_confirm_*/story_close_cancel_*),
@@ -78,12 +90,27 @@ Tag Submission Thread Post (in story thread)
   → turn given → chunkEntryContent → paginated edit modals
   → turn omitted → entry picker (own CONFIRMED entries only, story_edit_mypick_select_<storyId>)
     → picking an entry opens the same edit session below, with a "← Back to List" button added
+  → ONE panel, whatever opened it (command, either picker, or read's Edit button): buildEditMessage
+    takes no caller options for which buttons to show
   → story_edit_prev / story_edit_next / story_edit_jump (page-select menu, same pattern as story_read_jump) → jump to any page directly
   → story_edit_modal_* → entry updated
-  → story_edit_browse_history / story_edit_restore_* → edit-history browse + revert to a version
+  → story_edit_add_page → appends an empty page and opens it, so an entry can grow past its
+    current page count without save-and-reopen. Only on the last page of the entry, because it
+    appends to the end
+  → story_edit_browse_history / story_edit_restore_* → edit-history browse + revert to a version.
+    Reorders and writer changes appear here as change rows: no content, no paging, Restore
+    disabled
+  → story_edit_export_file → the entry as a plain .txt, first line carrying its turn ID
+  → story_edit_import_file → modal with a file upload → story_edit_import_confirm /
+    story_edit_import_cancel → replaces that entry's content, one confirmation first
+  → story_edit_next_entry_<entryId> (admins) → opens the next turn's entry in the same session.
+    On the panel itself, so it advances repeatedly — it used to be built only on the
+    after-a-save reply, which let it work exactly once (fixed 2026-10-23)
   → (Manage Entries sessions only) story_edit_manage_delete / story_edit_manage_restore →
-    soft-delete / undelete, independent of edit history; story_edit_backlist → back to
-    whichever picker (admin or author) opened this session
+    soft-delete / undelete, independent of edit history; story_edit_manage_order → modal, move
+    this turn to another position; story_edit_manage_writer → select menu, credit the turn to
+    another writer who has joined; story_edit_backlist → back to whichever picker (admin or
+    author) opened this session
 
 /story tag [story_id]
   → Active writers only; opens tag submission modal
@@ -94,6 +121,21 @@ Tag Submission Thread Post (in story thread)
 /story ping / timeleft / help
   → Ephemeral replies only; no follow-up interactions
 ```
+
+### Reading order
+
+A story's reading order is its own fact, held in `story_entry.entry_order` (migration 026), not
+derived from `turn.started_at`. The turn number a reader sees — in the thread, in `/story read`,
+on an export, in a picker — counts confirmed entries in that order. Reordering a story for
+publication therefore does not rewrite when anything happened.
+
+- A soft-deleted entry keeps its slot, so Restore puts it back between the turns it sat between.
+  Every renumber carries deleted rows along.
+- Abandoned quick-mode drafts are never in the order and keep a NULL.
+- Two things write the order: Change Order on one turn (`story_edit_manage_order`), and the
+  whole-story import, where the block order in the uploaded file becomes the order outright.
+- Both are logged in `story_entry_edit` (migration 027) and show up as change rows in an entry's
+  History, alongside content versions.
 
 ### Story feed announcements
 
@@ -238,6 +280,9 @@ turnSlowReminder job (slow mode only)
   path users reach — it was kept, not deleted, because a client with the old command list cached
   can still fire a DM interaction during the propagation window. Low priority now, but still
   hardcoded: one config key serves all three.
+- ~~`'Edit Next Entry →'` in `story/edit.js`~~ — **resolved 2026-10-23**, now `btnEditNextEntry`.
+  It was found while fixing the button's behaviour, not by an audit: the label had been hardcoded
+  since the button was added.
 - Additional items to be identified in Silos 3–5.
 
 ### Deferred Tier B — Story Management (Silo 2)

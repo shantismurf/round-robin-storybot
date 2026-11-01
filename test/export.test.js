@@ -189,6 +189,26 @@ describe('buildImageDataBlock', () => {
   });
 });
 
+describe('discordMarkdownToHtml underline handling', () => {
+  test('___text___ is underline plus italic, with no stray underscore', async () => {
+    const html = await discordMarkdownToHtml('___both___', null, null, null);
+    assert.match(html, /<u><em>both<\/em><\/u>/);
+    assert.ok(!html.includes('_both'), 'the lazy __ pass must not take the first two underscores');
+    assert.ok(!/<\/u>_/.test(html), 'no underscore should be left trailing the close tag');
+  });
+
+  test('__text__ is still plain underline', async () => {
+    const html = await discordMarkdownToHtml('__plain__', null, null, null);
+    assert.match(html, /<u>plain<\/u>/);
+  });
+
+  test('both forms in one entry each render correctly', async () => {
+    const html = await discordMarkdownToHtml('___x___ then __y__', null, null, null);
+    assert.match(html, /<u><em>x<\/em><\/u>/);
+    assert.match(html, /<u>y<\/u>/);
+  });
+});
+
 describe('discordMarkdownToHtml image handling', () => {
   test('renders a new-format [text](url) attachment link as a data-storybot-img placeholder, not a CDN src', async () => {
     const url = 'https://cdn.discordapp.com/attachments/1/2/a.png';

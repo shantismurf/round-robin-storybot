@@ -4,14 +4,34 @@
 // guideline — no behavior change, and no new state: still reads/writes the same pendingEditData
 // sessions (story/_state.js) and story_entry_edit rows edit.js always has.
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } from 'discord.js';
-import { getConfigValue, log, chunkEntryContent } from '../utilities.js';
+import { getConfigValue, log, chunkEntryContent, replaceTemplateVariables } from '../utilities.js';
 import { pendingEditData } from './_state.js';
-import { ENTRY_STATUS } from '../constants.js';
+import { ENTRY_STATUS, EDIT_CHANGE_TYPE } from '../constants.js';
 import { buildEditMessageForState } from './edit.js';
+
+// A history row is either a content version or a structural change (migration 027): a reorder or
+// a writer change, discriminated by change_type, with NULL meaning "content version" because that
+// is what every row held before 027. A change row has no content to page through or restore, so it
+// renders its own title, byline and one-line description, and its Restore button is disabled
+// rather than hidden -- LeeAnn, 2026-10-22: a move or a writer change is set again with the button
+// that set it, and undo exists only for bringing back a deleted entry.
+function describeChange(histRow, editCfg) {
+  if (histRow.change_type === EDIT_CHANGE_TYPE.REASSIGN) {
+    return replaceTemplateVariables(editCfg.txtEditHistoryWriterChanged, {
+      from_writer: histRow.previous_writer_name,
+      to_writer: histRow.new_writer_name,
+    });
+  }
+  return replaceTemplateVariables(editCfg.txtEditHistoryMoved, {
+    from_position: histRow.previous_position,
+    to_position: histRow.new_position,
+  });
+}
 
 async function renderHistoryPage(connection, interaction, state, histPage, histChunkPage = 0) {
   const [rows] = await connection.execute(
-    `SELECT edit_id, content, edited_by_name, edited_at
+    `SELECT edit_id, content, edited_by_name, edited_at,
+            change_type, previous_writer_name, new_writer_name, previous_position, new_position
      FROM story_entry_edit
      WHERE entry_id = ? ORDER BY edited_at DESC LIMIT 1 OFFSET ?`,
     [state.entryId, histPage]
@@ -29,46 +49,65 @@ async function renderHistoryPage(connection, interaction, state, histPage, histC
   }
 
   const histRow = rows[0];
+  const isChange = histRow.change_type !== null && histRow.change_type !== undefined;
   state.historyPage = histPage;
-  state.histChunkPage = histChunkPage;
+  state.histChunkPage = isChange ? 0 : histChunkPage;
 
-  const histChunks = chunkEntryContent(histRow.content);
-  const chunk = histChunks[histChunkPage];
-  const pageLabel = histChunks.length > 1 ? ` · Page ${histChunkPage + 1} of ${histChunks.length}` : '';
+  // A change row has no content, so there is nothing to chunk and no page to be on.
+  const histChunks = isChange ? [] : chunkEntryContent(histRow.content);
+  const chunkPage = isChange ? 0 : histChunkPage;
+  const version = total - histPage;
 
-  const embed = new EmbedBuilder()
-    .setTitle(`Edit History — Version ${total - histPage} of ${total}${pageLabel}`)
-    .setDescription(chunk.text)
-    .setFooter({ text: `Edited by ${histRow.edited_by_name} · ${histRow.edited_at}` })
-    .setColor(0x99aab5);
+  const embed = new EmbedBuilder().setColor(0x99aab5);
 
-  if (histChunkPage === 0 && histChunks.length > 1) {
-    embed.addFields({ name: '​', value: '*This version spans multiple pages. Restoring will replace your entire current entry and will alter the story\'s turn count.*' });
-  } else if (histChunkPage === 0) {
-    embed.addFields({ name: '​', value: '*Restoring will replace your entire current entry and will alter the story\'s turn count.*' });
+  if (isChange) {
+    embed
+      .setTitle(replaceTemplateVariables(editCfg.txtEditHistoryChangeTitle, { version, total }))
+      .setDescription(describeChange(histRow, editCfg))
+      .setFooter({ text: replaceTemplateVariables(editCfg.txtEditHistoryChangeBy, {
+        edited_by: histRow.edited_by_name, edited_at: histRow.edited_at,
+      }) });
+  } else {
+    const pageTokens = histChunks.length > 1
+      ? { page: chunkPage + 1, pages: histChunks.length }
+      : {};
+    embed
+      .setTitle(replaceTemplateVariables(editCfg.txtEditHistoryVersionTitle, { version, total, ...pageTokens }))
+      .setDescription(histChunks[chunkPage].text)
+      .setFooter({ text: replaceTemplateVariables(editCfg.txtEditHistoryEditedBy, {
+        edited_by: histRow.edited_by_name, edited_at: histRow.edited_at,
+      }) });
+
+    if (chunkPage === 0) {
+      embed.addFields({
+        name: '\u200b',
+        value: histChunks.length > 1 ? editCfg.txtEditRestoreWarningMulti : editCfg.txtEditRestoreWarningSingle,
+      });
+    }
   }
 
   const buttons = [];
 
   if (histPage > 0) {
-    buttons.push(new ButtonBuilder().setCustomId('story_edit_history_prev').setLabel(editCfg.btnEditHistNewer ?? '← Newer').setStyle(ButtonStyle.Secondary));
+    buttons.push(new ButtonBuilder().setCustomId('story_edit_history_prev').setLabel(editCfg.btnEditHistNewer).setStyle(ButtonStyle.Secondary));
   }
-  if (histChunkPage > 0) {
-    buttons.push(new ButtonBuilder().setCustomId('story_edit_hist_chunk_prev').setLabel(editCfg.btnEditHistPrevPage ?? '← Prev Page').setStyle(ButtonStyle.Secondary));
+  if (!isChange && chunkPage > 0) {
+    buttons.push(new ButtonBuilder().setCustomId('story_edit_hist_chunk_prev').setLabel(editCfg.btnEditHistPrevPage).setStyle(ButtonStyle.Secondary));
   }
-  if (histChunkPage === 0) {
+  if (isChange || chunkPage === 0) {
     buttons.push(new ButtonBuilder()
       .setCustomId(`story_edit_restore_${histRow.edit_id}`)
-      .setLabel(editCfg.btnEditRestore ?? 'Restore This Version')
-      .setStyle(ButtonStyle.Primary));
+      .setLabel(editCfg.btnEditRestore)
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(isChange));
   }
-  if (histChunkPage < histChunks.length - 1) {
-    buttons.push(new ButtonBuilder().setCustomId('story_edit_hist_chunk_next').setLabel(editCfg.btnEditHistNextPage ?? 'Next Page →').setStyle(ButtonStyle.Secondary));
+  if (!isChange && chunkPage < histChunks.length - 1) {
+    buttons.push(new ButtonBuilder().setCustomId('story_edit_hist_chunk_next').setLabel(editCfg.btnEditHistNextPage).setStyle(ButtonStyle.Secondary));
   }
   if (histPage < total - 1) {
-    buttons.push(new ButtonBuilder().setCustomId('story_edit_history_next').setLabel(editCfg.btnEditHistOlder ?? 'Older →').setStyle(ButtonStyle.Secondary));
+    buttons.push(new ButtonBuilder().setCustomId('story_edit_history_next').setLabel(editCfg.btnEditHistOlder).setStyle(ButtonStyle.Secondary));
   }
-  buttons.push(new ButtonBuilder().setCustomId('story_edit_back').setLabel(editCfg.btnEditBackToEntry ?? '← Back to Entry').setStyle(ButtonStyle.Secondary));
+  buttons.push(new ButtonBuilder().setCustomId('story_edit_back').setLabel(editCfg.btnEditBackToEntry).setStyle(ButtonStyle.Secondary));
 
   const components = [];
   for (let i = 0; i < buttons.length; i += 5) {
@@ -110,9 +149,17 @@ async function handleRestoreExecute(connection, interaction, editId) {
   if (!state) return;
 
   const [histRows] = await connection.execute(
-    `SELECT content FROM story_entry_edit WHERE edit_id = ?`, [editId]
+    `SELECT content, change_type FROM story_entry_edit WHERE edit_id = ?`, [editId]
   );
-  if (histRows.length === 0) {
+  // A reorder or writer-change row holds no content, so there is nothing to restore. The panel
+  // disables Restore on those rows, so reaching here means a stale button from before migration
+  // 027's rows existed, or a customId sent by hand -- either way it is treated as nothing to
+  // restore rather than writing a NULL over the entry.
+  const isRestorable = histRows.length > 0
+    && histRows[0].change_type === null
+    && histRows[0].content !== null;
+  if (!isRestorable) {
+    log(`handleRestoreExecute: edit ${editId} is not a content version (change_type=${histRows[0]?.change_type ?? 'missing row'}), nothing to restore`, { show: true, guildName: interaction?.guild?.name });
     return await state.historyMessage.edit({ content: await getConfigValue(connection, 'txtEditHistoryNotFound', interaction.guild.id), embeds: [], components: [] });
   }
 

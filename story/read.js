@@ -1,12 +1,14 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, MessageFlags } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, MessageFlags } from 'discord.js';
 import { getConfigValue, log, resolveStoryId, chunkEntryContent, checkIsAdmin, checkIsCreator, discordTimestamp, replaceTemplateVariables } from '../utilities.js';
 import { generateStoryExport } from './export.js';
 import { isRestricted, ratingBadgeKey } from './_metadata.js';
 import { pendingReadData, lastReadPage, pendingEditData } from './_state.js';
-import { buildEditMessage } from './edit.js';
+import { buildEditMessage, buildEntryModal, EDIT_PANEL_CONFIG_KEYS } from './edit.js';
+import { handleEntriesTextExportButton } from './_exportText.js';
 import { buildEntryEmbed, buildEntryPages, stepImagePage } from './_entryRenderer.js';
 import { withFreshAttachmentUrls } from './_exportImages.js';
 import { WRITER_STATUS, ENTRY_STATUS } from '../constants.js';
+import { turnNumberSubquery, entryOrderSort } from './_entryOrder.js';
 
 export { pendingReadData, lastReadPage };
 
@@ -70,8 +72,8 @@ export function buildReadEmbed(session, pageIndex) {
     let rangeStart = Math.max(0, pageIndex - Math.floor(maxOptions / 2));
     const rangeEnd = Math.min(totalPages, rangeStart + maxOptions);
     rangeStart = Math.max(0, rangeEnd - maxOptions);
-    const optionTemplate = session.lblPageJumpOptionTurn ?? 'Page [page] — Turn [turn]{? ([writer])?}';
-    const placeholderTemplate = session.lblPageJumpPlaceholder ?? 'Page [page] of [total]';
+    const optionTemplate = session.lblPageJumpOptionTurn;
+    const placeholderTemplate = session.lblPageJumpPlaceholder;
     const options = [];
     for (let i = rangeStart; i < rangeEnd; i++) {
       const p = session.pages[i];
@@ -97,10 +99,13 @@ export function buildReadEmbed(session, pageIndex) {
     utilityButtons.push(
       new ButtonBuilder()
         .setCustomId(`story_read_edit_${page.storyEntryId}`)
-        .setLabel('Edit')
+        .setLabel(session.btnEditOpen)
         .setStyle(ButtonStyle.Secondary)
     );
   }
+  // Two HTML exports (for posting) plus the plain-text one (for editing). With Edit and Repost
+  // both contextual, this row reaches exactly Discord's 5-component maximum — a sixth button
+  // here has to go in a row of its own.
   utilityButtons.push(
     new ButtonBuilder()
       .setCustomId('story_read_download_noturns')
@@ -109,6 +114,10 @@ export function buildReadEmbed(session, pageIndex) {
     new ButtonBuilder()
       .setCustomId('story_read_download_withturns')
       .setLabel(session.btnExportWithBreaks)
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('story_read_download_entries')
+      .setLabel(session.btnExportForEditing)
       .setStyle(ButtonStyle.Secondary)
   );
   if (session.pendingRepostEntryId && session.pendingRepostEntryId === page.storyEntryId && page.isFirstChunk) {
@@ -211,17 +220,13 @@ if (isConfigured) {
 
     const [entries] = await connection.execute(
       `SELECT se.content, se.story_entry_id, se.created_at, sw.discord_user_id AS original_author_id,
-              (SELECT COUNT(DISTINCT t2.turn_id)
-               FROM turn t2
-               JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-               JOIN story_entry se2 ON se2.turn_id = t2.turn_id AND se2.entry_status = ?
-               WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at) AS turn_number,
+              ${turnNumberSubquery()} AS turn_number,
               sw.discord_display_name
        FROM story_entry se
        JOIN turn t ON se.turn_id = t.turn_id
        JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
        WHERE sw.story_id = ? AND se.entry_status = ?
-       ORDER BY t.started_at`,
+       ORDER BY ${entryOrderSort()}`,
       [ENTRY_STATUS.CONFIRMED, storyId, ENTRY_STATUS.CONFIRMED]
     );
 
@@ -285,13 +290,15 @@ if (isConfigured) {
       [storyId]
     );
 
-    const [btnSubmitTagRead, btnViewProposedTags, btnManageTags, ratingBadgeDisplay, btnExportNoBreaks, btnExportWithBreaks, lblPageJumpPlaceholder, lblPageJumpOptionTurn, lblEntryFooter] = await Promise.all([
+    const [btnSubmitTagRead, btnViewProposedTags, btnManageTags, ratingBadgeDisplay, btnExportNoBreaks, btnExportWithBreaks, btnExportForEditing, btnEditOpen, lblPageJumpPlaceholder, lblPageJumpOptionTurn, lblEntryFooter] = await Promise.all([
       getConfigValue(connection, 'btnSubmitTagRead', guildId),
       getConfigValue(connection, 'btnViewProposedTags', guildId),
       getConfigValue(connection, 'btnManageTags', guildId),
       getConfigValue(connection, ratingBadgeKey(story.rating ?? 'NR'), guildId),
       getConfigValue(connection, 'btnExportNoBreaks', guildId),
       getConfigValue(connection, 'btnExportWithBreaks', guildId),
+      getConfigValue(connection, 'btnExportForEditing', guildId),
+      getConfigValue(connection, 'btnEditOpen', guildId),
       getConfigValue(connection, 'lblPageJumpPlaceholder', guildId),
       getConfigValue(connection, 'lblPageJumpOptionTurn', guildId),
       getConfigValue(connection, 'lblEntryFooter', guildId),
@@ -314,7 +321,7 @@ if (isConfigured) {
       isAdmin, isAdminOrCreator: isAdmin || isCreator, isActiveWriter,
       pendingTagCount: Number(pendingTagCount),
       btnSubmitTagRead, btnViewProposedTags, btnManageTags,
-      btnExportNoBreaks, btnExportWithBreaks,
+      btnExportNoBreaks, btnExportWithBreaks, btnExportForEditing, btnEditOpen,
       lblPageJumpPlaceholder, lblPageJumpOptionTurn, lblEntryFooter,
       storyThreadId: story.story_thread_id, imagePageIndex: 0
     };
@@ -364,40 +371,31 @@ export async function handleReadEditButton(connection, interaction, session, ent
     fromReadPath: !isMultiChunk,
   });
 
+  // Both branches render edit.js's own panel/modal, so they read the same key set it does —
+  // EDIT_PANEL_CONFIG_KEYS rather than a copy of the list that goes stale when a key is added there.
+  const editCfg = await getConfigValue(connection, EDIT_PANEL_CONFIG_KEYS, session.guildId);
+  const editState = pendingEditData.get(interaction.user.id);
+  if (editState) editState.editCfg = editCfg;
+
   if (isMultiChunk) {
     // Multi-chunk: show the paginated edit embed so all pages are reachable
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const editCfg = await getConfigValue(connection, [
-      'lblEditPageSplitNotice', 'txtEditPageSplitInstructions',
-      'btnEditPrev', 'btnEditNext', 'btnEditOpen', 'btnEditHistory', 'lblEditEntryContent',
-      'txtEditRestoreWarningMulti', 'txtEditRestoreWarningSingle',
-      'btnEditHistNewer', 'btnEditHistPrevPage', 'btnEditRestore',
-      'btnEditHistNextPage', 'btnEditHistOlder', 'btnEditBackToEntry',
-      'lblPageJumpPlaceholder', 'lblPageJumpOption',
-      'txtEditRestoreConfirmMulti',
-      'txtEditRestoreConfirmTitle', 'btnEditRestoreConfirm', 'btnEditRestoreCancel'
-    ], session.guildId);
-    const editState = pendingEditData.get(interaction.user.id);
-    if (editState) editState.editCfg = editCfg;
     await interaction.editReply(
       buildEditMessage(chunks, 0, page.hasHistory, page.turnNumber, storyTitle, session.guildStoryId, editCfg)
     );
   } else {
-    // Single chunk: open modal directly — no embed needed
-    // No defer — showModal must be the first response
-    // Use entryId in customId to prevent Discord from caching modal content across entries
-    const modal = new ModalBuilder()
-      .setCustomId(`story_edit_modal_${entryId}`)
-      .setTitle('Edit Entry');
-    const input = new TextInputBuilder()
-      .setCustomId('entry_content')
-      .setLabel('Entry content')
-      .setStyle(TextInputStyle.Paragraph)
-      .setMaxLength(4000)
-      .setValue(chunks[0].text.slice(0, 4000))
-      .setPlaceholder('Edit this section. If you hit the character limit, save and return to continue on the next page.');
-    modal.addComponents(new ActionRowBuilder().addComponents(input));
-    await interaction.showModal(modal);
+    // Single chunk: open modal directly — no embed needed.
+    // No defer — showModal must be the first response.
+    // Shares edit.js's buildEntryModal rather than assembling a second copy here: this one had
+    // its own hard-coded title, label and hint, and its hint described the save-and-reopen
+    // workaround that Add Page replaces.
+    if (!editState) {
+      return await interaction.reply({
+        content: await getConfigValue(connection, 'txtEditSessionExpired', session.guildId),
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    await interaction.showModal(buildEntryModal(editState));
   }
 }
 
@@ -415,6 +413,14 @@ export async function handleReadNav(connection, interaction) {
   if (interaction.customId.startsWith('story_read_edit_')) {
     const entryId = interaction.customId.split('_').at(-1); // keep as string — DB returns BIGINT as string (bigNumberStrings: true)
     await handleReadEditButton(connection, interaction, session, entryId);
+    return;
+  }
+
+  // The plain-text editing export — unrendered entry content, handled separately from the two
+  // HTML exports below because it carries no AO3 instructions and offers no public post.
+  if (interaction.customId === 'story_read_download_entries') {
+    await interaction.deferUpdate();
+    await handleEntriesTextExportButton(connection, interaction, session.storyId, session.guildId);
     return;
   }
 

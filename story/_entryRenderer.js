@@ -13,22 +13,13 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentB
 import { splitAtParagraphs, replaceTemplateVariables, log } from '../utilities.js';
 import { applyEntryMarkup } from './_entryMarkup.js';
 import { withFreshAttachmentUrls } from './_exportImages.js';
+import { IMAGE_LINK_RE, extractImageUrls, isSafeImageUrl } from './_imageUrls.js';
 
 const IMAGES_PER_PAGE = 4;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-function extractImageUrls(content) {
-  const urls = [];
-  const mdRe = /\[[^\]]*\]\((https:\/\/cdn\.discordapp\.com\/attachments\/[^\s)]+)\)/g;
-  let m;
-  while ((m = mdRe.exec(content)) !== null) urls.push(m[1]);
-  const bareRe = /(?<!\()(https:\/\/cdn\.discordapp\.com\/attachments\/[^\s<"]+)/g;
-  while ((m = bareRe.exec(content)) !== null) urls.push(m[1]);
-  return urls;
-}
 
 // ---------------------------------------------------------------------------
 // Interactive: build pages for a single entry
@@ -177,14 +168,15 @@ export const NAV_PREFIX = {
 // Non-interactive: stacked embeds for permanent thread posts
 // ---------------------------------------------------------------------------
 
-// Matches an image link in entry content: [caption](cdn attachment url) or a bare cdn url.
-const IMAGE_LINK_RE = /\[([^\]]*)\]\((https:\/\/cdn\.discordapp\.com\/attachments\/[^\s)]+)\)|(?<!\()(https:\/\/cdn\.discordapp\.com\/attachments\/[^\s<"]+)/g;
-
 // Split entry content into ordered text and image segments, so images can post inline.
 export function splitAtImages(content) {
   const segments = [];
   let last = 0;
   for (const m of content.matchAll(IMAGE_LINK_RE)) {
+    // A URL that matches the shape but fails validation is left in the prose rather than
+    // posted as an image. discord.js fetches the URL to upload it, so this is the gate that
+    // keeps the bot from being pointed at an address of someone else's choosing.
+    if (!isSafeImageUrl(m[2] ?? m[3])) continue;
     const text = content.slice(last, m.index).trim();
     if (text) segments.push({ type: 'text', text });
     segments.push({ type: 'image', url: m[2] ?? m[3], caption: m[1] ?? null, raw: m[0] });

@@ -58,6 +58,20 @@ Words: ~[word_count]', 'en', 1),
 ('txtEditSuccess', 'Entry updated.', 'en', 1),
 ('txtEditRestoreSuccess', 'Entry restored.', 'en', 1),
 ('txtEditHistoryNotFound', 'History version not found.', 'en', 1),
+-- Moved into config from inline template literals in story/_editHistory.js. Wording unchanged
+-- from what shipped. The {? ?} block is stripped on a single-page version, where no page tokens
+-- are in the map.
+('txtEditHistoryVersionTitle', 'Edit History — Version [version] of [total]{? · Page [page] of [pages]?}', 'en', 1),
+('txtEditHistoryEditedBy', 'Edited by [edited_by] · [edited_at]', 'en', 1),
+-- Added: story_entry_edit is a per-entry event log as of migration 027, so a history page can be
+-- a reorder or a writer change rather than a content version. Those rows hold no content to show
+-- or restore, so they render their own title, their own byline and a one-line description of what
+-- changed, and the panel disables Restore on them -- a move or a writer change is set again with
+-- the button that set it. LeeAnn, 2026-10-22: undo is only for bringing back a deleted entry.
+('txtEditHistoryChangeTitle', 'Entry History — Change [version] of [total]', 'en', 1),
+('txtEditHistoryChangeBy', 'Changed by [edited_by] · [edited_at]', 'en', 1),
+('txtEditHistoryWriterChanged', 'Writer changed from **[from_writer]** to **[to_writer]**.', 'en', 1),
+('txtEditHistoryMoved', 'Moved from turn [from_position] to turn [to_position].', 'en', 1),
 ('btnRepostEntry', '📢 Repost to Story Thread', 'en', 1),
 ('txtRepostSuccess', '✅ Entry reposted to the story thread.', 'en', 1),
 ('txtRepostThreadNotFound', 'Story thread not found — cannot repost.', 'en', 1),

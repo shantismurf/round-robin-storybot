@@ -3,6 +3,7 @@ import { getConfigValue, log, replaceTemplateVariables, resolveStoryId, splitAtP
 import { getStoriesPaginated } from '../story/list.js';
 import { ratingCodes, ratingBadgeKey } from '../story/_metadata.js';
 import { STORY_STATUS, WRITER_STATUS, ENTRY_STATUS, TURN_STATUS, STORY_MODE } from '../constants.js';
+import { turnNumberSubquery, entryOrderSort } from '../story/_entryOrder.js';
 
 const LIST_PAGE_SIZE = 5;
 const WIDE_SPACE = '　'; // unicode full-width space for field value indent
@@ -419,15 +420,12 @@ export async function handleCatchUp(connection, interaction) {
     const afterTime = lastTurnRows.length > 0 ? lastTurnRows[0].started_at : new Date(0);
     const [entries] = await connection.execute(
       `SELECT se.content, sw.discord_display_name,
-              (SELECT COUNT(DISTINCT t2.turn_id) FROM turn t2
-               JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-               JOIN story_entry se2 ON se2.turn_id = t2.turn_id AND se2.entry_status = ?
-               WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at) as turn_number
+              ${turnNumberSubquery()} as turn_number
        FROM story_entry se
        JOIN turn t ON se.turn_id = t.turn_id
        JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
        WHERE sw.story_id = ? AND se.entry_status = ? AND t.started_at >= ?
-       ORDER BY t.started_at`,
+       ORDER BY ${entryOrderSort()}`,
       [ENTRY_STATUS.CONFIRMED, storyId, ENTRY_STATUS.CONFIRMED, afterTime]
     );
 

@@ -37,6 +37,13 @@ export const ENTRY_STATUS = Object.freeze({
   DELETED: 'deleted',
 });
 
+// story_entry_edit.change_type. NULL on a content version, which is what the table held before
+// migration 027 — so the absence of a value is itself meaningful and there is no CONTENT member.
+export const EDIT_CHANGE_TYPE = Object.freeze({
+  REORDER: 'reorder',
+  REASSIGN: 'reassign',
+});
+
 export const STORY_MODE = Object.freeze({
   NORMAL: 0,
   QUICK: 1,

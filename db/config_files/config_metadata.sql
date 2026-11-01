@@ -3,8 +3,24 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('txtExportAO3Instructions', 'If you don''t see a download icon, click the ··· menu on the file and choose **Download**.\n\n**To post your story online:** Open the file in any text editor and copy everything between the `STORY START` and `STORY END` lines. For AO3, in the "Work Text" field, click the **HTML** button to switch to HTML mode, then paste. (Your title, tags, and summary go in AO3''s own fields — they''re at the top of the export file for easy reference.) Images are embedded inside the file itself, but sites like AO3 don''t accept embedded images — to include images in a posted work, upload them to an image host and add links there.', 'en', 1),
 ('btnExportPostPublicly', '📢 Post to Story Thread', 'en', 1),
 ('txtExportPostedPublicly', '✅ Story file posted to the story thread.', 'en', 1),
-('btnExportNoBreaks', '⬇ Export (no breaks)', 'en', 1),
-('btnExportWithBreaks', '⬇ Export (breaks with turns and names)', 'en', 1),
+-- No emoji on the export or import buttons, her call 2026-10-22, after a round of trying to make
+-- them consistent with each other. The three exports had drifted to two different emoji across
+-- three releases, and giving all three the same one only moved the problem: "I wanted to use only
+-- one emoji in the places that need them, not put it everywhere the word export appears." Her
+-- posture, which these six buttons now follow: err on keeping them out until there is a mindful
+-- style plan. docs/TODO.md has said button labels are plain text only since well before this.
+-- The other 44 styled buttons are untouched and wait on that plan.
+('btnExportNoBreaks', 'Export (no breaks)', 'en', 1),
+('btnExportWithBreaks', 'Export (breaks with turns and names)', 'en', 1),
+-- The plain-text editing export (story/_exportText.js). A different artifact from the two HTML
+-- exports above: unrendered story_entry.content, so what you edit is what is stored. The entry
+-- delimiter itself is NOT config — it is a structural token the importer parses, so a guild
+-- editing its wording would break import rather than translate it.
+('btnExportForEditing', 'Export Entries for Editing', 'en', 1),
+('txtExportTextInstructions', 'Download the text of all [entry_count] turn(s) ([word_count] words) for editing. This is the raw text of the entries, so keep any formatting markdown intact. Do not remove the first line of each turn, which contains the internal turn ID, so that entries can be imported correctly.', 'en', 1),
+('txtExportTextNoEntries', 'This story has no confirmed entries to export yet.', 'en', 1),
+('txtExportTextHeader', '[title] (story #[story_num])\n[turn_count] turn(s), [entry_count] entr(ies), [word_count] words - status: [status] - exported [exported]{?\nWriters: [authors]?}', 'en', 1),
+('txtExportTextLegend', '--- HOW TO EDIT THIS FILE ---\nThis is the entry text exactly as the bot stores it, not the published version. Edit the prose freely.\n\nEach turn begins with a line like [[turn 12 | #4417 | Maria]]. Do not change the number after the #, which is the internal turn ID - it is how the bot matches your edits back to the right turn. The turn number and the writer name are only there for you to read, and the bot works them out again when you import.\n\nYou can also rearrange the story from this file. A turn''s block is its turn line plus the text under it, so:\n  To move a turn, move its whole block to where you want it. The new turn order will be saved when you import.\n  To make a turn belong to a different writer, change the name on its turn line to another writer who has joined the story.\n  To remove a turn, delete its whole block. You can restore it from Manage Entries.\nWhen you import the file, you will see a summary of changes for confirmation before being applied.\n\nFormatting uses Discord markdown: *italic*, **bold**, ***bold italic***, __underline__, ~~strikethrough~~, ||spoiler||, > quote, -# small, # heading. Discord documents the rest at https://support.discord.com/hc/en-us/articles/210298617\nThese bot markers also work:\n  [[break]]              a scene break{? (shows as: [divider])?}\n  [[text|translation]]   text with a hover translation\nImages are referenced with regular markdown links, [caption](url). You can change the captions and urls, or add new images, each on their own line, but they must reference valid image files only.\n--- END ---', 'en', 1),
 ('txtExportCompletedLabel', 'Completed', 'en', 1),
 ('txtExportUpdatedLabel', 'Updated', 'en', 1),
 ('txtExportModeQuick', 'Quick Mode', 'en', 1),

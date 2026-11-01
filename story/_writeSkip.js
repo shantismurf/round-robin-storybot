@@ -3,6 +3,7 @@ import { getConfigValue, log, replaceTemplateVariables, checkIsAdmin, checkIsCre
 import { PickNextWriter, NextTurn, postStoryThreadActivity, endTurnThread, endTurnGuarded, deleteThreadAndAnnouncement } from './_turn.js';
 import { postThreadEntry } from './_entryRenderer.js';
 import { TURN_STATUS, JOB_STATUS, ENTRY_STATUS } from '../constants.js';
+import { turnNumberSubquery } from './_entryOrder.js';
 
 export async function handleViewLastEntry(connection, interaction) {
   log(`handleViewLastEntry entry user=${interaction.user.username}`, { show: false, guildName: interaction?.guild?.name });
@@ -26,11 +27,7 @@ export async function handleViewLastEntry(connection, interaction) {
 
     const [rows] = await connection.execute(
       `SELECT se.content, sw.discord_display_name, s.show_authors, s.scene_break_divider,
-              (SELECT COUNT(DISTINCT t2.turn_id)
-               FROM turn t2
-               JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id
-               JOIN story_entry se2 ON se2.turn_id = t2.turn_id AND se2.entry_status = ?
-               WHERE sw2.story_id = sw.story_id AND t2.started_at <= t.started_at) as turn_number
+              ${turnNumberSubquery()} as turn_number
        FROM story_entry se
        JOIN turn t ON se.turn_id = t.turn_id
        JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
