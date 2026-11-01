@@ -10,6 +10,6 @@
 - [ ] `npm test` passed
 - [ ] `node --check` on all new/modified files
 
-## Post-merge (no staging environment — the host pulls `main` and restarts)
-- [ ] Restarted the bot and confirmed no startup errors
+## Post-merge (no staging bot yet — deploy `main` from Coolify)
+- [ ] Deployed and confirmed no startup errors in the Coolify logs
 - [ ] Spot-checked the actual feature/fix live in Discord

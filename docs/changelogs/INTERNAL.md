@@ -28,6 +28,15 @@ the thing you will search for later is the old name.
 
 Provenance: written alongside the work.
 
+### Changed
+- **Hosting moved to Hetzner + Coolify (2026-10-12).** The bot process moved off bot-hosting.net
+  onto the Hetzner VM that already ran the database, and now runs as a Coolify
+  application with full root access. `config.json` is a Coolify File Mount, and
+  `db.host` is now `10.0.1.1`. Docs only, no code change: `docs/reference/HOSTING.md` rewritten
+  (bot-hosting.net details moved to a Legacy section), plus the Host/Startup bullets in
+  `CLAUDE.md`, the PR template's post-merge checklist, and `docs/INDEX.md`. The
+  bot-hosting.net slot is stopped, not deleted.
+
 ### Fixed
 - **Every background job failed on the new host with `"[object Object]" is not valid JSON`.**
   The `job.payload` column is `JSON`, which MariaDB stores as LONGTEXT, so mysql2 always returned
@@ -51,6 +60,9 @@ No bump: deployment tooling only, no change to the bot's code or behavior.
   copying the code, so a code-only deploy reuses the cached install. It takes effect once the
   Coolify app's Build Pack is set to Dockerfile. `config.json` stays out of the image and is
   still supplied by Coolify as a File Mount at `/app/config.json`.
+- **Plan: staging bot and Claude Code on the VM** (`docs/plans/PLAN-staging-and-agent-on-vm.md`).
+  Setup steps for a walled-off agent user, staging DB and staging bot, plus the seed/reset
+  script as the next build. Docs only.
 
 ---
 
