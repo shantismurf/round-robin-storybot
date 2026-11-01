@@ -18,9 +18,11 @@ if the bot starts misbehaving under load.
 
 ## Deploying
 
-- The bot is a Coolify application built with **Nixpacks** from this repo's `main` branch. The
-  repo has no Dockerfile. Nixpacks detects Node and runs `npm install`, then the `start` script
-  in `package.json` (`node index.js`).
+- The bot is a Coolify application built from this repo's `main` branch. It started on
+  Coolify's default **Nixpacks** build. The repo has had a `Dockerfile` since PR #86
+  (`node:22-slim`, packages installed in their own cached layer, then `node index.js`), which
+  takes effect once the app's Build Pack is set to Dockerfile. Nixpacks reinstalled every
+  package on each deploy (about 100 seconds).
 - **Deploys are manual right now.** Push to `main`, then hit **Redeploy** in the Coolify
   dashboard, which pulls the new commit and rebuilds. A plain Restart reuses the image Coolify
   already built, so it won't pick up new code.
@@ -35,8 +37,8 @@ if the bot starts misbehaving under load.
 
 ## config.json
 
-Not in git (`.gitignore`). It is copied into the Coolify application's **persistent storage**,
-so redeploys don't touch it. The format is the same as before. The only value that changed in
+Not in git (`.gitignore`), and kept out of the image by `.dockerignore`. Coolify supplies it as
+a **File Mount** at `/app/config.json`, so redeploys don't touch it. The format is the same as before. The only value that changed in
 the move is `db.host`, now `10.0.1.1`, which is the address the bot's container uses to reach
 MariaDB on the VM. The code reads only `config.json`, not environment variables.
 
@@ -52,8 +54,11 @@ There is no staging bot yet.
 
 Still untracked (`.gitignore`). That was a workaround for the old host, where `npm install`
 in a persistent directory rewrote the lock file and the next `git pull` refused to run.
-Nixpacks builds each deploy fresh, so that conflict can't happen here. Tracking the lock file
-again would make builds reproducible, but that hasn't been decided yet.
+Each Coolify deploy builds fresh, so that conflict can't happen here. Without a lock file, though,
+every build installs the newest versions `package.json` allows. That already bit once: the
+first Coolify build pulled mysql2 3.24.x, which parses JSON columns itself and broke every
+background job (fixed in `job-runner.js`, see the Unreleased changelog entry). Tracking the lock
+file again would make builds reproducible, but that hasn't been decided yet.
 
 ## Database
 

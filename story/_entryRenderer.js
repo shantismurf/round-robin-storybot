@@ -159,6 +159,13 @@ export function buildEntryEmbed(page, session) {
   return { embeds, components };
 }
 
+// Next image-page index for an Images ◀ (-1) / Images ▶ (+1) press, kept in range for this page's images.
+// Shared by every paged view so read and preview step the gallery the same way.
+export function stepImagePage(imagePageIndex, imageUrls, direction) {
+  const totalImagePages = Math.max(1, Math.ceil((imageUrls?.length ?? 0) / IMAGES_PER_PAGE));
+  return Math.min(totalImagePages - 1, Math.max(0, (imagePageIndex ?? 0) + direction));
+}
+
 // Button customId prefixes per context — distinct to avoid session collisions.
 export const NAV_PREFIX = {
   read:    'story_read',

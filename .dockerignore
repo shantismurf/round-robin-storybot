@@ -1,0 +1,11 @@
+.git
+node_modules
+.claude
+.github
+docs
+test
+coverage
+logs
+config*.json
+!config.example.json
+.env

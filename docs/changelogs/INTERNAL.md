@@ -26,19 +26,104 @@ the thing you will search for later is the old name.
 
 ## Unreleased
 
+Provenance: written alongside the work.
+
 ### Changed
 - **Hosting moved to Hetzner + Coolify (2026-10-12).** The bot process moved off bot-hosting.net
-  onto the Hetzner VM that already ran the database, and now runs as a Nixpacks-built Coolify
-  application with full root access. `config.json` lives in Coolify persistent storage, and
+  onto the Hetzner VM that already ran the database, and now runs as a Coolify
+  application with full root access. `config.json` is a Coolify File Mount, and
   `db.host` is now `10.0.1.1`. Docs only, no code change: `docs/reference/HOSTING.md` rewritten
   (bot-hosting.net details moved to a Legacy section), plus the Host/Startup bullets in
   `CLAUDE.md`, the PR template's post-merge checklist, and `docs/INDEX.md`. The
   bot-hosting.net slot is stopped, not deleted.
 
+### Fixed
+- **Every background job failed on the new host with `"[object Object]" is not valid JSON`.**
+  The `job.payload` column is `JSON`, which MariaDB stores as LONGTEXT, so mysql2 always returned
+  it as a string and `processJob` ran `JSON.parse` on it. mysql2 3.23.0 (July 2026) started
+  reading MariaDB's extended column metadata and parsing JSON columns itself, so the payload now
+  arrives as an object. With no lockfile and `^3.15.3` in `package.json`, the Coolify build's
+  fresh install pulled 3.24.x. The parse also ran after the job was claimed and outside the
+  try/catch, so each failure skipped the retry logic, surfaced as a "poll error", and left the
+  job stuck in progress until the next restart re-queued it (job 1735, departedWriterAudit, was
+  the visible case). `processJob` now accepts either a string or an object, and parses inside
+  the try so a bad payload goes through normal retries. Jobs stuck since the move are re-queued
+  on the next restart and run late. No bump: no intended behavior change.
+
+No bump: deployment tooling only, no change to the bot's code or behavior.
+
 ### Added
+- **`Dockerfile` and `.dockerignore` for the Coolify host.** The bot moved from bot-hosting.net
+  to Coolify on the Hetzner server on 2026-10-12. Coolify's default Nixpacks build reinstalled
+  every npm package on each deploy (about 100 seconds), because copying the changed code
+  invalidated its install cache. The Dockerfile installs packages in their own layer before
+  copying the code, so a code-only deploy reuses the cached install. It takes effect once the
+  Coolify app's Build Pack is set to Dockerfile. `config.json` stays out of the image and is
+  still supplied by Coolify as a File Mount at `/app/config.json`.
 - **Plan: staging bot and Claude Code on the VM** (`docs/plans/PLAN-staging-and-agent-on-vm.md`).
   Setup steps for a walled-off agent user, staging DB and staging bot, plus the seed/reset
   script as the next build. Docs only.
+
+---
+
+## 3.9.2 — 2026-10-24
+
+Provenance: written alongside the work.
+
+### Fixed
+- **Moving a story's rating across the mature threshold crashed with `cfg is not defined`.**
+  The rating-change confirmation in `handleManageModalSubmit`, restored in f029459
+  (2026-09-24), read its strings from a bare `cfg`. That branch of the dispatcher never
+  declared one: its five sibling branches each open with `const cfg = state.cfg;`, and the
+  nearest declaration is block-scoped to the settings branch sixty lines above, so the
+  reference was a `ReferenceError` from the day it shipped. The block runs only when
+  `crossesBarrier` is true, which is why every other metadata save was fine and this went
+  a month without being seen. The throw landed before the confirm prompt was sent, so the
+  new rating was never staged and nothing reached the database: the admin got
+  `errProcessingRequest`, the story kept its old rating, and there was no way at all to move
+  a story across the threshold from Manage. `state.pendingRatingChange`, set one line
+  earlier, is read only by the confirm button that never rendered, so it sat inert until the
+  panel closed and never leaked into a save. Reported from the Bagginshield Book Club server
+  on 2026-10-24.
+
+---
+
+## 3.9.1 — 2026-10-13
+
+Provenance: written alongside the work.
+
+PATCH. The finalize preview now shows an entry's images, from the same assembly code that
+builds the saved entry. LeeAnn approved 3.9.1 on 2026-10-13.
+
+### Fixed
+- **The finalize preview shows real images, on the page they belong to.** The preview had
+  never shown images: it built its own copy of the entry text and put a "📎 caption" line
+  wherever an image went, so the shared gallery code had no image links to show. 3.9.0's
+  per-page images made the gap obvious.
+- **The preview's image gallery restarts on each text page.** Turning the preview's text page
+  kept the old image-page position, unlike `/story read`.
+
+### Changed
+- **Preview and confirm build the entry with one function, `assembleEntryContent`.** The two
+  separate loops over the writer's posts are now one. Each call passes how to link an image:
+  the preview links the writer's own upload in the turn thread (still freshly signed), and
+  confirm forwards to the media channel and links that copy, so forwarding still happens exactly
+  once, on confirm. Preview-only markdown stripping still runs after assembly, and mentions
+  still resolve once in the preview and get reused on confirm (see
+  `docs/plans/completed/PLAN-mention-display-text.md`). The reasoning comment in
+  `doFinalizeEntry` is updated to match. A side effect: with no media channel set, the preview
+  now leaves image posts out, matching what confirm saves, instead of showing "📎" lines for
+  images that would never be saved.
+- **Images ◀ ▶ handling shared via `stepImagePage`** in `_entryRenderer.js`. Read and preview
+  each had their own copy, with the 4-per-page size hardcoded.
+- **The media-channel lookup is one helper, `getMediaChannel`,** used by both preview and
+  confirm.
+
+### Removed
+- **`collectMessageParts`** (`_writeFinalize.js`, re-exported from `write.js`). Nothing called
+  it, and `assembleEntryContent` is now the one place that turns posts into entry text.
+
+---
 
 ## 3.9.0 — 2026-10-12
 
