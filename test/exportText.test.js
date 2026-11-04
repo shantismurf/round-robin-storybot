@@ -254,7 +254,7 @@ describe('buildCloseExportRow', () => {
   const cfg = {
     btnExportNoBreaks: '⬇ Export (no breaks)',
     btnExportWithBreaks: '⬇ Export (breaks with turns and names)',
-    btnExportForEditing: '📝 Export Entries for Editing',
+    btnExportForEditing: 'Export All for Editing',
   };
 
   test('offers all three exports, each carrying the story id', () => {

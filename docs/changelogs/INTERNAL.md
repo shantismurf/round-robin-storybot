@@ -40,6 +40,10 @@ they are until there is a style plan -- see the `Create style_roadmap.md` sectio
   (bot-hosting.net details moved to a Legacy section), plus the Host/Startup bullets in
   `CLAUDE.md`, the PR template's post-merge checklist, and `docs/INDEX.md`. The
   bot-hosting.net slot is stopped, not deleted.
+- **"Export Entries for Editing" is now "Export All for Editing".** LeeAnn, 2026-11-04. The
+  button exports every turn in the story, so "All" says what it does. `btnExportForEditing`'s
+  value changed, and the help page's bolded mention of it in `txtHelp6Export` follows. Wording
+  only, no bump.
 
 ### Added
 - **Plan: staging bot and Claude Code on the VM** (`docs/plans/PLAN-staging-and-agent-on-vm.md`).
