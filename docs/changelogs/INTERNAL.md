@@ -45,6 +45,10 @@ they are until there is a style plan -- see the `Create style_roadmap.md` sectio
 - **Plan: staging bot and Claude Code on the VM** (`docs/plans/PLAN-staging-and-agent-on-vm.md`).
   Setup steps for a walled-off agent user, staging DB and staging bot, plus the seed/reset
   script as the next build. Docs only.
+- **`docs/reference/DB-ACCESS.md`: querying the production database from a laptop.** MySQL
+  Workbench over an SSH tunnel to the VM, a read-only `workbench_ro` login so exploring can't
+  change anything, the `mariadb-dump` command for a backup by hand, and fixes for the three
+  likely connection failures. Port 3306 stays closed. Docs only.
 
 ### Fixed
 - **3.10.0 never started: migration 026 failed on the production database.** Every boot of the

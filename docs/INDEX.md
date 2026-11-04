@@ -90,6 +90,7 @@ Every file has a `Status` / `Created` / `Last Updated` (/ `Implemented`) header.
 | [discordjs_reference.md](reference/discordjs_reference.md) | Verified discord.js API notes — check before trusting training data |
 | [autocomplete-sort-filter-reference.md](reference/autocomplete-sort-filter-reference.md) | Filter/sort rules per `/story` autocomplete subcommand |
 | [HOSTING.md](reference/HOSTING.md) | Production hosting (Hetzner + Coolify): deploy, config, database, backups |
+| [DB-ACCESS.md](reference/DB-ACCESS.md) | Querying the production database from a laptop: MySQL Workbench over SSH, a read-only login, and the by-hand backup |
 | [PRIVACY_POLICY.md](reference/PRIVACY_POLICY.md) | User-facing Privacy Policy & ToS (canonical source is `privacy-policy.js`) |
 
 ---
