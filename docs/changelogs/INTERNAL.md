@@ -46,6 +46,24 @@ they are until there is a style plan -- see the `Create style_roadmap.md` sectio
   Setup steps for a walled-off agent user, staging DB and staging bot, plus the seed/reset
   script as the next build. Docs only.
 
+### Fixed
+- **3.10.0 never started: migration 026 failed on the production database.** Every boot of the
+  3.10.0 build stopped at `Cannot drop index 'unique_turn_order': needed in a
+  foreign key constraint`, and `index.js` exits on a failed migration, so the bot was down
+  until this shipped. Production's `story_entry` predates April, when its `turn_id` foreign key
+  was declared in the same `CREATE TABLE` as `UNIQUE KEY unique_turn_order (turn_id,
+  order_in_turn)`, so InnoDB used that unique index to back the key and never built one of its
+  own, and MariaDB will not drop the only index a foreign key can use. 026 now adds
+  `INDEX turn_id (turn_id)` before the drop. On a database built from today's `init.sql`
+  InnoDB already gives the key an index by that name, so the new statement does nothing there.
+  The failed boots had already committed 026's first two statements (the `entry_order` column
+  and its backfill); both are guarded, so the rerun picks up where it stopped. Reproduced
+  against a local MariaDB built in the pre-April shape: the unpatched file fails with the
+  production error, the patched file completes 026 and 027 on that same half-migrated
+  database, the backfill numbers each story by `started_at` with a deleted entry keeping its
+  slot and a pending draft left NULL, and a second boot reports nothing pending. A database
+  built from `init.sql` ends up with exactly one index on `turn_id`.
+
 ---
 
 ## 3.10.0 — 2026-11-01

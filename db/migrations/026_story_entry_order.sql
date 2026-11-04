@@ -48,6 +48,17 @@ WHERE se.entry_order IS NULL;
 -- dropping a column that is part of a multi-column index removes the column from the index
 -- instead of dropping the index, which here would leave a UNIQUE KEY on turn_id alone -- a
 -- constraint nobody intended, and one that would stop a turn ever holding a second row.
+--
+-- Corrected 2026-11-04, after this migration failed in production with "Cannot drop index
+-- unique_turn_order: needed in a foreign key constraint". A database created before April
+-- declared the turn_id foreign key in the same CREATE TABLE as unique_turn_order, so InnoDB
+-- used that unique index to back the foreign key and never built one of its own. MariaDB will
+-- not drop the only index a foreign key can use, so the key gets its own index first. It is
+-- named turn_id, the name InnoDB gives the index it builds for this key on a database created
+-- from init.sql today, so there this statement does nothing and both kinds of database end up
+-- with the same index.
+ALTER TABLE story_entry ADD INDEX IF NOT EXISTS turn_id (turn_id);
+
 ALTER TABLE story_entry DROP INDEX IF EXISTS unique_turn_order;
 
 ALTER TABLE story_entry DROP COLUMN IF EXISTS order_in_turn;
