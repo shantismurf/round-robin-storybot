@@ -33,6 +33,13 @@ they are until there is a style plan -- see the `Create style_roadmap.md` sectio
 `docs/TODO.md`.
 
 ### Changed
+- **SSH password login turned off on the Hetzner VM (2026-11-06).** `HOSTING.md` said SSH was
+  key-only, but cloud-init's `50-cloud-init.conf` had password login enabled and the SSH log
+  showed bots guessing the root password from public addresses. Added
+  `/etc/ssh/sshd_config.d/00-no-password.conf` (`PasswordAuthentication no`) on the server, and
+  gave the owner's phone its own key. Server config and docs only, no code change.
+  `HOSTING.md` now describes the real setup and the allowed keys (including Coolify's, which
+  must stay), and notes that the Hetzner cloud firewall is evidently not applied to the server.
 - **bot-hosting.net account deleted, hosting docs brought up to date (2026-11-06).** The whole
   bot-hosting.net account is gone, including this bot's stopped slot and its old database, so
   there is no rollback target any more. Docs only, no code change: `docs/reference/HOSTING.md`

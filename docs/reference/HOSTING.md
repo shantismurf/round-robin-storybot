@@ -15,7 +15,16 @@ VM" below), so that headroom matters more than it did.
 
 - **Host**: Hetzner Cloud VM (CX22: 2 vCPU / 4GB RAM / 40GB disk, Ubuntu), IP
   `95.217.14.153`, server name `storybot`.
-- **SSH**: root, key-only auth. No separate sudo/non-root account set up yet.
+- **SSH**: root, key-only auth. No separate sudo/non-root account set up yet. Password login
+  was in fact enabled until **2026-11-06** (cloud-init's `/etc/ssh/sshd_config.d/50-cloud-init.conf`
+  sets `PasswordAuthentication yes`), and `journalctl -u ssh` showed bots guessing root and other
+  usernames from public addresses. It is now off through
+  `/etc/ssh/sshd_config.d/00-no-password.conf` (`PasswordAuthentication no`). Files in that folder
+  are read in order and the first value wins, so the `00-` name overrides cloud-init's file, which
+  cloud-init may rewrite. The allowed keys (`ssh-keygen -lf ~/.ssh/authorized_keys`) are the
+  owner's PC key, the owner's phone key (ConnectBot) and **Coolify's own key, which must not be
+  removed** or Coolify loses control of the server. To add a device, give it its own key and append
+  its public key to `~/.ssh/authorized_keys`.
 - **Coolify**: runs on the same VM and manages the bot's container (deploys, restarts, logs).
 
 ## Deploying
@@ -124,8 +133,11 @@ There are two, and traffic has to pass both. The **`ufw`** firewall on the VM al
 `10.0.1.0/24` into port 3306. The **Hetzner cloud firewall** (Hetzner console) has inbound rules
 for SSH (22) and the Coolify dashboard (8000) from the owner's home IP only, plus ICMP. If the
 home IP changes, SSH and the dashboard stop working until those two rules are updated. A leftover
-rule for TCP 20343 (bot-hosting's old Agshar port) was removed on 2026-11-06. It has not been
-confirmed that this cloud firewall is applied to the server (check its "Applied to" section).
+rule for TCP 20343 (bot-hosting's old Agshar port) was removed on 2026-11-06. This cloud firewall
+is evidently **not applied to the server**: its SSH rule only allows the owner's home IP, yet
+`journalctl -u ssh` logs password-guessing attempts from other addresses. The server is
+protected by `ufw`, and now by key-only SSH. Before ever applying the cloud firewall, add rules
+for ports 80 and 443 (Coolify's proxy), or the apps and their HTTPS certificates break.
 
 ## Bot invite/install link
 
