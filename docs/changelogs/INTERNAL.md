@@ -33,6 +33,14 @@ they are until there is a style plan -- see the `Create style_roadmap.md` sectio
 `docs/TODO.md`.
 
 ### Changed
+- **bot-hosting.net account deleted, hosting docs brought up to date (2026-11-06).** The whole
+  bot-hosting.net account is gone, including this bot's stopped slot and its old database, so
+  there is no rollback target any more. Docs only, no code change: `docs/reference/HOSTING.md`
+  now says that, records that the `ufw` rule for `65.21.16.214` and the
+  `storybot`@`65.21.16.214` login were removed, replaces "Backups: none yet" with the enabled
+  Hetzner server backups, and adds sections on the other app now on this VM (Agshar, sharing
+  the MariaDB with its own database and accounts), connecting with MySQL Workbench over an SSH
+  tunnel, and the two firewalls.
 - **Hosting moved to Hetzner + Coolify (2026-10-12).** The bot process moved off bot-hosting.net
   onto the Hetzner VM that already ran the database, and now runs as a Coolify
   application with full root access. `config.json` is a Coolify File Mount, and
