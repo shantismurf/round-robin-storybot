@@ -8,6 +8,7 @@ import { getConfigValue, log, chunkEntryContent, replaceTemplateVariables } from
 import { pendingEditData } from './_state.js';
 import { ENTRY_STATUS, EDIT_CHANGE_TYPE } from '../constants.js';
 import { buildEditMessageForState } from './edit.js';
+import { promoteToPanel } from './_editPanelReply.js';
 
 // A history row is either a content version or a structural change (migration 027): a reorder or
 // a writer change, discriminated by change_type, with NULL meaning "content version" because that
@@ -140,7 +141,8 @@ async function handleRestoreConfirm(connection, interaction, editId) {
       .setStyle(ButtonStyle.Secondary)
   );
 
-  await state.historyMessage.edit({ embeds: [embed], components: [row] });
+  // The Restore button is on the history message, so this click edits that message directly.
+  await interaction.editReply({ embeds: [embed], components: [row] });
 }
 
 async function handleRestoreExecute(connection, interaction, editId) {
@@ -160,7 +162,7 @@ async function handleRestoreExecute(connection, interaction, editId) {
     && histRows[0].content !== null;
   if (!isRestorable) {
     log(`handleRestoreExecute: edit ${editId} is not a content version (change_type=${histRows[0]?.change_type ?? 'missing row'}), nothing to restore`, { show: true, guildName: interaction?.guild?.name });
-    return await state.historyMessage.edit({ content: await getConfigValue(connection, 'txtEditHistoryNotFound', interaction.guild.id), embeds: [], components: [] });
+    return await interaction.editReply({ content: await getConfigValue(connection, 'txtEditHistoryNotFound', interaction.guild.id), embeds: [], components: [] });
   }
 
   const editorName = interaction.member?.displayName ?? interaction.user.username;
@@ -193,9 +195,8 @@ async function handleRestoreExecute(connection, interaction, editId) {
     txn.release();
   }
 
-  // Close the history followUp and update the edit embed with restored content.
-  await state.historyMessage?.delete().catch(() => {});
-  state.historyMessage = null;
+  // The confirm button is on the history message, so that message becomes the panel and the old
+  // panel is retired (see story/_editPanelReply.js for why the old panel can't be redrawn).
   state.currentContent = histRows[0].content;
   state.chunks = chunkEntryContent(state.currentContent);
   state.chunkPage = 0;
@@ -216,7 +217,7 @@ async function handleRestoreExecute(connection, interaction, editId) {
   );
 
   const editMsg = buildEditMessageForState(state);
-  await state.originalInteraction.editReply({
+  await promoteToPanel(interaction, state, {
     ...editMsg,
     content: txtEditRestoreSuccess,
     components: [...editMsg.components, repostRow]
@@ -232,38 +233,38 @@ async function handleEditHistoryButton(connection, interaction, state) {
 
   if (customId === 'story_edit_browse_history') {
     await interaction.deferUpdate();
-    state.historyMessage = await state.originalInteraction.followUp({
+    await interaction.followUp({
       ...(await renderHistoryPage(connection, interaction, state, 0, 0)),
       flags: MessageFlags.Ephemeral
     });
 
   } else if (customId === 'story_edit_history_prev') {
     await interaction.deferUpdate();
-    await state.historyMessage.edit(
+    await interaction.editReply(
       await renderHistoryPage(connection, interaction, state, Math.max(0, state.historyPage - 1), 0)
     );
 
   } else if (customId === 'story_edit_history_next') {
     await interaction.deferUpdate();
-    await state.historyMessage.edit(
+    await interaction.editReply(
       await renderHistoryPage(connection, interaction, state, state.historyPage + 1, 0)
     );
 
   } else if (customId === 'story_edit_hist_chunk_prev') {
     await interaction.deferUpdate();
-    await state.historyMessage.edit(
+    await interaction.editReply(
       await renderHistoryPage(connection, interaction, state, state.historyPage, (state.histChunkPage ?? 0) - 1)
     );
 
   } else if (customId === 'story_edit_hist_chunk_next') {
     await interaction.deferUpdate();
-    await state.historyMessage.edit(
+    await interaction.editReply(
       await renderHistoryPage(connection, interaction, state, state.historyPage, (state.histChunkPage ?? 0) + 1)
     );
 
   } else if (customId === 'story_edit_restore_cancel') {
     await interaction.deferUpdate();
-    await state.historyMessage.edit(
+    await interaction.editReply(
       await renderHistoryPage(connection, interaction, state, state.historyPage, state.histChunkPage ?? 0)
     );
 
@@ -276,11 +277,10 @@ async function handleEditHistoryButton(connection, interaction, state) {
     await handleRestoreConfirm(connection, interaction, editId);
 
   } else if (customId === 'story_edit_back') {
-    // Close the history followUp and return focus to the edit embed.
-    // Ephemeral followUps can't be deleted via message.delete() — must use the interaction webhook.
+    // Close the history message and return focus to the edit embed. The Back button is on the
+    // history message, so this click's own deleteReply() targets it, with a fresh token.
     await interaction.deferUpdate();
-    await state.originalInteraction.deleteReply(state.historyMessage).catch(() => {});
-    state.historyMessage = null;
+    await interaction.deleteReply().catch(() => {});
 
   } else {
     return false;

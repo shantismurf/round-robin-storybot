@@ -7,6 +7,7 @@ import { buildReadEmbed } from './read.js';
 import { getActiveThreadId } from '../storybot.js';
 import { buildEntryPickerMessage } from './_manageEntriesList.js';
 import { handleEditHistoryButton } from './_editHistory.js';
+import { promoteToPanel } from './_editPanelReply.js';
 import { ENTRY_STATUS } from '../constants.js';
 import { turnNumberSubquery, readEntryPosition, moveEntryToPosition, findNextEntryId } from './_entryOrder.js';
 import { logEntryReorder, logEntryWriterChange, listStoryWritersForCredit, readEntryWriter } from './_entryChangeLog.js';
@@ -333,7 +334,7 @@ export async function applyOrderChange(connection, interaction, state, rawValue)
   if (state.nextEntryId != null) {
     state.nextEntryId = await findNextEntryId(connection, state.storyId, result.to);
   }
-  await state.originalInteraction.editReply({ ...buildEditMessageForState(state), content: '' });
+  await interaction.editReply({ ...buildEditMessageForState(state), content: '' });
   await interaction.followUp({
     content: replaceTemplateVariables(cfg.txtManageEntriesChangeOrderSuccess, {
       to_position: String(result.to),
@@ -397,7 +398,8 @@ async function applyWriterChange(connection, interaction, state, newWriterId) {
   }
 
   state.hasHistory = true;
-  await state.originalInteraction.editReply({ ...buildEditMessageForState(state), content: '' });
+  // The writer select is on its own message, not the panel, so that message becomes the panel.
+  await promoteToPanel(interaction, state, { ...buildEditMessageForState(state), content: '' });
   await interaction.followUp({
     content: replaceTemplateVariables(cfg.txtManageEntriesChangeWriterSuccess, {
       turn_number: String(state.turnNumber),
@@ -645,15 +647,18 @@ async function handleEditButton(connection, interaction) {
     return;
   }
 
+  // Every branch below redraws through `interaction`, never state.originalInteraction: the
+  // click's token is fresh, while the one that opened the panel dies after 15 minutes. See
+  // story/_editPanelReply.js.
   if (customId === 'story_edit_prev') {
     await interaction.deferUpdate();
     state.chunkPage = Math.max(0, state.chunkPage - 1);
-    await state.originalInteraction.editReply(buildEditMessageForState(state));
+    await interaction.editReply(buildEditMessageForState(state));
 
   } else if (customId === 'story_edit_next') {
     await interaction.deferUpdate();
     state.chunkPage = Math.min(state.chunks.length - 1, state.chunkPage + 1);
-    await state.originalInteraction.editReply(buildEditMessageForState(state));
+    await interaction.editReply(buildEditMessageForState(state));
 
   } else if (customId === 'story_edit_jump') {
     await interaction.deferUpdate();
@@ -661,7 +666,7 @@ async function handleEditButton(connection, interaction) {
     if (!isNaN(selected)) {
       state.chunkPage = Math.min(state.chunks.length - 1, Math.max(0, selected));
     }
-    await state.originalInteraction.editReply(buildEditMessageForState(state));
+    await interaction.editReply(buildEditMessageForState(state));
 
   } else if (customId === 'story_edit_manage_delete') {
     await interaction.deferUpdate();
@@ -675,7 +680,7 @@ async function handleEditButton(connection, interaction) {
     log(`Entry deleted via Manage Entries: ${state.entryId} by ${interaction.user.username}`, { show: true, guildName: interaction?.guild?.name });
     // Confirmation goes in its own message below the panel — as panel content it rendered
     // above the embed, out of sight.
-    await state.originalInteraction.editReply({ ...buildEditMessageForState(state), content: '' });
+    await interaction.editReply({ ...buildEditMessageForState(state), content: '' });
     await interaction.followUp({
       content: replaceTemplateVariables(state.editCfg?.txtManageEntryDeleteSuccess ?? '', { entry_id: String(state.entryId) }),
       flags: MessageFlags.Ephemeral
@@ -693,7 +698,7 @@ async function handleEditButton(connection, interaction) {
     log(`Entry restored via Manage Entries: ${state.entryId} by ${interaction.user.username}`, { show: true, guildName: interaction?.guild?.name });
     // Confirmation goes in its own message below the panel — as panel content it rendered
     // above the embed, out of sight.
-    await state.originalInteraction.editReply({ ...buildEditMessageForState(state), content: '' });
+    await interaction.editReply({ ...buildEditMessageForState(state), content: '' });
     await interaction.followUp({
       content: replaceTemplateVariables(state.editCfg?.txtManageEntryRestoreSuccess ?? '', { writer_name: state.authorName ?? '' }),
       flags: MessageFlags.Ephemeral
@@ -707,7 +712,7 @@ async function handleEditButton(connection, interaction) {
     if (!picker) return; // button is only ever shown when pickerContext is set
     log(`story_edit_backlist: returning to ${picker.role} entry list for story ${picker.storyId} (user ${interaction.user.username})`, { show: false, guildName: interaction?.guild?.name });
     const msg = await buildEntryPickerMessage(connection, guildId, picker.storyId, picker.listOffset ?? 0, picker.role, picker.role === 'author' ? userId : null);
-    await state.originalInteraction.editReply(msg);
+    await interaction.editReply(msg);
 
   } else if (customId === 'story_edit_manage_order') {
     // No defer — showModal must be the first response.

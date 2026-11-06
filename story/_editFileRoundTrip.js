@@ -25,6 +25,7 @@ import {
   ModalBuilder, LabelBuilder, FileUploadBuilder,
 } from 'discord.js';
 import { getConfigValue, log, replaceTemplateVariables, chunkEntryContent } from '../utilities.js';
+import { promoteToPanel } from './_editPanelReply.js';
 import { buildEntryDelimiter, parseEntryDelimiter, buildExportStamp, parseExportStamp } from './_exportText.js';
 import { buildExportFilename } from './_exportData.js';
 import { resolveMentionsToPlainText } from './_entryMarkup.js';
@@ -354,7 +355,7 @@ export async function handleImportModalSubmit(connection, interaction, state) {
   );
 
   log(`handleImportModalSubmit: entry ${state.entryId} staged from ${attachment.name} (${wordCount(state.currentContent)} -> ${wordCount(resolved)} words, conflict=${conflictAt ?? 'none'})`, { show: true, guildName });
-  state.importMessage = await interaction.followUp({ embeds: [embed], components: [row], flags: MessageFlags.Ephemeral });
+  await interaction.followUp({ embeds: [embed], components: [row], flags: MessageFlags.Ephemeral });
 }
 
 /**
@@ -405,10 +406,6 @@ export async function handleImportConfirm(connection, interaction, state, buildP
 
   log(`handleImportConfirm: entry ${state.entryId} replaced from ${staged.filename} by ${interaction.user.username} (${previousContent.length} -> ${staged.content.length} chars)`, { show: true, guildName });
 
-  // The staged confirm is finished with; the panel below it carries the result.
-  await state.originalInteraction.deleteReply(state.importMessage).catch(() => {});
-  state.importMessage = null;
-
   // Same follow-up as a saved edit: the entry's thread post is now stale, so offer the repost.
   const editMsg = buildPanel(state);
   const repostRow = new ActionRowBuilder().addComponents(
@@ -417,7 +414,10 @@ export async function handleImportConfirm(connection, interaction, state, buildP
       .setLabel(await getConfigValue(connection, 'btnRepostEntry', state.guildId))
       .setStyle(ButtonStyle.Secondary)
   );
-  await state.originalInteraction.editReply({
+  // Save Changes sits on the confirm message, not the panel, so the confirm becomes the
+  // updated panel. Redrawing the old panel instead needed the token from when it was opened,
+  // which Discord kills after 15 minutes -- and a file round trip routinely takes longer.
+  await promoteToPanel(interaction, state, {
     ...editMsg,
     content: replaceTemplateVariables(state.editCfg.txtEditImportSuccess, {
       turn_number: String(state.turnNumber),

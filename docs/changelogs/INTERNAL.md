@@ -71,6 +71,21 @@ they are until there is a style plan -- see the `Create style_roadmap.md` sectio
   database, the backfill numbers each story by `started_at` with a deleted entry keeping its
   slot and a pending draft left NULL, and a second boot reports nothing pending. A database
   built from `init.sql` ends up with exactly one index on `turn_id`.
+- **The edit panel stopped responding 15 minutes after `/story edit`.** LeeAnn hit it on
+  2026-11-06: Save Changes on an import failed with `Invalid Webhook Token` (50027), and only
+  the confirm message's text changed. Every redraw went through `state.originalInteraction`,
+  the interaction that opened the panel, and Discord lets a bot edit its reply to an
+  interaction for only 15 minutes. Panel buttons now redraw through the click's own
+  interaction, which always carries a fresh token, so the panel keeps working for as long as
+  the edit session lasts (until Back to List, a new `/story edit`, or a bot restart). Actions
+  confirmed from a message of their own (the import confirm, the writer picker, a History
+  restore) turn that message into the updated panel and delete the old one, through the new
+  `story/_editPanelReply.js` (`promoteToPanel`). Past 15 minutes the old panel can't be deleted
+  and stays on screen until clicked, but its buttons still work. The History browser's own
+  buttons now edit the history message through their click as well. `edit.js`,
+  `_editFileRoundTrip.js`, `_editHistory.js`. Not live-tested yet. The Add, Manage and
+  `/mystory manage` panels still redraw through the opening interaction and have the same
+  15-minute limit, not changed here.
 
 ---
 
