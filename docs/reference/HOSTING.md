@@ -4,16 +4,27 @@
 VM. The bot runs as a Coolify application on that VM, and there is full root access to the box.
 
 Before that, the bot ran on bot-hosting.net (a Pterodactyl panel with no shell, no way to run
-scripts, and no staging), and from 2026-08-30 only the database lived on this VM. The
-bot-hosting.net history is kept at the bottom of this file because the incident notes are still
-useful. The CX22 sizing below was chosen for the DB alone, so check memory and disk headroom
-if the bot starts misbehaving under load.
+scripts, and no staging), and from 2026-08-30 only the database lived on this VM. The whole
+bot-hosting.net account was deleted on 2026-11-06, so there is nothing left to roll back to. Its
+history is kept at the bottom of this file because the incident notes are still useful. The CX22
+sizing below was chosen for the DB alone, so check memory and disk headroom if the bot starts
+misbehaving under load. The VM and its MariaDB now also serve Agshar (see "Other apps on this
+VM" below), so that headroom matters more than it did.
 
 ## Server
 
 - **Host**: Hetzner Cloud VM (CX22: 2 vCPU / 4GB RAM / 40GB disk, Ubuntu), IP
   `95.217.14.153`, server name `storybot`.
-- **SSH**: root, key-only auth. No separate sudo/non-root account set up yet.
+- **SSH**: root, key-only auth. No separate sudo/non-root account set up yet. Password login
+  was in fact enabled until **2026-11-06** (cloud-init's `/etc/ssh/sshd_config.d/50-cloud-init.conf`
+  sets `PasswordAuthentication yes`), and `journalctl -u ssh` showed bots guessing root and other
+  usernames from public addresses. It is now off through
+  `/etc/ssh/sshd_config.d/00-no-password.conf` (`PasswordAuthentication no`). Files in that folder
+  are read in order and the first value wins, so the `00-` name overrides cloud-init's file, which
+  cloud-init may rewrite. The allowed keys (`ssh-keygen -lf ~/.ssh/authorized_keys`) are the
+  owner's PC key, the owner's phone key (ConnectBot) and **Coolify's own key, which must not be
+  removed** or Coolify loses control of the server. To add a device, give it its own key and append
+  its public key to `~/.ssh/authorized_keys`.
 - **Coolify**: runs on the same VM and manages the bot's container (deploys, restarts, logs).
 
 ## Deploying
@@ -76,14 +87,59 @@ change in that move except that the bot now connects from the same machine.
   is not root. Its credentials live in `config.json` (see above).
 - **Querying it yourself**: MySQL Workbench over an SSH tunnel with a read-only login, plus the
   by-hand backup command. Step by step in [DB-ACCESS.md](DB-ACCESS.md).
-- **Network access**: the bot now connects locally, from its container to `10.0.1.1`. The old
-  `ufw` rule allowing inbound 3306 from bot-hosting.net's outbound IP (`65.21.16.214`) is
-  **still open on purpose** as of 2026-10-12, so the stopped bot-hosting.net slot could be
-  restarted as a rollback. Close that rule, and drop the matching `storybot`@`65.21.16.214`
-  grant if it's still there, when the old slot is deleted.
-- **Backups**: **none yet.** They're planned but not set up. A corrupted disk or a lost key
-  file means real, unrecoverable data loss today. Any backup plan has to cover the key file as
-  well as the dumps, and keep them in separate places.
+- **Network access**: the bot connects locally, from its container to `10.0.1.1`. The only
+  `ufw` allow rule for port 3306 is `10.0.1.0/24`, the `coolify` Docker network. The old rule
+  for bot-hosting.net's outbound IP (`65.21.16.214`) and the `storybot`@`65.21.16.214` login
+  were removed on 2026-11-06, after the bot-hosting.net account was deleted.
+- **Backups**: Hetzner server backups are enabled. They are whole-server snapshots, so they
+  include the database files and the encryption key file together, but a restore brings back the
+  whole server, not one database or table. A `mysqldump` now and then gives a portable copy.
+  Keep a second copy of `/etc/mysql/encryption/keyfile.txt` somewhere outside Hetzner's account.
+
+## Other apps on this VM
+
+Agshar (a Discord Activity bot and API, repo `shantismurf/agshar`) runs as a second Coolify
+application on this VM and uses the same MariaDB. It has its own `agshar` database, and its own
+accounts. The accounts are limited to their own database on purpose:
+
+| Account | Host | Access |
+|---|---|---|
+| `storybot` | `10.0.1.%` | this bot, `storybot` database |
+| `storybot_admin` | `127.0.0.1` | MySQL Workbench through the SSH tunnel, `storybot` database only |
+| `agshar`, `agshar_admin` | `10.0.1.%`, `127.0.0.1` | Agshar's bot, and Workbench, `agshar` database only |
+| `root`, `mysql`, `mariadb.sys` | `localhost` | local administration |
+
+Agshar's own deployment notes (Coolify setup, network rules, the data copy recipe) are in that
+repo's `docs/hetzner-deployment.md`.
+
+### Connecting with MySQL Workbench
+
+MariaDB is not open to the internet. Workbench goes through an SSH tunnel started from the
+owner's PC. `~/.ssh/config` there has a `storybot` shortcut (`HostName 95.217.14.153`,
+`User root`, `IdentityFile ~/.ssh/ssh-key-2026-08-24.key`). In a new PowerShell window, leave this
+running (it prints nothing, which is success):
+
+```
+ssh -N -L 3307:127.0.0.1:3306 storybot
+```
+
+Then use a plain **Standard TCP/IP** connection in Workbench to `127.0.0.1`, port `3307`, with
+user `storybot_admin`. Through the tunnel MariaDB sees the connection as coming from `127.0.0.1`,
+which is why the admin accounts are `…@'127.0.0.1'`. Typing `ssh root@95.217.14.153` instead
+skips the shortcut and falls back to a password prompt. Workbench's own "over SSH" connection
+type and the `dbtunnel` SSH user were never made to work and are not needed.
+
+### Firewalls
+
+There are two, and traffic has to pass both. The **`ufw`** firewall on the VM allows only
+`10.0.1.0/24` into port 3306. The **Hetzner cloud firewall** (Hetzner console) has inbound rules
+for SSH (22) and the Coolify dashboard (8000) from the owner's home IP only, plus ICMP. If the
+home IP changes, SSH and the dashboard stop working until those two rules are updated. A leftover
+rule for TCP 20343 (bot-hosting's old Agshar port) was removed on 2026-11-06. This cloud firewall
+is evidently **not applied to the server**: its SSH rule only allows the owner's home IP, yet
+`journalctl -u ssh` logs password-guessing attempts from other addresses. The server is
+protected by `ufw`, and now by key-only SSH. Before ever applying the cloud firewall, add rules
+for ports 80 and 443 (Coolify's proxy), or the apps and their HTTPS certificates break.
 
 ## Bot invite/install link
 
@@ -108,8 +164,8 @@ drop-in replacement, rather than assuming a fresh generation is automatically co
 
 # Legacy: bot-hosting.net (Pterodactyl), until 2026-10-12
 
-The bot-hosting.net slot is **stopped but not deleted** as of 2026-10-12. Delete it once the
-Coolify setup has proven stable. Back then:
+The bot-hosting.net slot was stopped on 2026-10-12 and **deleted on 2026-11-06**, together with
+its database and the account's other bots (Agshar, ficfeed). Back then:
 
 - There was no shell. The panel's Console tab showed stdout only, and every change, including
   debug logging, shipped by pushing to `main` and restarting from the panel.
@@ -130,10 +186,9 @@ Coolify setup has proven stable. Back then:
   required, but the server does not support it`.
 - The old bot-hosting.net-provided database
   (`s388541_ficfeed_test_tracker` on `us.mysql.db.bot-hosting.net`) is no
-  longer used by the bot as of this cutover, but has **not been
-  deleted** — it still holds a full, now-increasingly-stale copy of
-  everything up to the migration moment. Decommission it once the new
-  setup has proven stable for a while.
+  longer used by the bot as of this cutover. It was kept as a stale
+  copy of everything up to the migration moment, and was deleted
+  along with the whole bot-hosting.net account on 2026-11-06.
 
 ### Known quirk (legacy bot-hosting.net DB, kept for reference): DB outage from disk-full crash, no uptime visibility
 
