@@ -8,9 +8,7 @@ const EMBED_DESCRIPTION_LIMIT = 4096;
 const EMBED_MESSAGE_TOTAL_LIMIT = 6000;
 
 // Edit this before arming a broadcast, then flip BROADCAST_ARMED below to true.
-export const ANNOUNCEMENT = `# 📢 Announcement title goes here
-
-Announcement body goes here.`;
+export const ANNOUNCEMENT = `📢 **Round Robin StoryBot is switching to a new Discord bot identity.** You may notice the old bot leave your server soon — don't worry, your stories and data are fully preserved and will pick back up exactly where they left off. Just re-invite the new bot here: https://discord.com/oauth2/authorize?client_id=1570551318202949743&permissions=2252195219237888&scope=bot%20applications.commands. No other action needed!`;
 
 // Manual arm/disarm switch — the host has no way to run one-off scripts, so this
 // is how a broadcast gets triggered: edit ANNOUNCEMENT above, flip this to true,
