@@ -85,6 +85,8 @@ change in that move except that the bot now connects from the same machine.
   automatically and no per-table `ENCRYPTED=YES` is needed anywhere in schema/migrations.
 - **Connection**: the bot connects to `10.0.1.1` from its container. The `storybot` app user
   is not root. Its credentials live in `config.json` (see above).
+- **Querying it yourself**: MySQL Workbench over an SSH tunnel with a read-only login, plus the
+  by-hand backup command. Step by step in [DB-ACCESS.md](DB-ACCESS.md).
 - **Network access**: the bot connects locally, from its container to `10.0.1.1`. The only
   `ufw` allow rule for port 3306 is `10.0.1.0/24`, the `coolify` Docker network. The old rule
   for bot-hosting.net's outbound IP (`65.21.16.214`) and the `storybot`@`65.21.16.214` login

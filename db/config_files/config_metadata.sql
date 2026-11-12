@@ -16,7 +16,7 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 -- exports above: unrendered story_entry.content, so what you edit is what is stored. The entry
 -- delimiter itself is NOT config — it is a structural token the importer parses, so a guild
 -- editing its wording would break import rather than translate it.
-('btnExportForEditing', 'Export Entries for Editing', 'en', 1),
+('btnExportForEditing', 'Export All for Editing', 'en', 1),
 ('txtExportTextInstructions', 'Download the text of all [entry_count] turn(s) ([word_count] words) for editing. This is the raw text of the entries, so keep any formatting markdown intact. Do not remove the first line of each turn, which contains the internal turn ID, so that entries can be imported correctly.', 'en', 1),
 ('txtExportTextNoEntries', 'This story has no confirmed entries to export yet.', 'en', 1),
 ('txtExportTextHeader', '[title] (story #[story_num])\n[turn_count] turn(s), [entry_count] entr(ies), [word_count] words - status: [status] - exported [exported]{?\nWriters: [authors]?}', 'en', 1),
