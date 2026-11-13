@@ -71,7 +71,8 @@ they are until there is a style plan -- see the `Create style_roadmap.md` sectio
 - **`docs/tools/hub-announcement-counter.html`**, the character counter used to draft that post,
   saved so it is there next time. Its two boxes match the split above.
 - **`ANNOUNCEMENT` holds the v3.2.1 → v3.10.0 changelog and the new-bot install notice**,
-  LeeAnn's text, not armed. Archive it in `docs/changelogs/public/` once sent.
+  LeeAnn's text. Sent 2026-11-13 (armed in `aa69531`, disarmed in `dd82a17`) and archived as
+  `public/2026-11-13-v3.2.1-v3.10.0.md`.
 - **Plan: staging bot and Claude Code on the VM** (`docs/plans/PLAN-staging-and-agent-on-vm.md`).
   Setup steps for a walled-off agent user, staging DB and staging bot, plus the seed/reset
   script as the next build. Docs only.

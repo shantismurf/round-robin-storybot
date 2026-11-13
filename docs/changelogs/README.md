@@ -34,6 +34,10 @@ far: a title with the version range, the month as a subheading, then `💫 New F
 into `🌟 Major Additions` and `✨ Minor Additions`, then `🛠️ Improvements`, then `🐛 Bug Fixes`,
 with each item as a blockquoted bullet whose lead phrase is bolded.
 
+A post longer than one embed (4,096 characters) is split with a line holding only `=====`,
+which `broadcast.js` sends as separate embeds in the same message, up to 6,000 characters in
+all. Draft it in `docs/tools/hub-announcement-counter.html`, which counts both limits.
+
 ## Workflow
 
 `CLAUDE.md` already requires sign-off before any version bump. Attach the changelog to that
