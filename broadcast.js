@@ -75,7 +75,7 @@ It's been a long time between posts, so this one covers a lot! In addition to al
 // and privacy-policy hub posts (idempotent edits-in-place), a broadcast is a
 // one-shot send to every configured server's feed channel — deploy.js runs this
 // step on every restart, so leaving this armed would resend on the next deploy too.
-export const BROADCAST_ARMED = false;
+export const BROADCAST_ARMED = true;
 
 // Sends ANNOUNCEMENT to the hub's announcements channel and every configured guild's
 // story feed channel (skipping guilds that opted out via cfgChangelogEnabled), with the
