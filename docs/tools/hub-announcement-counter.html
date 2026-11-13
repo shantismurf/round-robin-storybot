@@ -1,0 +1,306 @@
+<!doctype html>
+<!--
+  Hub Announcement Counter: a character counter for broadcast.js announcements.
+  Open this file in any browser. Text is kept in that browser's local storage.
+  Two boxes, one per embed: the first holds up to 4,096 characters, and both together up to
+  5,784 (6,000 per post minus 216 for the title, footer and opt-out notice). "Copy both" joins
+  them with a ===== line, which broadcast.js's splitAnnouncement() cuts on.
+  Paste the result into ANNOUNCEMENT in broadcast.js with every backtick escaped as \`.
+  If txtHubAnnouncementTitle, txtHubAnnouncementFooter or txtHubAnnouncementOptOut change
+  length, update TOTAL below.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hub Announcement Counter</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column. A sticky meter for the whole post, then one writing box per embed. */
+:root {
+  --bg: #f4f7f7;
+  --panel: #ffffff;
+  --ink: #1d2a2c;
+  --muted: #5b6b6e;
+  --line: #d5dfe0;
+  --robin: #5fb3b8;       /* robin's-egg blue: the first embed's share of the bar */
+  --robin-2: #9fd3d6;     /* lighter shell of the same egg: the second embed's share */
+  --robin-ink: #1f6f74;   /* the same hue, dark enough for text */
+  --warn: #a35d00;
+  --over: #b3261e;
+  --track: #e3ebec;
+  --font-ui: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-text: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121a1b; --panel: #1a2426; --ink: #e4eeee; --muted: #9db0b2; --line: #2c3a3c;
+  --robin: #6cc4c9; --robin-2: #3f7f83; --robin-ink: #8fd6da; --warn: #f0a640; --over: #ff7a70; --track: #253234;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #121a1b; --panel: #1a2426; --ink: #e4eeee; --muted: #9db0b2; --line: #2c3a3c;
+  --robin: #6cc4c9; --robin-2: #3f7f83; --robin-ink: #8fd6da; --warn: #f0a640; --over: #ff7a70; --track: #253234;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--ink); }
+body { font-family: var(--font-ui); font-size: 16px; line-height: 1.45; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--panel); }
+.wrap {
+  max-width: 820px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 32px;
+  display: grid; gap: 18px;
+}
+.meter {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+  margin-left: calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+  margin-right: calc(-1 * max(16px, env(safe-area-inset-right, 0px)));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px 12px;
+  display: grid; gap: 8px;
+}
+.readout { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.left { display: flex; align-items: baseline; gap: 8px; }
+.left .num { font-size: 2.2rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; color: var(--robin-ink); }
+.left .lbl { color: var(--muted); }
+.meter.is-warn .left .num { color: var(--warn); }
+.meter.is-over .left .num { color: var(--over); }
+.used { color: var(--muted); font-variant-numeric: tabular-nums; }
+.bar { position: relative; height: 10px; background: var(--track); border-radius: 5px; overflow: hidden; display: flex; }
+.seg { height: 100%; width: 0; transition: width .12s linear; }
+#seg1 { background: var(--robin); }
+#seg2 { background: var(--robin-2); }
+.meter.is-over .seg { background: var(--over); }
+.msg { font-size: .95rem; min-height: 1.4em; }
+.meter.is-over .msg { color: var(--over); font-weight: 700; }
+.meter.is-warn .msg { color: var(--warn); }
+h1 { font-size: 1.15rem; margin: 16px 0 0; text-wrap: balance; }
+.sub { color: var(--muted); margin: 2px 0 0; max-width: 65ch; }
+.field { display: grid; gap: 6px; }
+.fieldhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.fieldhead label { font-weight: 700; }
+.count { font-variant-numeric: tabular-nums; color: var(--muted); }
+.count.over { color: var(--over); font-weight: 700; }
+.count.warn { color: var(--warn); }
+textarea {
+  width: 100%; resize: vertical;
+  font-family: var(--font-text); font-size: 14px; line-height: 1.55;
+  color: var(--ink); background: var(--panel);
+  border: 1px solid var(--line); border-left: 4px solid var(--robin); border-radius: 8px; padding: 12px;
+}
+#text1 { min-height: 50vh; }
+#text2 { min-height: 22vh; border-left-color: var(--robin-2); }
+textarea.over { border-color: var(--over); border-left-color: var(--over); }
+textarea:focus-visible, button:focus-visible { outline: 2px solid var(--robin-ink); outline-offset: 2px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+button {
+  font: inherit; font-size: .95rem; padding: 8px 14px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+}
+button.primary { background: var(--robin-ink); border-color: var(--robin-ink); color: var(--panel); }
+button[hidden] { display: none; }
+.note { color: var(--muted); font-size: .9rem; }
+details { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+summary { cursor: pointer; font-weight: 700; }
+details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); max-width: 65ch; }
+@media (prefers-reduced-motion: reduce) { .seg { transition: none; } }
+</style>
+
+<div class="wrap">
+  <div class="meter" id="meter" role="status" aria-live="polite">
+    <div class="readout">
+      <div class="left"><span class="num" id="left">0</span><span class="lbl">characters left in the post</span></div>
+      <div class="used" id="used">0 of 5,784 used</div>
+    </div>
+    <div class="bar" aria-hidden="true"><div class="seg" id="seg1"></div><div class="seg" id="seg2"></div></div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div>
+    <h1>Hub Announcement Counter</h1>
+    <p class="sub">The announcement goes out as up to two embeds in one post. Fill the first box, then put the rest in the second. Counts update as you type and match how Discord measures. Your text stays in this browser between visits.</p>
+  </div>
+
+  <div class="field">
+    <div class="fieldhead">
+      <label for="text1">First embed</label>
+      <span class="count" id="count1"></span>
+    </div>
+    <textarea id="text1" spellcheck="true"></textarea>
+    <div class="actions">
+      <button id="move" type="button" hidden>Move the overflow to the second box</button>
+      <span class="note" id="movenote"></span>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="fieldhead">
+      <label for="text2">Second embed <span class="note">(leave empty to send one embed)</span></label>
+      <span class="count" id="count2"></span>
+    </div>
+    <textarea id="text2" spellcheck="true"></textarea>
+  </div>
+
+  <div class="actions">
+    <button class="primary" id="copy" type="button">Copy both</button>
+    <button id="restore" type="button" hidden>Load the October draft</button>
+    <span class="note" id="actnote"></span>
+  </div>
+  <p class="note" id="syncnote" role="status"></p>
+
+  <details>
+    <summary>How this is counted</summary>
+    <ul>
+      <li>The whole post can hold 6,000 characters. The title, the footer and the opt-out notice already use 216 of them, which leaves 5,784 for your two boxes together.</li>
+      <li>Each embed holds at most 4,096. Once the first box is full, the second can take 1,688.</li>
+      <li>Everything counts: spaces, line breaks, and markdown like <code>**</code>, <code>##</code> and <code>&gt;</code>.</li>
+      <li>Most emoji count as 2, because that is how Discord counts them. 📢 is 2, and so is 💫.</li>
+      <li>Copy both puts a line of <code>=====</code> between the boxes, so it's clear where the second embed starts.</li>
+    </ul>
+  </details>
+</div>
+
+<script>
+const TOTAL = 5784;      // 6,000 per post, minus 216 for the title, footer and opt-out notice
+const EMBED = 4096;      // one embed's description
+const KEYS = ["rr-hub-announcement-1", "rr-hub-announcement-2"];
+const SEED = document.getElementById("text1").value;
+
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => n.toLocaleString("en-US");
+const minus = (n) => (n < 0 ? "−" + fmt(-n) : fmt(n));
+const t1 = $("text1"), t2 = $("text2");
+
+function render() {
+  const n1 = t1.value.length, n2 = t2.value.length;
+  const total = n1 + n2;
+  const left = TOTAL - total;
+  const cap2 = Math.max(0, Math.min(EMBED, TOTAL - Math.min(n1, EMBED)));
+  const over1 = n1 > EMBED;
+  const over2 = n2 > cap2;
+
+  $("left").textContent = minus(left);
+  $("used").textContent = `${fmt(total)} of ${fmt(TOTAL)} used`;
+  $("seg1").style.width = Math.min(100, (n1 / TOTAL) * 100) + "%";
+  $("seg2").style.width = Math.max(0, Math.min(100 - (n1 / TOTAL) * 100, (n2 / TOTAL) * 100)) + "%";
+
+  const c1 = $("count1");
+  c1.textContent = over1 ? `${fmt(n1)} of ${fmt(EMBED)}, over by ${fmt(n1 - EMBED)}` : `${fmt(n1)} of ${fmt(EMBED)}, ${fmt(EMBED - n1)} left`;
+  c1.className = "count" + (over1 ? " over" : EMBED - n1 < 150 ? " warn" : "");
+  t1.classList.toggle("over", over1);
+
+  const c2 = $("count2");
+  c2.textContent = over2 ? `${fmt(n2)} of ${fmt(cap2)}, over by ${fmt(n2 - cap2)}` : `${fmt(n2)} of ${fmt(cap2)}, ${fmt(cap2 - n2)} left`;
+  c2.className = "count" + (over2 ? " over" : n2 > 0 && cap2 - n2 < 150 ? " warn" : "");
+  t2.classList.toggle("over", over2);
+
+  $("move").hidden = !over1;
+
+  const m = $("meter");
+  const bad = left < 0 || over1 || over2;
+  m.classList.toggle("is-over", bad);
+  m.classList.toggle("is-warn", !bad && left < 250);
+
+  let msg;
+  if (left < 0) msg = `Over by ${fmt(-left)}. Trim ${fmt(-left)} characters to send it.`;
+  else if (over1) msg = `The first box is over 4,096. Move ${fmt(n1 - EMBED)} or more characters into the second box.`;
+  else if (over2) msg = `The second box is over by ${fmt(n2 - cap2)}.`;
+  else if (n2 === 0) msg = "Fits in one embed.";
+  else msg = "Fits, as two embeds.";
+  $("msg").textContent = msg;
+
+  try { localStorage.setItem(KEYS[0], t1.value); localStorage.setItem(KEYS[1], t2.value); } catch (e) {}
+}
+
+// Shared copy: the text is saved with the page, so Claude can read and edit the same draft.
+// Falls back to this browser's own copy (above) when the shared store isn't available.
+const DOC_PATH = "drafts/announcement";
+let db = null, saveTimer = null, pending = false, lastSaved = null;
+function setSync(text) { $("syncnote").textContent = text; }
+function scheduleSave() {
+  if (!db) return;
+  pending = true;
+  setSync("Saving…");
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveNow, 800);
+}
+async function saveNow() {
+  const data = { part1: t1.value, part2: t2.value, savedAt: new Date().toISOString() };
+  try {
+    await db.doc(DOC_PATH).set(data);
+    lastSaved = data.part1 + "\u0000" + data.part2;
+    pending = false;
+    setSync("Saved. Claude sees this copy.");
+  } catch (e) {
+    pending = false;
+    setSync("Couldn't save the shared copy. Your text is still kept in this browser.");
+  }
+}
+(async () => {
+  try { db = await claude.use("db"); } catch (e) { db = null; }
+  if (!db) { setSync("Saved in this browser only."); return; }
+  setSync("Loading the shared copy…");
+  const timer = setTimeout(() => setSync("The shared copy is slow to load. Your text is kept in this browser meanwhile."), 10000);
+  db.doc(DOC_PATH).onSnapshot((snap) => {
+    clearTimeout(timer);
+    const d = snap && snap.exists ? snap.data() : null;
+    if (!d) { setSync("Shared copy is empty. Your next edit saves it."); return; }
+    const key = (d.part1 ?? "") + "\u0000" + (d.part2 ?? "");
+    if (pending || key === lastSaved) { if (!pending) setSync("Saved. Claude sees this copy."); return; }
+    if (key !== t1.value + "\u0000" + t2.value) {
+      t1.value = d.part1 ?? ""; t2.value = d.part2 ?? "";
+      render();
+    }
+    lastSaved = key;
+    setSync("Up to date with the shared copy.");
+  }, () => { clearTimeout(timer); setSync("Couldn't load the shared copy. Your text is kept in this browser."); });
+})();
+
+// Restore what was typed last time, if this browser kept it
+try {
+  const a = localStorage.getItem(KEYS[0]), b = localStorage.getItem(KEYS[1]);
+  if (a !== null && (a !== "" || (b !== null && b !== ""))) { t1.value = a; t2.value = b ?? ""; }
+} catch (e) {}
+
+t1.addEventListener("input", () => { render(); scheduleSave(); });
+t2.addEventListener("input", () => { render(); scheduleSave(); });
+
+// Cut the first box at its last blank line before 4,096 (or last line break), and put the rest
+// at the top of the second box.
+$("move").addEventListener("click", () => {
+  const s = t1.value;
+  let at = s.lastIndexOf("\n\n", EMBED);
+  if (at <= 0) at = s.lastIndexOf("\n", EMBED);
+  if (at <= 0) at = EMBED;
+  const keep = s.slice(0, at).replace(/\s+$/, "");
+  const moved = s.slice(at).replace(/^\s+/, "");
+  t1.value = keep;
+  t2.value = t2.value.trim() ? moved + "\n\n" + t2.value : moved;
+  $("movenote").textContent = `Moved ${fmt(moved.length)} characters, from the last paragraph break that fits.`;
+  render(); scheduleSave();
+});
+
+$("copy").addEventListener("click", async () => {
+  const out = t2.value.trim() ? t1.value + "\n\n=====\n\n" + t2.value : t1.value;
+  const note = $("actnote");
+  try { await navigator.clipboard.writeText(out); note.textContent = "Copied."; }
+  catch (e) { t1.focus(); t1.select(); note.textContent = "Couldn't reach the clipboard. The first box is selected, so copy it with your device's copy command."; }
+});
+
+// Two taps, so a stray tap can't wipe what's been written
+let armed = false;
+$("restore").addEventListener("click", () => {
+  const btn = $("restore");
+  if (!armed) { armed = true; btn.textContent = "Replace both boxes? Tap again"; setTimeout(() => { armed = false; btn.textContent = "Load the October draft"; }, 4000); return; }
+  armed = false; btn.textContent = "Load the October draft";
+  t1.value = SEED; t2.value = ""; $("movenote").textContent = ""; render(); scheduleSave();
+  $("actnote").textContent = "October draft loaded.";
+});
+
+render();
+</script>
