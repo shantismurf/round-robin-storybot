@@ -24,6 +24,7 @@ else lives under `docs/`.
 |---|---|
 | [INTERNAL.md](changelogs/INTERNAL.md) | Comprehensive backend record, newest first. Removed entries carry the reason. Provenance marked per era — git-derived from v3.2.1, Hub-post-derived before that, nothing before v2.0 |
 | [public/](changelogs/public/) | Each Hub announcement verbatim as sent, one file per post, 2026-04-30 onward. Primary sources; corrections go in `INTERNAL.md` |
+| [tools/hub-announcement-counter.html](tools/hub-announcement-counter.html) | Character counter for drafting a Hub broadcast: two boxes, one per embed, with Discord's limits. Open in any browser; "Copy both" output goes into `ANNOUNCEMENT` in `broadcast.js` |
 
 ---
 

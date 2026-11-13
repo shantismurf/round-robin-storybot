@@ -61,6 +61,17 @@ they are until there is a style plan -- see the `Create style_roadmap.md` sectio
   only, no bump.
 
 ### Added
+- **Hub broadcasts can span several embeds.** `broadcast.js` used to send `ANNOUNCEMENT` as one
+  embed and refuse anything over 4,096 characters, which ruled out the v3.2.1 → v3.10.0 post.
+  A line holding only `=====` now cuts it into one embed per part in the same message
+  (`splitAnnouncement()`, `test/broadcast.test.js`), with the title on the first embed, the
+  footer on the last, and the opt-out notice after them. The guard checks each part against
+  4,096 and the whole message against 6,000, and logs each part's length. Back-end only, no
+  bump.
+- **`docs/tools/hub-announcement-counter.html`**, the character counter used to draft that post,
+  saved so it is there next time. Its two boxes match the split above.
+- **`ANNOUNCEMENT` holds the v3.2.1 → v3.10.0 changelog and the new-bot install notice**,
+  LeeAnn's text, not armed. Archive it in `docs/changelogs/public/` once sent.
 - **Plan: staging bot and Claude Code on the VM** (`docs/plans/PLAN-staging-and-agent-on-vm.md`).
   Setup steps for a walled-off agent user, staging DB and staging bot, plus the seed/reset
   script as the next build. Docs only.
