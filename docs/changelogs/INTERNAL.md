@@ -81,6 +81,13 @@ they are until there is a style plan -- see the `Create style_roadmap.md` sectio
   likely connection failures. Port 3306 stays closed. Docs only.
 
 ### Fixed
+- **The privacy policy sync could stop the bot from starting under a new bot application.**
+  Every boot edits the pinned policy post in the Hub's #rules, and Discord only lets a bot edit
+  its own messages. With the move to a new application ID (Nov 2026), the post belongs to the
+  old bot, so the edit would be refused, the error was uncaught, and a failed deploy exits the
+  bot on every boot. A refused edit now posts and pins a fresh copy (the old one is left for an
+  admin to delete), and a failed post is logged rather than thrown. `privacy-policy.js`. No
+  bump.
 - **3.10.0 never started: migration 026 failed on the production database.** Every boot of the
   3.10.0 build stopped at `Cannot drop index 'unique_turn_order': needed in a
   foreign key constraint`, and `index.js` exits on a failed migration, so the bot was down
