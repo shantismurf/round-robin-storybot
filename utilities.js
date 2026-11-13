@@ -356,13 +356,25 @@ export async function getSetupRequiredMessage(connection, interaction) {
   return replaceTemplateVariables(cfg[msgKey], { hubInviteUrl: cfg.cfgHubInviteUrl });
 }
 
+// Paused for the move to a new bot application (switch scheduled 2026-11-20). While two bot
+// accounts overlap, "this bot can't see the guild" does not mean the server left: removing the
+// old bot, or a server that hasn't invited the new one yet, both look exactly like an uninstall.
+// While true, closeOrphanedGuildStories only logs. Set back to false once every server that is
+// staying has the new bot (see docs/TODO.md).
+export const ORPHAN_CLEANUP_PAUSED = true;
+
 /**
  * Mark every active/paused story in a guild as closed and cancel its pending jobs.
+ * Returns true if it closed anything, false when ORPHAN_CLEANUP_PAUSED held it back.
  * Used when the bot discovers a guild no longer has it installed (DiscordAPIError
  * 10004 "Unknown Guild"), whether via the GuildDelete event, a failed status refresh,
  * or a job that fails because its guild is gone.
  */
 export async function closeOrphanedGuildStories(connection, guildId) {
+  if (ORPHAN_CLEANUP_PAUSED) {
+    log(`closeOrphanedGuildStories: guild ${guildId} looks uninstalled, but cleanup is paused for the bot application move, so its stories stay open`, { show: true, hub: true });
+    return false;
+  }
   // End active turns before flipping story_status, since the join below only
   // matches turns belonging to still-open (1/2/4) stories.
   const [turnResult] = await connection.execute(
@@ -382,6 +394,7 @@ export async function closeOrphanedGuildStories(connection, guildId) {
     [JOB_STATUS.CANCELLED, JOB_STATUS.PENDING, JOB_STATUS.IN_PROGRESS, String(guildId)]
   );
   log(`closeOrphanedGuildStories: ended ${turnResult.affectedRows} active turn(s), closed ${storyResult.affectedRows} story/stories, and cancelled ${jobResult.affectedRows} pending job(s) for guild ${guildId}`, { show: true, hub: true });
+  return true;
 }
 
 export async function getConfigValue(connection, key, guildId = 1) {

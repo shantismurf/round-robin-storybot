@@ -82,6 +82,16 @@ they are until there is a style plan -- see the `Create style_roadmap.md` sectio
   likely connection failures. Port 3306 stays closed. Docs only.
 
 ### Fixed
+- **Removing the bot no longer closes a server's stories while the bot moves to a new
+  application.** `closeOrphanedGuildStories` ends every active turn, closes every open story
+  and cancels the jobs of a guild that looks uninstalled: on `GuildDelete`
+  (`index.js`), on an Unknown Guild error refreshing status posts at boot (`index.js`), and on
+  one from a job (`job-runner.js`). During the move (switch 2026-11-20) both look like an
+  uninstall when they aren't one: an admin removing the old bot while it still runs, and a
+  server the new bot hasn't been invited to yet. New `ORPHAN_CLEANUP_PAUSED` in `utilities.js`
+  (true for now) makes it log and return false instead, and a job that hits this stays pending
+  and retries every 6 hours rather than being cancelled. To be set back to false once the move
+  settles (`docs/TODO.md`). No bump.
 - **The privacy policy sync could stop the bot from starting under a new bot application.**
   Every boot edits the pinned policy post in the Hub's #rules, and Discord only lets a bot edit
   its own messages. With the move to a new application ID (Nov 2026), the post belongs to the

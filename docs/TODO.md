@@ -10,6 +10,7 @@ work — see [plans/PLAN-sequencing-and-priorities.md](plans/PLAN-sequencing-and
 
 # Pending
 
+- **Turn orphan cleanup back on after the bot application move** — `ORPHAN_CLEANUP_PAUSED` in `utilities.js` is `true` since 2026-11-13 so the move to the new app (switch 2026-11-20) can't close stories. Set it back to `false` once every server that is staying has the new bot. Until then a server that really uninstalls keeps its stories open, and its jobs retry every 6 hours.
 - **Other panels still die 15 minutes after they open** — found 2026-11-06 while fixing the same bug in the edit panel (`story/_editPanelReply.js`). `story/add.js` (around lines 271 and 509-515), `commands/_myStoryManage.js` (around 406) and many branches of `story/manage.js` still redraw through `state.originalInteraction`, whose token Discord kills after 15 minutes (`Invalid Webhook Token`, 50027). Same fix: redraw through the click's own interaction.
 - **Turn on Coolify auto-deploy** — merges to `main` don't go live until someone clicks Redeploy (`docs/reference/HOSTING.md`, "Deploys are manual"). On 2026-11-13 that left a week of merged fixes undeployed without anyone noticing.
 - **Staging bot and Claude Code on the VM** — setup steps for LeeAnn, then a seed/reset script. See [plans/PLAN-staging-and-agent-on-vm.md](plans/PLAN-staging-and-agent-on-vm.md).

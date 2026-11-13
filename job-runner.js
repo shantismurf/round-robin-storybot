@@ -11,6 +11,8 @@ import { resolveFeedChannelId } from './story/_metadata.js';
 const JOB_POLL_INTERVAL_MS = 60 * 1000;
 const JOB_MAX_ATTEMPTS = 3;
 const JOB_RETRY_DELAY_MS = 5 * 60 * 1000; // 5 minutes
+// How long a job waits before retrying while orphan cleanup is paused (see utilities.js).
+const ORPHAN_PAUSED_RETRY_MS = 6 * 60 * 60 * 1000;
 const JOB_PURGE_EVERY_N_TICKS = 24 * 60; // once per day at a 60s poll interval
 const JOB_PURGE_AGE_DAYS = 30;
 const ONBOARDING_REMINDER_DAYS = { onboardingDay1: 1, onboardingDay7: 7, onboardingDay14: 14, onboardingDay30: 30 };
@@ -142,8 +144,16 @@ async function processJob(connection, client, job) {
     await connection.execute(`UPDATE job SET job_status = ? WHERE job_id = ?`, [JOB_STATUS.COMPLETED, job.job_id]);
   } catch (err) {
     if ((err?.code === 10004 || err?.code === 50278) && payload.guildId) {
-      log(`Job ${job.job_id} (${job.job_type}): guild ${payload.guildId} no longer has the bot installed; closing its stories`, { show: true, hub: true });
-      await closeOrphanedGuildStories(connection, payload.guildId);
+      log(`Job ${job.job_id} (${job.job_type}): guild ${payload.guildId} no longer has the bot installed`, { show: true, hub: true });
+      const closed = await closeOrphanedGuildStories(connection, payload.guildId);
+      if (!closed) {
+        // Cleanup is paused (ORPHAN_CLEANUP_PAUSED): keep the job alive and try again later, so
+        // a server that invites the new bot afterwards picks up where it left off.
+        const retryAt = new Date(Date.now() + ORPHAN_PAUSED_RETRY_MS);
+        await connection.execute(`UPDATE job SET job_status = ?, run_at = ? WHERE job_id = ?`, [JOB_STATUS.PENDING, retryAt, job.job_id]);
+        log(`Job ${job.job_id} (${job.job_type}) kept pending, next try ${retryAt.toISOString()}`, { show: true });
+        return;
+      }
       await connection.execute(`UPDATE job SET job_status = ? WHERE job_id = ?`, [JOB_STATUS.CANCELLED, job.job_id]);
       return;
     }

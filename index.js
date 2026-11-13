@@ -58,7 +58,7 @@ async function refreshAllStatusMessages(connection, client) {
         await updateStoryStatusMessage(connection, guild, story.story_id);
       } catch (err) {
         if (err?.code === 10004) {
-          log(`refreshAllStatusMessages: guild ${story.guild_id} no longer has the bot installed; closing its stories`, { show: true, hub: true });
+          log(`refreshAllStatusMessages: guild ${story.guild_id} no longer has the bot installed`, { show: true, hub: true });
           orphanedGuildIds.add(story.guild_id);
           await closeOrphanedGuildStories(connection, story.guild_id);
         } else {
