@@ -68,14 +68,32 @@ export async function syncPrivacyPolicy(client, connection) {
   if (isSnowflake(existingMessageId)) {
     const existingMessage = await rulesChannel.messages.fetch(existingMessageId).catch(() => null);
     if (existingMessage) {
-      await existingMessage.edit({ embeds: [embed] });
-      log(`syncPrivacyPolicy: edited existing message ${existingMessageId} in #${rulesChannel.name}`, { show: true });
-      return { success: true };
+      // Discord only lets a bot edit its own messages. After a move to a new bot application
+      // the pinned policy belongs to the old bot, and an uncaught refusal here would fail the
+      // deploy, which exits the bot on every boot. So a failed edit posts a fresh copy below
+      // and leaves the old one for an admin to delete.
+      try {
+        await existingMessage.edit({ embeds: [embed] });
+        log(`syncPrivacyPolicy: edited existing message ${existingMessageId} in #${rulesChannel.name}`, { show: true });
+        return { success: true };
+      } catch (err) {
+        log(`syncPrivacyPolicy: could not edit message ${existingMessageId} in #${rulesChannel.name} (author ${existingMessage.author?.id}, this bot ${client.user?.id}) — posting a new one. Delete the old message by hand: ${err?.message ?? err}`, { show: true });
+      }
+    } else {
+      log(`syncPrivacyPolicy: stored message ${existingMessageId} no longer exists — posting a new one`, { show: true });
     }
-    log(`syncPrivacyPolicy: stored message ${existingMessageId} no longer exists — posting a new one`, { show: true });
   }
 
-  const message = await rulesChannel.send({ embeds: [embed] });
+  // A failed post is logged, not thrown: this runs inside deploy(), and a throw there exits
+  // the bot, which is far worse than a missing policy post (for example a new bot application
+  // that hasn't been given access to #rules yet).
+  let message;
+  try {
+    message = await rulesChannel.send({ embeds: [embed] });
+  } catch (err) {
+    log(`syncPrivacyPolicy failed for #${rulesChannel.name}: could not post the policy: ${err?.stack ?? err}`, { show: true });
+    return { success: false };
+  }
   await message.pin().catch(err => log(`syncPrivacyPolicy: posted but could not pin: ${err?.stack ?? err}`, { show: true }));
   await connection.execute(
     `INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES ('cfgPrivacyPolicyMessageId', ?, 'en', 1)
