@@ -30,15 +30,6 @@ Open and deliberately not in 3.10.0 or 3.10.1: the emoji on the remaining 44 but
 which stay as they are until there is a style plan -- see the `Create style_roadmap.md` section
 of `docs/TODO.md`.
 
-### Changed
-- **Hub announcement embed title shortened (2026-11-14).** `txtHubAnnouncementTitle` changed
-  from "📢 Round Robin StoryBot Announcement" to "Hub Announcement". The announcement text
-  itself already opens with the emoji and the app name, so the old title doubled both, and
-  "Hub Announcement" matches the setting named in the opt-out line. Config only, picked up by
-  `sync-config.js` on the next deploy. Affects future broadcasts only, not posts already sent.
-  `docs/tools/hub-announcement-counter.html` updated to match: the title, footer and opt-out
-  notice now use 196 characters, not 216, so the two boxes together hold 5,804, not 5,784.
-
 ## 3.10.1 — 2026-11-14
 
 Provenance: written alongside the work. Absorbs everything that sat under Unreleased after
@@ -81,6 +72,13 @@ Provenance: written alongside the work. Absorbs everything that sat under Unrele
   `state.ratingsFilter` is set. Reported by LeeAnn.
 
 ### Changed
+- **Hub announcement embed title shortened (2026-11-14).** `txtHubAnnouncementTitle` changed
+  from "📢 Round Robin StoryBot Announcement" to "Hub Announcement". The announcement text
+  itself already opens with the emoji and the app name, so the old title doubled both, and
+  "Hub Announcement" matches the setting named in the opt-out line. Config only, picked up by
+  `sync-config.js` on the next deploy. Affects future broadcasts only, not posts already sent.
+  `docs/tools/hub-announcement-counter.html` updated to match: the title, footer and opt-out
+  notice now use 196 characters, not 216, so the two boxes together hold 5,804, not 5,784.
 - **SSH password login turned off on the Hetzner VM (2026-11-06).** `HOSTING.md` said SSH was
   key-only, but cloud-init's `50-cloud-init.conf` had password login enabled and the SSH log
   showed bots guessing the root password from public addresses. Added
