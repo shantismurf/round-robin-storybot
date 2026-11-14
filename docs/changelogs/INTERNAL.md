@@ -33,7 +33,7 @@ they are until there is a style plan -- see the `Create style_roadmap.md` sectio
 `docs/TODO.md`.
 
 ### Fixed
-- **`/story add`, `/story manage` and `/mystory manage` stopped redrawing 15 minutes after the
+- **`/story add`, `/story manage`, `/mystory manage` and the Manage User panel stopped redrawing 15 minutes after the
   command ran (2026-11-14).** LeeAnn set delay hours in `/story add` more than 15 minutes in:
   the Settings save failed with `Invalid Webhook Token` (50027) at `story/add.js:271`, the panel
   kept showing 0 hours, and no error appeared in Discord. The value had in fact been staged, and
@@ -50,6 +50,8 @@ they are until there is a style plan -- see the `Create style_roadmap.md` sectio
     rating-change prompt now refreshes the panel first and posts the prompt as a follow-up, so
     Confirm can redraw it; that redraw is best effort past 15 minutes (the rating is staged
     either way, and the next panel click shows it).
+  - `story/_manageUser.js`: the Manage User panel's Pen Name modal (from `/storyadmin user` or
+    Manage Users on `/story manage`) redraws with `interaction.update()`.
   - `story/_manageTurnActions.js`: after Extend, the main-panel refresh is best effort (it is a
     different message from Manage Turns, so it has no fresh token of its own). The extension
     itself is saved and confirmed either way.
