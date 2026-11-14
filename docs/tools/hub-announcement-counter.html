@@ -3,7 +3,7 @@
   Hub Announcement Counter: a character counter for broadcast.js announcements.
   Open this file in any browser. Text is kept in that browser's local storage.
   Two boxes, one per embed: the first holds up to 4,096 characters, and both together up to
-  5,784 (6,000 per post minus 216 for the title, footer and opt-out notice). "Copy both" joins
+  5,804 (6,000 per post minus 196 for the title, footer and opt-out notice). "Copy both" joins
   them with a ===== line, which broadcast.js's splitAnnouncement() cuts on.
   Paste the result into ANNOUNCEMENT in broadcast.js with every backtick escaped as \`.
   If txtHubAnnouncementTitle, txtHubAnnouncementFooter or txtHubAnnouncementOptOut change
@@ -115,7 +115,7 @@ details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); max-width
   <div class="meter" id="meter" role="status" aria-live="polite">
     <div class="readout">
       <div class="left"><span class="num" id="left">0</span><span class="lbl">characters left in the post</span></div>
-      <div class="used" id="used">0 of 5,784 used</div>
+      <div class="used" id="used">0 of 5,804 used</div>
     </div>
     <div class="bar" aria-hidden="true"><div class="seg" id="seg1"></div><div class="seg" id="seg2"></div></div>
     <div class="msg" id="msg"></div>
@@ -156,7 +156,7 @@ details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); max-width
   <details>
     <summary>How this is counted</summary>
     <ul>
-      <li>The whole post can hold 6,000 characters. The title, the footer and the opt-out notice already use 216 of them, which leaves 5,784 for your two boxes together.</li>
+      <li>The whole post can hold 6,000 characters. The title, the footer and the opt-out notice already use 196 of them, which leaves 5,804 for your two boxes together.</li>
       <li>Each embed holds at most 4,096. Once the first box is full, the second can take 1,688.</li>
       <li>Everything counts: spaces, line breaks, and markdown like <code>**</code>, <code>##</code> and <code>&gt;</code>.</li>
       <li>Most emoji count as 2, because that is how Discord counts them. 📢 is 2, and so is 💫.</li>
@@ -166,7 +166,7 @@ details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); max-width
 </div>
 
 <script>
-const TOTAL = 5784;      // 6,000 per post, minus 216 for the title, footer and opt-out notice
+const TOTAL = 5804;      // 6,000 per post, minus 196 for the title, footer and opt-out notice
 const EMBED = 4096;      // one embed's description
 const KEYS = ["rr-hub-announcement-1", "rr-hub-announcement-2"];
 const SEED = document.getElementById("text1").value;
