@@ -2,6 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   splitAtParagraphs,
+  replyActionFailed,
   parseDuration,
   formatDuration,
   replaceTemplateVariables,
@@ -348,5 +349,40 @@ describe('permission levels', () => {
   test('with no role configured, the server permission is the only way in', async () => {
     const connection = makeFakeConnection([[{ config_value: null }]]);
     assert.ok(!await checkIsAdmin(connection, interactionFor(member([], ['Story Admin'])), '1'));
+  });
+});
+
+// replyActionFailed: reply() before acknowledgment, followUp() after it, so the user always sees
+// the failure message (a failure after deferUpdate()/update() used to be silent).
+describe('replyActionFailed', () => {
+  function fakeInteraction({ replied = false, deferred = false } = {}) {
+    const calls = [];
+    return {
+      replied, deferred, calls, customId: 'x', user: { username: 'u' }, guild: { name: 'g' },
+      reply: async (p) => { calls.push(['reply', p]); },
+      followUp: async (p) => { calls.push(['followUp', p]); },
+    };
+  }
+  test('replies when the interaction has not been acknowledged', async () => {
+    const i = fakeInteraction();
+    await replyActionFailed(i, 'oops');
+    assert.equal(i.calls.length, 1);
+    assert.equal(i.calls[0][0], 'reply');
+    assert.equal(i.calls[0][1].content, 'oops');
+  });
+  test('follows up when the interaction was deferred', async () => {
+    const i = fakeInteraction({ deferred: true });
+    await replyActionFailed(i, 'oops');
+    assert.equal(i.calls[0][0], 'followUp');
+  });
+  test('follows up when the interaction was already replied to or updated', async () => {
+    const i = fakeInteraction({ replied: true });
+    await replyActionFailed(i, 'oops');
+    assert.equal(i.calls[0][0], 'followUp');
+  });
+  test('does not throw when Discord rejects the message', async () => {
+    const i = fakeInteraction();
+    i.reply = async () => { throw new Error('Invalid Webhook Token'); };
+    await replyActionFailed(i, 'oops');
   });
 });

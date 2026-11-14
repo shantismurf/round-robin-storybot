@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, LabelBuilder, SeparatorBuilder, ContainerBuilder, TextDisplayBuilder, MessageFlags } from 'discord.js';
-import { getConfigValue, log, sanitizeModalInput, replaceTemplateVariables, parseDuration, formatDuration, replyValidationError } from '../utilities.js';
+import { getConfigValue, log, sanitizeModalInput, replaceTemplateVariables, parseDuration, formatDuration, replyValidationError, replyActionFailed } from '../utilities.js';
 import { CreateStory } from '../storybot.js';
 import { getMetaCfg, buildStoryPanel, buildPanelTabRow, buildMetadataModal, buildTagsModal, buildStoryInfoModal } from './_metadataModals.js';
 import { parseGroundRulesText, effectiveGroundRulesText } from './_groundRules.js';
@@ -267,15 +267,15 @@ export async function handleAddStoryModalSubmit(connection, interaction) {
       else if (notifVal === 'mention') state.notifications = 0;
     }
 
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    await state.originalInteraction.editReply(buildStoryAddMessage(state.cfg, state));
-    await interaction.deleteReply();
+    // interaction.update() edits the panel message this modal was opened from (every story_add
+    // modal opens from a panel button), using this submission's own fresh token. Never
+    // state.originalInteraction.editReply(): that is the /story add command's token, which
+    // Discord kills 15 minutes after the command ran (Invalid Webhook Token, 50027).
+    await interaction.update(buildStoryAddMessage(state.cfg, state));
 
   } catch (error) {
     log(`Error in handleAddStoryModalSubmit: customId=${customId} user=${interaction.user.username}: ${error?.stack ?? error}`, { show: true, guildName: interaction?.guild?.name });
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: await getConfigValue(connection, 'txtActionFailed', interaction.guild.id), flags: MessageFlags.Ephemeral });
-    }
+    await replyActionFailed(interaction, await getConfigValue(connection, 'txtActionFailed', interaction.guild.id));
   }
 }
 
@@ -458,9 +458,7 @@ export async function handleAddStoryButton(connection, interaction) {
     }
   } catch (error) {
     log(`handleAddStoryButton failed: customId=${customId} user=${interaction.user.username}: ${error?.stack ?? error}`, { show: true, guildName: interaction?.guild?.name });
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: await getConfigValue(connection, 'txtActionFailed', interaction.guild.id), flags: MessageFlags.Ephemeral });
-    }
+    await replyActionFailed(interaction, await getConfigValue(connection, 'txtActionFailed', interaction.guild.id));
   }
 }
 
@@ -473,6 +471,8 @@ export async function handleCreateStorySubmit(connection, interaction, state) {
     return;
   }
 
+  // deferUpdate() + interaction.editReply() edits the panel through this click's own token, not
+  // the /story add command's, which is dead once the panel has been open 15 minutes.
   await interaction.deferUpdate();
 
   try {
@@ -506,12 +506,12 @@ export async function handleCreateStorySubmit(connection, interaction, state) {
     pendingStoryData.delete(interaction.user.id);
 
     if (result.success) {
-      await state.originalInteraction.editReply(finalMessage(result.message));
+      await interaction.editReply(finalMessage(result.message));
     } else {
-      await state.originalInteraction.editReply(finalMessage(result.error));
+      await interaction.editReply(finalMessage(result.error));
     }
   } catch (error) {
     log(`Error creating story: ${error?.stack ?? error}`, { show: true, guildName: interaction?.guild?.name });
-    await state.originalInteraction.editReply(finalMessage(await getConfigValue(connection, 'txtStoryCreationError', interaction.guild.id)));
+    await interaction.editReply(finalMessage(await getConfigValue(connection, 'txtStoryCreationError', interaction.guild.id)));
   }
 }

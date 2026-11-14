@@ -26,11 +26,50 @@ the thing you will search for later is the old name.
 
 ## Unreleased
 
-Provenance: written alongside the work.
+Open and deliberately not in 3.10.0 or 3.10.1: the emoji on the remaining 44 button labels,
+which stay as they are until there is a style plan -- see the `Create style_roadmap.md` section
+of `docs/TODO.md`.
 
-Open and deliberately not in 3.10.0: the emoji on the remaining 44 button labels, which stay as
-they are until there is a style plan -- see the `Create style_roadmap.md` section of
-`docs/TODO.md`.
+## 3.10.1 — 2026-11-14
+
+Provenance: written alongside the work. Absorbs everything that sat under Unreleased after
+3.10.0, including the back-end and docs work marked "No bump" at the time.
+
+### Fixed
+- **`/story add`, `/story manage`, `/mystory manage` and the Manage User panel stopped redrawing 15 minutes after the
+  command ran (2026-11-14).** LeeAnn set delay hours in `/story add` more than 15 minutes in:
+  the Settings save failed with `Invalid Webhook Token` (50027) at `story/add.js:271`, the panel
+  kept showing 0 hours, and no error appeared in Discord. The value had in fact been staged, and
+  the story was created with it. Cause: these panels redrew through `state.originalInteraction`,
+  the slash command's own interaction, whose token Discord kills 15 minutes after the command.
+  Same bug as the edit panel (fixed earlier) and `/storyadmin setup` (fixed earlier).
+  - `story/add.js`: modal submits redraw with `interaction.update()`; Create Story shows its
+    result through the button click's own token. Previously, past 15 minutes the story was
+    created but the confirmation could not be shown.
+  - `story/manage.js`, `commands/_myStoryManage.js`: modal submits use `interaction.update()`,
+    and every handler that acknowledges a click on the panel now points
+    `state.originalInteraction` at that click, so later redraws (Save, Close, Reopen,
+    Pause/Resume, rating confirm) use a token no older than the last panel interaction. The
+    rating-change prompt now refreshes the panel first and posts the prompt as a follow-up, so
+    Confirm can redraw it; that redraw is best effort past 15 minutes (the rating is staged
+    either way, and the next panel click shows it).
+  - `story/_manageUser.js`: the Manage User panel's Pen Name modal (from `/storyadmin user` or
+    Manage Users on `/story manage`) redraws with `interaction.update()`.
+  - `story/_manageTurnActions.js`: after Extend, the main-panel refresh is best effort (it is a
+    different message from Manage Turns, so it has no fresh token of its own). The extension
+    itself is saved and confirmed either way.
+  - **No more silent failures on these panels.** Their error handlers only showed
+    `txtActionFailed`/`errProcessingRequest` if the interaction had not been acknowledged yet, so
+    a failure after the acknowledgment (as above) showed nothing in Discord. New
+    `replyActionFailed()` in `utilities.js` replies before acknowledgment and sends an ephemeral
+    follow-up after it. Used by the catch blocks in `add.js`, `manage.js`, `_myStoryManage.js`
+    and `_manageUser.js`. Tests in `test/utilities.test.js`.
+- **Rating hint on the Story Info tab now respects the Ratings Filter (2026-11-14).** The line
+  under Rating on `/story add` and `/story manage` always read `txtRatingDesc` ("Filter M & E to
+  NSFW channel (if set up)"), even on servers with the Ratings Filter on, where M and E aren't
+  offered. `buildStoryPanel()` in `story/_metadataModals.js` now shows the new
+  `txtRatingDescFiltered` ("This server keeps stories at Teen or lower") when
+  `state.ratingsFilter` is set. Reported by LeeAnn.
 
 ### Changed
 - **Hub announcement embed title shortened (2026-11-14).** `txtHubAnnouncementTitle` changed

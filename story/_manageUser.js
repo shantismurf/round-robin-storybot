@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags } from 'discord.js';
-import { getConfigValue, sanitizeModalInput, log, replaceTemplateVariables, resolveStoryId } from '../utilities.js';
+import { getConfigValue, sanitizeModalInput, log, replaceTemplateVariables, resolveStoryId, replyActionFailed } from '../utilities.js';
 import { PickNextWriter, NextTurn, postStoryThreadActivity, endTurnGuarded, endTurnThread, departWriter } from './_turn.js';
 import { updateStoryStatusMessage } from './_storyStatus.js';
 import { buildWriterPanel } from './_writerPanel.js';
@@ -384,12 +384,14 @@ export async function handleManageUserModalSubmit(connection, interaction) {
     // which the panel's own note text never actually described correctly.
     log(`handleManageUserModalSubmit: staged pen name="${newName}" for writerId=${pending.writerId}`, { show: false, guildName: interaction?.guild?.name });
     pending.penName = newName;
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    await pending.originalInteraction.editReply(buildManageUserPanel(pending));
-    await interaction.deleteReply();
+    // interaction.update() edits the panel this modal was opened from with this submission's own
+    // token. pending.originalInteraction is the command that opened the panel, whose token
+    // Discord kills 15 minutes after it ran (Invalid Webhook Token, 50027).
+    await interaction.update(buildManageUserPanel(pending));
+    pending.originalInteraction = interaction;
   } catch (error) {
     log(`handleManageUserModalSubmit failed for story ${pending?.storyId} guild ${pending?.guildId}: ${error?.stack ?? error}`, { show: true, guildName: interaction?.guild?.name });
-    await interaction.reply({ content: await getConfigValue(connection, 'errProcessingRequest', interaction.guild.id), flags: MessageFlags.Ephemeral });
+    await replyActionFailed(interaction, await getConfigValue(connection, 'errProcessingRequest', interaction.guild.id));
   }
 }
 
