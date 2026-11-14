@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkStoryDelay } from '../story/_delay.js';
+import { checkStoryDelay, formatDelayStatus } from '../story/_delay.js';
 import { STORY_STATUS } from '../constants.js';
 import { makeFakeConnection } from './_fakeConnection.js';
 
@@ -69,5 +69,36 @@ describe('checkStoryDelay', () => {
     const conn = makeFakeConnection([[]]);
     const result = await checkStoryDelay(conn, 999);
     assert.equal(result.madeActive, false);
+  });
+});
+
+describe('formatDelayStatus', () => {
+  const cfg = {
+    txtStatusDelayedStarts: '[status], starts [conditions]',
+    txtStatusDelayWriters: 'at [target] writers ([joined] so far)',
+    txtStatusDelayOr: 'or',
+  };
+  const created = new Date('2026-11-14T12:00:00Z');
+  const now = new Date('2026-11-14T15:00:00Z').getTime();
+  const startTs = Math.floor(new Date('2026-11-15T12:00:00Z').getTime() / 1000);
+
+  test('hour delay shows a relative countdown', () => {
+    const story = { story_delay_hours: 24, story_delay_users: null, created_at: created };
+    assert.equal(formatDelayStatus(story, 2, '⏳ Delayed', cfg, now), `⏳ Delayed, starts <t:${startTs}:R>`);
+  });
+
+  test('writer delay shows target and joined count', () => {
+    const story = { story_delay_hours: 0, story_delay_users: 5, created_at: created };
+    assert.equal(formatDelayStatus(story, 2, '⏳ Delayed', cfg, now), '⏳ Delayed, starts at 5 writers (2 so far)');
+  });
+
+  test('both delays join with "or"', () => {
+    const story = { story_delay_hours: 24, story_delay_users: 5, created_at: created };
+    assert.equal(formatDelayStatus(story, 2, '⏳ Delayed', cfg, now), `⏳ Delayed, starts <t:${startTs}:R> or at 5 writers (2 so far)`);
+  });
+
+  test('falls back to the bare label when nothing is left to count down', () => {
+    const story = { story_delay_hours: 1, story_delay_users: 3, created_at: created };
+    assert.equal(formatDelayStatus(story, 3, '⏳ Delayed', cfg, now), '⏳ Delayed');
   });
 });

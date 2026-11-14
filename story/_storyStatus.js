@@ -5,6 +5,7 @@ import { resolveGroundRules, parseGroundRulesText, effectiveGroundRulesText, bui
 import { getActiveThreadId } from '../storybot.js';
 import { STORY_STATUS, TURN_STATUS, WRITER_STATUS, STORY_MODE, ENTRY_STATUS } from '../constants.js';
 import { extractImageUrls } from './_imageUrls.js';
+import { formatDelayStatus } from './_delay.js';
 
 /**
  * Truncates free-text metadata to a render cap, with an ellipsis when it had to cut. Several of
@@ -80,7 +81,8 @@ export async function updateStoryStatusMessage(connection, guild, storyId) {
               reminder_timing, max_writers, allow_joins, show_authors,
               story_order_type, summary, tags, story_thread_id, restricted_thread_id, status_message_id, guild_id,
               next_writer_id, closed_at, rating, warnings, main_pairing,
-              other_relationships, characters, dynamic, ground_rules
+              other_relationships, characters, dynamic, ground_rules,
+              story_delay_hours, story_delay_users, created_at
        FROM story WHERE story_id = ?`,
       [storyId]
     );
@@ -142,6 +144,7 @@ export async function updateStoryStatusMessage(connection, guild, storyId) {
       'lblMetaRating', 'lblMetaMainRelationship', 'lblMetaOtherRelationships', 'lblMetaWarnings', 'lblMetaCharacters', 'lblMetaTags',
       'lblMetaDynamic', 'lblMetaGroundRules', 'cfgGroundRulesColor', 'cfgGroundRules', 'txtGroundRulesDefaultVocabulary',
       'txtStatusWriterListMore',
+      'txtStatusDelayedStarts', 'txtStatusDelayWriters', 'txtStatusDelayOr',
       ratingBadgeCfgKey,
       ...warningOptions,
       ...dynamicOptions,
@@ -161,6 +164,11 @@ export async function updateStoryStatusMessage(connection, guild, storyId) {
     const colorMap = { 1: 0x57f287, 2: 0xfee75c, 3: 0xed4245 };
 
     const activeWriters = writers.filter(w => w.sw_status === WRITER_STATUS.ACTIVE);
+    // A delayed story says when it starts beside "Delayed" (LeeAnn, 2026-11-14) -- the same active
+    // writer count checkStoryDelay measures against the target.
+    if (story.story_status === STORY_STATUS.DELAYED) {
+      statusMap[STORY_STATUS.DELAYED] = formatDelayStatus(story, activeWriters.length, `⏳ ${txtDelayed}`, cfg);
+    }
     const pausedWriters = writers.filter(w => w.sw_status === WRITER_STATUS.PAUSED);
     // Departed writers who never contributed a confirmed entry are dropped from the roster
     // entirely rather than archived — nothing to preserve a record of.

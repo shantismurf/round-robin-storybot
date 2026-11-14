@@ -30,6 +30,19 @@ Open and deliberately not in 3.10.0 or 3.10.1: the emoji on the remaining 44 but
 which stay as they are until there is a style plan -- see the `Create style_roadmap.md` section
 of `docs/TODO.md`.
 
+## 3.10.2 — 2026-11-14
+
+Provenance: written alongside the work.
+
+### Added
+- **Delayed stories show when they start, beside "Delayed" in the status post (2026-11-14).**
+  LeeAnn asked for a countdown. The Status box now reads e.g. `⏳ Delayed, starts in 21 hours`
+  (a Discord relative timestamp, which ticks down on the reader's side with no edits),
+  `⏳ Delayed, starts at 5 writers (2 so far)`, or both joined with "or" when both delays are set,
+  since whichever is met first starts the story. The writer count stays current because a join
+  already redraws the status post. New pure helper `formatDelayStatus()` in `story/_delay.js`,
+  new config keys `txtStatusDelayedStarts`, `txtStatusDelayWriters`, `txtStatusDelayOr`.
+
 ## 3.10.1 — 2026-11-14
 
 Provenance: written alongside the work. Absorbs everything that sat under Unreleased after
