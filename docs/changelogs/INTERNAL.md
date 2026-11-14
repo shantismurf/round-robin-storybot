@@ -26,11 +26,14 @@ the thing you will search for later is the old name.
 
 ## Unreleased
 
-Provenance: written alongside the work.
+Open and deliberately not in 3.10.0 or 3.10.1: the emoji on the remaining 44 button labels,
+which stay as they are until there is a style plan -- see the `Create style_roadmap.md` section
+of `docs/TODO.md`.
 
-Open and deliberately not in 3.10.0: the emoji on the remaining 44 button labels, which stay as
-they are until there is a style plan -- see the `Create style_roadmap.md` section of
-`docs/TODO.md`.
+## 3.10.1 — 2026-11-14
+
+Provenance: written alongside the work. Absorbs everything that sat under Unreleased after
+3.10.0, including the back-end and docs work marked "No bump" at the time.
 
 ### Fixed
 - **`/story add`, `/story manage`, `/mystory manage` and the Manage User panel stopped redrawing 15 minutes after the
@@ -61,6 +64,12 @@ they are until there is a style plan -- see the `Create style_roadmap.md` sectio
     `replyActionFailed()` in `utilities.js` replies before acknowledgment and sends an ephemeral
     follow-up after it. Used by the catch blocks in `add.js`, `manage.js`, `_myStoryManage.js`
     and `_manageUser.js`. Tests in `test/utilities.test.js`.
+- **Rating hint on the Story Info tab now respects the Ratings Filter (2026-11-14).** The line
+  under Rating on `/story add` and `/story manage` always read `txtRatingDesc` ("Filter M & E to
+  NSFW channel (if set up)"), even on servers with the Ratings Filter on, where M and E aren't
+  offered. `buildStoryPanel()` in `story/_metadataModals.js` now shows the new
+  `txtRatingDescFiltered` ("This server keeps stories at Teen or lower") when
+  `state.ratingsFilter` is set. Reported by LeeAnn.
 
 ### Changed
 - **SSH password login turned off on the Hetzner VM (2026-11-06).** `HOSTING.md` said SSH was
