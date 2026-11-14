@@ -100,6 +100,7 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('lblMetaDynamic', '📊 Dynamic 📊', 'en', 1),
 ('lblMetaRating', '🛡️ Rating 🛡️', 'en', 1),
 ('txtRatingDesc', 'Filter M & E to NSFW channel (if set up)', 'en', 1),
+('txtRatingDescFiltered', 'This server keeps stories at Teen or lower', 'en', 1),
 ('lblMetadataAddon', ' (metadata)', 'en', 1),
 ('lblMetaWarnings', '⚠️ Warnings ⚠️', 'en', 1),
 ('lblMetaFandom', '🌟 Fandom', 'en', 1),
