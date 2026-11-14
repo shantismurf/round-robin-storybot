@@ -33,6 +33,11 @@ they are until there is a style plan -- see the `Create style_roadmap.md` sectio
 `docs/TODO.md`.
 
 ### Changed
+- **Hub announcement embed title shortened (2026-11-14).** `txtHubAnnouncementTitle` changed
+  from "📢 Round Robin StoryBot Announcement" to "Hub Announcement". The announcement text
+  itself already opens with the emoji and the app name, so the old title doubled both, and
+  "Hub Announcement" matches the setting named in the opt-out line. Config only, picked up by
+  `sync-config.js` on the next deploy. Affects future broadcasts only, not posts already sent.
 - **SSH password login turned off on the Hetzner VM (2026-11-06).** `HOSTING.md` said SSH was
   key-only, but cloud-init's `50-cloud-init.conf` had password login enabled and the SSH log
   showed bots guessing the root password from public addresses. Added

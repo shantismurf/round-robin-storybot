@@ -290,7 +290,7 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('txtSetupSupportInvite', 'Need help? Join our support server: [hubInviteUrl]', 'en', 1),
 ('lblSetupChangelog', 'Storybot Hub Announcements', 'en', 1),
 ('txtSetupEmbedDescChangelog', '-# Receive changelogs and announcements from the Round Robin StoryBot Hub in your story feed channel.', 'en', 1),
-('txtHubAnnouncementTitle', '📢 Round Robin StoryBot Announcement', 'en', 1),
+('txtHubAnnouncementTitle', 'Hub Announcement', 'en', 1),
 ('txtHubAnnouncementFooter', 'Join the Round Robin StoryBot Hub Server for more information.', 'en', 1),
 ('txtHubAnnouncementOptOut', '-# Changelog announcements from the Round Robin Hub Server are rare, but you can disable them via `/storyadmin setup`.', 'en', 1),
 -- Reopen story
