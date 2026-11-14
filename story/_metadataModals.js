@@ -47,7 +47,7 @@ export async function getMetaCfg(connection, guildId) {
     'lblMetaMainRelationship', 'lblMetaOtherRelationships',
     'lblMetaCharacters', 'lblMetaTags', 'lblMetaSummary', 'lblMetaSceneBreakDivider',
     'txtMetaMainRelationshipPlaceholder', 'txtMetaSceneBreakDividerPlaceholder',
-    'txtSceneBreakDividerDesc', 'txtRatingDesc', 'txtTimeoutReminderDesc', 'txtTimeoutReminderSlowDesc', 'txtMaxWritersDesc',
+    'txtSceneBreakDividerDesc', 'txtRatingDesc', 'txtRatingDescFiltered', 'txtTimeoutReminderDesc', 'txtTimeoutReminderSlowDesc', 'txtMaxWritersDesc',
     'btnAddTitleAndSummary', 'btnAddStoryInfo', 'btnAddSettings', 'btnAddMetadata', 'btnAddTags', 'btnAddMySettings',
     'btnSaveSettings', 'btnCreateStory', 'btnPanelTabStoryInfo', 'btnPanelTabSettings', 'btnPanelTabMetadata', 'txtStoryManagementLabel',
     'lblUnsavedChangesTitle', 'txtUnsavedChangesBody',
@@ -191,7 +191,7 @@ export function buildStoryPanel(cfg, state, title, { isManage = false, activeGro
       `**${trimTrailingEmoji(cfg.lblShowAuthors)}:** ${state.showAuthors ? cfg.txtOn : cfg.txtOff}\n-# ${state.showAuthors ? cfg.txtShowAuthorsOnDesc : cfg.txtShowAuthorsOffDesc}`,
       `**${trimTrailingEmoji(cfg.lblTurnPrivacy)}:** ${state.storyTurnPrivacy ? cfg.txtPrivate : cfg.txtPublic}\n-# ${state.storyTurnPrivacy ? cfg.txtTurnPrivacyPrivateDesc : cfg.txtTurnPrivacyPublicDesc}`,
       `**${trimTrailingEmoji(cfg.lblMetaSceneBreakDivider)}:** ${sceneBreakDisplay}\n-# ${cfg.txtSceneBreakDividerDesc}`,
-      `**${trimTrailingEmoji(cfg.lblMetaRating)}${cfg.lblMetadataAddon}:** ${ratingLabel}\n-# ${cfg.txtRatingDesc}`,
+      `**${trimTrailingEmoji(cfg.lblMetaRating)}${cfg.lblMetadataAddon}:** ${ratingLabel}\n-# ${state.ratingsFilter ? cfg.txtRatingDescFiltered : cfg.txtRatingDesc}`,
     ];
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent(infoLines.join('\n')));
     container.addActionRowComponents(new ActionRowBuilder().addComponents(
