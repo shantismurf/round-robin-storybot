@@ -44,6 +44,12 @@ Provenance: written alongside the work.
   new config keys `txtStatusDelayedStarts`, `txtStatusDelayWriters`, and the generic `txtOr`
   (with the other shared words in config_system.sql).
 
+### Fixed
+- **Delayed stories' status posts were never redrawn on startup (2026-11-14).** The startup
+  refresh (`refreshAllStatusMessages` in `index.js`) only picked Active and Paused stories, so
+  after the 3.10.2 Redeploy a delayed story showed no countdown until a join redrew it. Delayed
+  added to that query. No separate bump: found the day 3.10.2 went live.
+
 ## 3.10.1 — 2026-11-14
 
 Provenance: written alongside the work. Absorbs everything that sat under Unreleased after
