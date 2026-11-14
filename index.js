@@ -40,16 +40,16 @@ async function waitForDatabase(dbConfig) {
 }
 
 /**
- * On startup, refresh status embeds for all active/paused stories so buttons
+ * On startup, refresh status embeds for all active/paused/delayed stories so buttons
  * and content never go stale after a bot restart.
  */
 async function refreshAllStatusMessages(connection, client) {
   try {
     const [stories] = await connection.execute(
-      `SELECT story_id, guild_id FROM story WHERE story_status IN (?, ?) AND story_thread_id IS NOT NULL`,
-      [STORY_STATUS.ACTIVE, STORY_STATUS.PAUSED]
+      `SELECT story_id, guild_id FROM story WHERE story_status IN (?, ?, ?) AND story_thread_id IS NOT NULL`,
+      [STORY_STATUS.ACTIVE, STORY_STATUS.PAUSED, STORY_STATUS.DELAYED]
     );
-    log(`Refreshing status messages for ${stories.length} active/paused story/stories...`, { show: false });
+    log(`Refreshing status messages for ${stories.length} active/paused/delayed story/stories...`, { show: false });
     const orphanedGuildIds = new Set();
     for (const story of stories) {
       if (orphanedGuildIds.has(story.guild_id)) continue;
