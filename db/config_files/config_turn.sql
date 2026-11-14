@@ -145,6 +145,8 @@ Words: ~[word_count]', 'en', 1),
 ('lblStatusWriterList', 'Writer List', 'en', 1),
 ('lblStatusInactiveHeading', 'Inactive', 'en', 1),
 ('txtStatusWriterListMore', '…and [count] more', 'en', 1),
+('txtStatusDelayedStarts', '[status], starts [conditions]', 'en', 1),
+('txtStatusDelayWriters', 'at [target] writers ([joined] so far)', 'en', 1),
 ('lblStatusClosed', 'Closed', 'en', 1),
 -- Thread preservation / skip flow
 ('txtThreadScheduledDelete', 'This turn has now ended and this thread is scheduled for deletion [relative_timestamp].', 'en', 1),

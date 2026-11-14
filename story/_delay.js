@@ -1,4 +1,4 @@
-import { getConfigValue, log } from '../utilities.js';
+import { getConfigValue, log, replaceTemplateVariables } from '../utilities.js';
 import { STORY_STATUS, WRITER_STATUS } from '../constants.js';
 
 /**
@@ -73,4 +73,29 @@ export async function checkStoryDelay(connection, storyId) {
     log(`checkStoryDelay failed for story ${storyId}: ${error}`, { show: true });
     return { madeActive: false };
   }
+}
+
+/**
+ * When a delayed story will start, as the text that follows "Delayed" in the status post's Status
+ * box: a relative countdown for an hour delay, the writer target for a writer delay, and both
+ * joined with "or" when both are set, since whichever is met first starts the story. Returns ''
+ * when there is nothing left to count down to, so the box falls back to a bare "Delayed".
+ *
+ * The hour countdown is a Discord <t:...:R> timestamp, which renders as "in 21 hours" and ticks
+ * down on the reader's side without the post being edited. The writer count refreshes because a
+ * join already redraws the status post. Pure, so the status post and its test share one copy.
+ *
+ * cfg needs txtStatusDelayedStarts, txtStatusDelayWriters and txtOr.
+ */
+export function formatDelayStatus(story, joinedCount, statusLabel, cfg, now = Date.now()) {
+  const conditions = [];
+  if (story.story_delay_hours > 0 && story.created_at) {
+    const startMs = new Date(story.created_at).getTime() + story.story_delay_hours * 60 * 60 * 1000;
+    if (startMs > now) conditions.push(`<t:${Math.floor(startMs / 1000)}:R>`);
+  }
+  if (story.story_delay_users > 0 && joinedCount < story.story_delay_users) {
+    conditions.push(replaceTemplateVariables(cfg.txtStatusDelayWriters, { target: story.story_delay_users, joined: joinedCount }));
+  }
+  if (!conditions.length) return statusLabel;
+  return replaceTemplateVariables(cfg.txtStatusDelayedStarts, { status: statusLabel, conditions: conditions.join(` ${cfg.txtOr} `) });
 }
