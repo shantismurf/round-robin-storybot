@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, LabelBuilder, SeparatorBuilder, ContainerBuilder, TextDisplayBuilder, MessageFlags, EmbedBuilder } from 'discord.js';
-import { getConfigValue, log, sanitizeModalInput, replaceTemplateVariables, resolveStoryId, checkIsAdmin, checkIsCreator, parseDuration, formatDuration, replyValidationError } from '../utilities.js';
+import { getConfigValue, log, sanitizeModalInput, replaceTemplateVariables, resolveStoryId, checkIsAdmin, checkIsCreator, parseDuration, formatDuration, replyValidationError, replyActionFailed } from '../utilities.js';
 import { updateStoryStatusMessage } from './_storyStatus.js';
 import { ratingCodes, ratingLabelKey, warningOptions, dynamicOptions, crossesBarrier, isRestricted } from './_metadata.js';
 import { parseGroundRulesText, effectiveGroundRulesText } from './_groundRules.js';
@@ -598,9 +598,7 @@ async function handleManageButton(connection, interaction) {
     }
   } catch (error) {
     log(`handleManageButton failed: customId=${customId} user=${interaction.user.username}: ${error?.stack ?? error}`, { show: true, guildName: interaction?.guild?.name });
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: await getConfigValue(connection, 'errProcessingRequest', interaction.guild.id), flags: MessageFlags.Ephemeral });
-    }
+    await replyActionFailed(interaction, await getConfigValue(connection, 'errProcessingRequest', interaction.guild.id));
   }
 }
 
@@ -766,9 +764,7 @@ async function handleManageModalSubmit(connection, interaction) {
 
   } catch (error) {
     log(`handleManageModalSubmit failed: customId=${customId} user=${interaction.user.username}: ${error?.stack ?? error}`, { show: true, guildName: interaction?.guild?.name });
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: await getConfigValue(connection, 'errProcessingRequest', interaction.guild.id), flags: MessageFlags.Ephemeral });
-    }
+    await replyActionFailed(interaction, await getConfigValue(connection, 'errProcessingRequest', interaction.guild.id));
   }
 }
 

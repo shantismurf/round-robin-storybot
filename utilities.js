@@ -773,6 +773,22 @@ export function storyLastActivitySQL(storyAlias = 's') {
  * click "Dismiss message" after every typo. The delay is cfgValidationErrorDismissSeconds.
  * `detail` names the field and raw input for the log, e.g. `field=turn_length input="abc"`.
  */
+/**
+ * Shows a handler's "something went wrong" message to the user whatever state the interaction is
+ * in. reply() only works before the interaction is acknowledged, so after a deferUpdate(),
+ * update() or deferReply() the message goes out as an ephemeral followUp() instead. Without this,
+ * a failure after the acknowledgment was silent in Discord (LeeAnn, 2026-11-14).
+ */
+export async function replyActionFailed(interaction, content) {
+  const payload = { content, flags: MessageFlags.Ephemeral };
+  try {
+    if (interaction.replied || interaction.deferred) await interaction.followUp(payload);
+    else await interaction.reply(payload);
+  } catch (err) {
+    log(`replyActionFailed: could not show the error message to user=${interaction.user?.username} customId=${interaction.customId}: ${err?.stack ?? err}`, { show: true, guildName: interaction.guild?.name });
+  }
+}
+
 export async function replyValidationError(connection, interaction, content, detail = '') {
   // Worded "rejected", not "failed"/"error": show:true lines with those words are copied to the hub #logs channel, and a user typo should not page the admin.
   log(`${interaction.customId} input rejected: user=${interaction.user?.username} ${detail}`.trim(), { show: true, guildName: interaction.guild?.name });

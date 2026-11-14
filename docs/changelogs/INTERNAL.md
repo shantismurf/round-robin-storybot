@@ -55,6 +55,12 @@ they are until there is a style plan -- see the `Create style_roadmap.md` sectio
   - `story/_manageTurnActions.js`: after Extend, the main-panel refresh is best effort (it is a
     different message from Manage Turns, so it has no fresh token of its own). The extension
     itself is saved and confirmed either way.
+  - **No more silent failures on these panels.** Their error handlers only showed
+    `txtActionFailed`/`errProcessingRequest` if the interaction had not been acknowledged yet, so
+    a failure after the acknowledgment (as above) showed nothing in Discord. New
+    `replyActionFailed()` in `utilities.js` replies before acknowledgment and sends an ephemeral
+    follow-up after it. Used by the catch blocks in `add.js`, `manage.js`, `_myStoryManage.js`
+    and `_manageUser.js`. Tests in `test/utilities.test.js`.
 
 ### Changed
 - **SSH password login turned off on the Hetzner VM (2026-11-06).** `HOSTING.md` said SSH was

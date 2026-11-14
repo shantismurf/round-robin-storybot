@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags } from 'discord.js';
-import { getConfigValue, sanitizeModalInput, log, replaceTemplateVariables, resolveStoryId } from '../utilities.js';
+import { getConfigValue, sanitizeModalInput, log, replaceTemplateVariables, resolveStoryId, replyActionFailed } from '../utilities.js';
 import { finalMessage } from '../story/_metadataModals.js';
 import { PickNextWriter, NextTurn, endTurnGuarded, endTurnThread, departWriter } from '../story/_turn.js';
 import { updateStoryStatusMessage } from '../story/_storyStatus.js';
@@ -409,6 +409,6 @@ export async function handleMyStoryManageModal(connection, interaction) {
     state.originalInteraction = interaction;
   } catch (error) {
     log(`handleMyStoryManageModal failed: ${error?.stack ?? error}`, { show: true, guildName: interaction?.guild?.name });
-    await interaction.reply({ content: await getConfigValue(connection, 'errProcessingRequest', interaction.guild.id), flags: MessageFlags.Ephemeral });
+    await replyActionFailed(interaction, await getConfigValue(connection, 'errProcessingRequest', interaction.guild.id));
   }
 }

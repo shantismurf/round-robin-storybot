@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags } from 'discord.js';
-import { getConfigValue, sanitizeModalInput, log, replaceTemplateVariables, resolveStoryId } from '../utilities.js';
+import { getConfigValue, sanitizeModalInput, log, replaceTemplateVariables, resolveStoryId, replyActionFailed } from '../utilities.js';
 import { PickNextWriter, NextTurn, postStoryThreadActivity, endTurnGuarded, endTurnThread, departWriter } from './_turn.js';
 import { updateStoryStatusMessage } from './_storyStatus.js';
 import { buildWriterPanel } from './_writerPanel.js';
@@ -391,7 +391,7 @@ export async function handleManageUserModalSubmit(connection, interaction) {
     pending.originalInteraction = interaction;
   } catch (error) {
     log(`handleManageUserModalSubmit failed for story ${pending?.storyId} guild ${pending?.guildId}: ${error?.stack ?? error}`, { show: true, guildName: interaction?.guild?.name });
-    await interaction.reply({ content: await getConfigValue(connection, 'errProcessingRequest', interaction.guild.id), flags: MessageFlags.Ephemeral });
+    await replyActionFailed(interaction, await getConfigValue(connection, 'errProcessingRequest', interaction.guild.id));
   }
 }
 

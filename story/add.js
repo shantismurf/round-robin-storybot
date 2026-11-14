@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, LabelBuilder, SeparatorBuilder, ContainerBuilder, TextDisplayBuilder, MessageFlags } from 'discord.js';
-import { getConfigValue, log, sanitizeModalInput, replaceTemplateVariables, parseDuration, formatDuration, replyValidationError } from '../utilities.js';
+import { getConfigValue, log, sanitizeModalInput, replaceTemplateVariables, parseDuration, formatDuration, replyValidationError, replyActionFailed } from '../utilities.js';
 import { CreateStory } from '../storybot.js';
 import { getMetaCfg, buildStoryPanel, buildPanelTabRow, buildMetadataModal, buildTagsModal, buildStoryInfoModal } from './_metadataModals.js';
 import { parseGroundRulesText, effectiveGroundRulesText } from './_groundRules.js';
@@ -275,9 +275,7 @@ export async function handleAddStoryModalSubmit(connection, interaction) {
 
   } catch (error) {
     log(`Error in handleAddStoryModalSubmit: customId=${customId} user=${interaction.user.username}: ${error?.stack ?? error}`, { show: true, guildName: interaction?.guild?.name });
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: await getConfigValue(connection, 'txtActionFailed', interaction.guild.id), flags: MessageFlags.Ephemeral });
-    }
+    await replyActionFailed(interaction, await getConfigValue(connection, 'txtActionFailed', interaction.guild.id));
   }
 }
 
@@ -460,9 +458,7 @@ export async function handleAddStoryButton(connection, interaction) {
     }
   } catch (error) {
     log(`handleAddStoryButton failed: customId=${customId} user=${interaction.user.username}: ${error?.stack ?? error}`, { show: true, guildName: interaction?.guild?.name });
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: await getConfigValue(connection, 'txtActionFailed', interaction.guild.id), flags: MessageFlags.Ephemeral });
-    }
+    await replyActionFailed(interaction, await getConfigValue(connection, 'txtActionFailed', interaction.guild.id));
   }
 }
 
