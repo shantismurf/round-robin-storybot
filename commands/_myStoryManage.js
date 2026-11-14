@@ -402,9 +402,11 @@ export async function handleMyStoryManageModal(connection, interaction) {
     const rawName = interaction.fields.getTextInputValue('pen_name_input');
     const newName = sanitizeModalInput(rawName, 100) || null;
     state.penName = newName;
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    await state.originalInteraction.editReply(buildMyStoryManagePanel(state, state.cfg));
-    await interaction.deleteReply();
+    // interaction.update() edits the panel this modal was opened from with this submission's own
+    // token. state.originalInteraction is the /mystory manage command, whose token Discord kills
+    // 15 minutes after the command ran (Invalid Webhook Token, 50027).
+    await interaction.update(buildMyStoryManagePanel(state, state.cfg));
+    state.originalInteraction = interaction;
   } catch (error) {
     log(`handleMyStoryManageModal failed: ${error?.stack ?? error}`, { show: true, guildName: interaction?.guild?.name });
     await interaction.reply({ content: await getConfigValue(connection, 'errProcessingRequest', interaction.guild.id), flags: MessageFlags.Ephemeral });

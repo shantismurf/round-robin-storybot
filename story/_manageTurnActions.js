@@ -415,7 +415,12 @@ export async function handleTurnActionModal(connection, interaction, manageState
       if (manageState?.activeTurn) {
         manageState.activeTurn.turn_ends_unix = newEndUnix;
         const { buildManageMessage } = await import('./manage.js');
-        await manageState.originalInteraction.editReply(buildManageMessage(manageState.cfg, manageState, manageState.activeTurn));
+        // Best effort: the main panel is a different message from this Manage Turns one, so it can
+        // only be redrawn through state.originalInteraction, the last interaction that touched the
+        // panel. That token dies 15 minutes after that interaction. The extension is already saved
+        // and confirmed above, so a stale token only leaves the panel showing the old deadline.
+        await manageState.originalInteraction.editReply(buildManageMessage(manageState.cfg, manageState, manageState.activeTurn))
+          .catch(err => log(`handleTurnActionModal: manage panel not refreshed after extend on story ${storyId} (panel token likely expired), user=${interaction.user.username}: ${err?.message ?? err}`, { show: false, guildName: interaction?.guild?.name }));
       }
 
     } catch (error) {

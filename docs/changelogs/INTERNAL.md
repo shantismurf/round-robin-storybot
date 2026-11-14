@@ -32,6 +32,28 @@ Open and deliberately not in 3.10.0: the emoji on the remaining 44 button labels
 they are until there is a style plan -- see the `Create style_roadmap.md` section of
 `docs/TODO.md`.
 
+### Fixed
+- **`/story add`, `/story manage` and `/mystory manage` stopped redrawing 15 minutes after the
+  command ran (2026-11-14).** LeeAnn set delay hours in `/story add` more than 15 minutes in:
+  the Settings save failed with `Invalid Webhook Token` (50027) at `story/add.js:271`, the panel
+  kept showing 0 hours, and no error appeared in Discord. The value had in fact been staged, and
+  the story was created with it. Cause: these panels redrew through `state.originalInteraction`,
+  the slash command's own interaction, whose token Discord kills 15 minutes after the command.
+  Same bug as the edit panel (fixed earlier) and `/storyadmin setup` (fixed earlier).
+  - `story/add.js`: modal submits redraw with `interaction.update()`; Create Story shows its
+    result through the button click's own token. Previously, past 15 minutes the story was
+    created but the confirmation could not be shown.
+  - `story/manage.js`, `commands/_myStoryManage.js`: modal submits use `interaction.update()`,
+    and every handler that acknowledges a click on the panel now points
+    `state.originalInteraction` at that click, so later redraws (Save, Close, Reopen,
+    Pause/Resume, rating confirm) use a token no older than the last panel interaction. The
+    rating-change prompt now refreshes the panel first and posts the prompt as a follow-up, so
+    Confirm can redraw it; that redraw is best effort past 15 minutes (the rating is staged
+    either way, and the next panel click shows it).
+  - `story/_manageTurnActions.js`: after Extend, the main-panel refresh is best effort (it is a
+    different message from Manage Turns, so it has no fresh token of its own). The extension
+    itself is saved and confirmed either way.
+
 ### Changed
 - **SSH password login turned off on the Hetzner VM (2026-11-06).** `HOSTING.md` said SSH was
   key-only, but cloud-init's `50-cloud-init.conf` had password login enabled and the SSH log

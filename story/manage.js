@@ -338,6 +338,7 @@ async function handleManageButton(connection, interaction) {
       // latter edits via the ORIGINAL /story manage command's webhook token, which goes stale 15
       // minutes after that command ran. See docs/reference/discordjs_reference.md.
       await interaction.update(buildManageMessage(state.cfg, state, state.activeTurn));
+      state.originalInteraction = interaction;
 
     } else if (customId === 'story_manage_open_storyinfo') {
       await interaction.showModal(buildStoryInfoModal(state.cfg, state, 'story_manage'));
@@ -348,6 +349,7 @@ async function handleManageButton(connection, interaction) {
       // status-message refresh Pause/Resume/Reopen already do.
       try {
         await interaction.deferUpdate();
+        state.originalInteraction = interaction;
         state.allowJoins = state.allowJoins ? 0 : 1;
         await connection.execute(`UPDATE story SET allow_joins = ? WHERE story_id = ?`, [state.allowJoins, state.storyId]);
         updateStoryStatusMessage(connection, interaction.guild, state.storyId).catch(() => {});
@@ -379,22 +381,26 @@ async function handleManageButton(connection, interaction) {
           .setStyle(ButtonStyle.Secondary)
       );
       await interaction.deferUpdate();
+      state.originalInteraction = interaction;
       await state.originalInteraction.editReply(finalMessage(confirmMsg, [row]));
 
     } else if (customId === 'story_manage_close_confirm') {
       if (!state.isAdminOrCreator) {
         return await interaction.followUp({ content: await getConfigValue(connection, 'txtManageNotAuthorized', interaction.guild.id), flags: MessageFlags.Ephemeral });
       }
+      state.originalInteraction = interaction;
       await handleManageCloseConfirm(connection, interaction, state);
       pendingManageData.delete(userId);
 
     } else if (customId === 'story_manage_close_cancel') {
       await interaction.deferUpdate();
+      state.originalInteraction = interaction;
       await state.originalInteraction.editReply(buildManageMessage(state.cfg, state, state.activeTurn));
 
     } else if (customId === 'story_manage_reopen') {
       try {
         const { reopenMsg } = await handleReopenStory(connection, interaction, state);
+        state.originalInteraction = interaction;
         pendingManageData.set(userId, state);
         await state.originalInteraction.editReply(buildManageMessage(state.cfg, state, null));
         await interaction.followUp({ content: reopenMsg, flags: MessageFlags.Ephemeral });
@@ -412,6 +418,7 @@ async function handleManageButton(connection, interaction) {
       // moment it's clicked. handleTogglePauseResume mirrors handleReopenStory's shape.
       try {
         await handleTogglePauseResume(connection, interaction, state);
+        state.originalInteraction = interaction;
         pendingManageData.set(userId, state);
         await state.originalInteraction.editReply(buildManageMessage(state.cfg, state, state.activeTurn));
       } catch (err) {
@@ -572,7 +579,11 @@ async function handleManageButton(connection, interaction) {
       delete state.pendingRatingChange;
       log(`handleManageButton: rating change confirmed, storyId=${state.storyId} rating=${state.rating} user=${interaction.user.username}`, { show: true, guildName: interaction?.guild?.name });
       await interaction.update({ content: state.cfg.txtMetaApplied, embeds: [], components: [] });
-      await state.originalInteraction.editReply(buildManageMessage(state.cfg, state, state.activeTurn));
+      // Best effort: the panel is a different message from this prompt, so it is redrawn through
+      // the metadata modal submit that posted the prompt, whose token dies 15 minutes after that
+      // submit. The rating is already staged either way, and the next panel click redraws it.
+      await state.originalInteraction.editReply(buildManageMessage(state.cfg, state, state.activeTurn))
+        .catch(err => log(`handleManageButton: panel not refreshed after rating confirm, storyId=${state.storyId} (panel token likely expired), user=${interaction.user.username}: ${err?.message ?? err}`, { show: false, guildName: interaction?.guild?.name }));
 
     } else if (customId === 'story_manage_rating_revert') {
       delete state.pendingRatingChange;
@@ -581,6 +592,7 @@ async function handleManageButton(connection, interaction) {
 
     } else if (customId === 'story_manage_save') {
       await interaction.deferUpdate();
+      state.originalInteraction = interaction;
       await handleManageSave(connection, interaction, state);
 
     }
@@ -712,7 +724,12 @@ async function handleManageModalSubmit(connection, interaction) {
         );
         // A new ephemeral message, not an edit of the V2 panel — a classic embed is still valid
         // here (see docs/reference/discordjs_reference.md's Components V2 section).
-        await interaction.reply({ embeds: [confirmEmbed], components: [confirmRow], flags: MessageFlags.Ephemeral });
+        // update() first: it acknowledges this submission against the panel message and makes
+        // this submission's token the panel's, so Confirm/Revert can redraw the panel later
+        // without the /story manage command's token, which dies 15 minutes after the command ran.
+        await interaction.update(buildManageMessage(state.cfg, state, state.activeTurn));
+        state.originalInteraction = interaction;
+        await interaction.followUp({ embeds: [confirmEmbed], components: [confirmRow], flags: MessageFlags.Ephemeral });
         return;
       }
 
@@ -740,9 +757,12 @@ async function handleManageModalSubmit(connection, interaction) {
       return;
     }
 
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    await interaction.deleteReply();
-    await state.originalInteraction.editReply(buildManageMessage(state.cfg, state, state.activeTurn));
+    // interaction.update() edits the panel this modal was opened from with this submission's own
+    // token, and state.originalInteraction then points here so later redraws (rating confirm,
+    // turn-action refreshes) use a token no older than the last panel interaction. The
+    // /story manage command's own token dies 15 minutes after the command ran (50027).
+    await interaction.update(buildManageMessage(state.cfg, state, state.activeTurn));
+    state.originalInteraction = interaction;
 
   } catch (error) {
     log(`handleManageModalSubmit failed: customId=${customId} user=${interaction.user.username}: ${error?.stack ?? error}`, { show: true, guildName: interaction?.guild?.name });

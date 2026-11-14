@@ -267,9 +267,11 @@ export async function handleAddStoryModalSubmit(connection, interaction) {
       else if (notifVal === 'mention') state.notifications = 0;
     }
 
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    await state.originalInteraction.editReply(buildStoryAddMessage(state.cfg, state));
-    await interaction.deleteReply();
+    // interaction.update() edits the panel message this modal was opened from (every story_add
+    // modal opens from a panel button), using this submission's own fresh token. Never
+    // state.originalInteraction.editReply(): that is the /story add command's token, which
+    // Discord kills 15 minutes after the command ran (Invalid Webhook Token, 50027).
+    await interaction.update(buildStoryAddMessage(state.cfg, state));
 
   } catch (error) {
     log(`Error in handleAddStoryModalSubmit: customId=${customId} user=${interaction.user.username}: ${error?.stack ?? error}`, { show: true, guildName: interaction?.guild?.name });
@@ -473,6 +475,8 @@ export async function handleCreateStorySubmit(connection, interaction, state) {
     return;
   }
 
+  // deferUpdate() + interaction.editReply() edits the panel through this click's own token, not
+  // the /story add command's, which is dead once the panel has been open 15 minutes.
   await interaction.deferUpdate();
 
   try {
@@ -506,12 +510,12 @@ export async function handleCreateStorySubmit(connection, interaction, state) {
     pendingStoryData.delete(interaction.user.id);
 
     if (result.success) {
-      await state.originalInteraction.editReply(finalMessage(result.message));
+      await interaction.editReply(finalMessage(result.message));
     } else {
-      await state.originalInteraction.editReply(finalMessage(result.error));
+      await interaction.editReply(finalMessage(result.error));
     }
   } catch (error) {
     log(`Error creating story: ${error?.stack ?? error}`, { show: true, guildName: interaction?.guild?.name });
-    await state.originalInteraction.editReply(finalMessage(await getConfigValue(connection, 'txtStoryCreationError', interaction.guild.id)));
+    await interaction.editReply(finalMessage(await getConfigValue(connection, 'txtStoryCreationError', interaction.guild.id)));
   }
 }
