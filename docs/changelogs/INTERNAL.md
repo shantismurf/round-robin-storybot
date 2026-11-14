@@ -41,7 +41,8 @@ Provenance: written alongside the work.
   `⏳ Delayed, starts at 5 writers (2 so far)`, or both joined with "or" when both delays are set,
   since whichever is met first starts the story. The writer count stays current because a join
   already redraws the status post. New pure helper `formatDelayStatus()` in `story/_delay.js`,
-  new config keys `txtStatusDelayedStarts`, `txtStatusDelayWriters`, `txtStatusDelayOr`.
+  new config keys `txtStatusDelayedStarts`, `txtStatusDelayWriters`, and the generic `txtOr`
+  (with the other shared words in config_system.sql).
 
 ## 3.10.1 — 2026-11-14
 

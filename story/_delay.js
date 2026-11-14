@@ -85,7 +85,7 @@ export async function checkStoryDelay(connection, storyId) {
  * down on the reader's side without the post being edited. The writer count refreshes because a
  * join already redraws the status post. Pure, so the status post and its test share one copy.
  *
- * cfg needs txtStatusDelayedStarts, txtStatusDelayWriters and txtStatusDelayOr.
+ * cfg needs txtStatusDelayedStarts, txtStatusDelayWriters and txtOr.
  */
 export function formatDelayStatus(story, joinedCount, statusLabel, cfg, now = Date.now()) {
   const conditions = [];
@@ -97,5 +97,5 @@ export function formatDelayStatus(story, joinedCount, statusLabel, cfg, now = Da
     conditions.push(replaceTemplateVariables(cfg.txtStatusDelayWriters, { target: story.story_delay_users, joined: joinedCount }));
   }
   if (!conditions.length) return statusLabel;
-  return replaceTemplateVariables(cfg.txtStatusDelayedStarts, { status: statusLabel, conditions: conditions.join(` ${cfg.txtStatusDelayOr} `) });
+  return replaceTemplateVariables(cfg.txtStatusDelayedStarts, { status: statusLabel, conditions: conditions.join(` ${cfg.txtOr} `) });
 }

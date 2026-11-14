@@ -76,7 +76,7 @@ describe('formatDelayStatus', () => {
   const cfg = {
     txtStatusDelayedStarts: '[status], starts [conditions]',
     txtStatusDelayWriters: 'at [target] writers ([joined] so far)',
-    txtStatusDelayOr: 'or',
+    txtOr: 'or',
   };
   const created = new Date('2026-11-14T12:00:00Z');
   const now = new Date('2026-11-14T15:00:00Z').getTime();
