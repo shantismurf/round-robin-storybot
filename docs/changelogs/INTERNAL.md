@@ -30,9 +30,11 @@ Open and deliberately not in 3.10.0 or 3.10.1: the emoji on the remaining 44 but
 which stay as they are until there is a style plan -- see the `Create style_roadmap.md` section
 of `docs/TODO.md`.
 
-### Starter story on first setup (2026-11-19, version not yet approved, proposed 3.11.0)
+## 3.11.0 — 2026-11-19
 
-Added
+Provenance: written alongside the work.
+
+### Added
 - **Starter story on the first `/storyadmin setup` save.** A Slow-mode story with reminders off,
   opened by a made-up stranger, The Hooded Stranger, whose entry (written by LeeAnn) is Turn 1.
   The admin who saved setup gets Turn 2, then the stranger leaves the story with an exit line
@@ -45,7 +47,7 @@ Added
 - **Every new story posts the creator's join line** in its story thread. Before, only the Join
   button posted one, so creators never got a line.
 
-Changed
+### Changed
 - **Round Robin is the default turn order for new stories.** It was Random. Defaults now live in
   `story/_storyDefaults.js`, shared by `/story add` and the starter story. Existing stories keep
   their order.
@@ -53,6 +55,9 @@ Changed
   hard-coded English. The starter story's announcement names the stranger instead of the admin.
 - `CreateStory()` takes a `{ starter }` option and returns `storyId`. The story thread's opening
   lines are posted in order after commit by `postStoryThreadOpening()`.
+- `helper/adminmsg.js` carries the new-bot reinstall DM (cutoff Sat 2026-11-21 16:00 UTC), reads
+  the app root's `config.json` so it runs inside the bot's container, takes `--ids` and `--config`,
+  and sends one DM per owner.
 
 ## 3.10.2 — 2026-11-14
 

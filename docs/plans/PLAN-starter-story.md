@@ -1,6 +1,6 @@
 # Plan: Starter Story on First Setup
 
-Status: Built on `claude/project-thread-sgzpjj`, PR open, awaiting a live test on a fresh server
+Status: Built, shipped as 3.11.0 (PR #100), awaiting a live test on a fresh server
 Created: 2026-11-19
 Last Updated: 2026-11-19
 
