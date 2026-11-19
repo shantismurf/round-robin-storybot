@@ -192,6 +192,12 @@ guild guard. See `docs/plans/PLAN-dm-support.md`.
         Ground Rules (own authoring flow, writes immediately — see below),
         Ratings Filter toggle (staged behind Save Settings like changelog)
   → storyadmin_setup_* modal → guild config saved
+  → Save Settings, first setup only (no cfgStoryFeedChannelId yet), after the summary is sent:
+    starter story (story/_starterStory.js, docs/plans/PLAN-starter-story.md). Slow mode, no
+    reminders. The Hooded Stranger's opening entry is Turn 1, the admin who saved is added and
+    gets Turn 2, the stranger leaves with a line inviting them to take up the pen or delete the
+    story. Never repeated: a failed attempt (e.g. feed permissions) retries on the next save,
+    a deleted starter story never comes back, servers set up earlier never get one.
   → storyadmin_setup_groundrules → paragraph-text modal, pre-filled with the approved defaults
     on an unconfigured guild → validate → pure addition saves immediately, anything else shows
     an Added/Removed/Renamed confirmation screen before writing cfgGroundRules

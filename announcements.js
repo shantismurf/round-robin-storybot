@@ -75,7 +75,9 @@ export async function postStoryFeedJoinAnnouncement(connection, storyId, interac
  * function postStoryFeedCreationAnnouncement
  * Post announcement to story feed channel when a story is created
  */
-export async function postStoryFeedCreationAnnouncement(connection, storyId, interaction) {
+// creatorName overrides the clicker's name, for the starter story, whose creator is the made-up
+// stranger rather than the admin whose setup save created it (story/_starterStory.js).
+export async function postStoryFeedCreationAnnouncement(connection, storyId, interaction, { creatorName: creatorNameOverride = null } = {}) {
   const guildId = interaction.guild.id;
   try {
     const feedChannelId = await getConfigValue(connection, 'cfgStoryFeedChannelId', guildId);
@@ -97,7 +99,7 @@ export async function postStoryFeedCreationAnnouncement(connection, storyId, int
     if (storyRows.length === 0) return;
     const story = storyRows[0];
 
-    const creatorName = interaction.member.displayName || interaction.user.displayName || interaction.user.username;
+    const creatorName = creatorNameOverride || interaction.member.displayName || interaction.user.displayName || interaction.user.username;
 
     const modeText = story.mode === STORY_MODE.QUICK ? 'Quick' : story.mode === STORY_MODE.SLOW ? 'Slow' : 'Normal';
     const orderMap = { 1: 'Random', 2: 'Round-Robin', 3: 'Fixed' };
@@ -125,8 +127,14 @@ export async function postStoryFeedCreationAnnouncement(connection, storyId, int
       ...delayParts
     ];
 
-    const ratingBadgeDisplay = await getConfigValue(connection, ratingBadgeKey(story.rating ?? 'NR'), guildId);
-    const message = `# 📚 New Story Created by ${creatorName}: "${story.title}" ${ratingBadgeDisplay}\n-# ${metaParts.join(' · ')}`;
+    const [ratingBadgeDisplay, txtStoryFeedCreatedTitle] = await Promise.all([
+      getConfigValue(connection, ratingBadgeKey(story.rating ?? 'NR'), guildId),
+      getConfigValue(connection, 'txtStoryFeedCreatedTitle', guildId),
+    ]);
+    const title = replaceTemplateVariables(txtStoryFeedCreatedTitle, {
+      creator_name: creatorName, rating_badge: ratingBadgeDisplay, story_title: story.title,
+    });
+    const message = `${title}\n-# ${metaParts.join(' · ')}`;
 
     // A new story used to be announced to the feed with no way to act on it — the only Join
     // button lived on the pinned status embed inside the story thread, which nobody reading the

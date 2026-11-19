@@ -11,7 +11,10 @@ For config string keys, see `config_roadmap.md`.
 |------|---------|-------|
 | `index.js` | Entry point, Discord client, interaction router. Waits for DB reachability (`waitForDatabase()`) before running `deploy.js`, so a DB outage at boot retries with throttled logging instead of crash-looping | ~305 |
 | `utilities.js` | Shared helpers: DB, logging, config, validators, parseDuration (accepts bare hours, d/h/m, spelled-out units, and formatDuration's own "96 hours (4 days)" output), formatDuration, `replyValidationError()` (ephemeral validation reply that deletes itself after `cfgValidationErrorDismissSeconds`), `replyActionFailed()` (shows a handler's error message as a reply, or as an ephemeral follow-up once the interaction is already acknowledged), `createFailureThrottle()` (burst-then-summary logging for a repeating failure/recovery cycle, e.g. DB connectivity), `getSetupRequiredMessage()`, `logGuildEvent()` (non-fatal insert into the `guild_event` funnel table) | ~770 |
-| `storybot.js` | Core story engine: CreateStory, NextTurn, PickNextWriter | — |
+| `storybot.js` | Core story engine: `CreateStory(connection, interaction, storyInput, { starter })` (returns `storyId`; `starter` seeds the starter story), `StoryJoin` (returns `displayName`), `postStoryThreadOpening` (internal: status post, creator join line, first turn line, posted in order after commit), NextTurn, PickNextWriter | — |
+| `story/_storyDefaults.js` | `STORY_DEFAULTS`: new-story defaults shared by `/story add` and the starter story (Round Robin order since 2026-11-19) | ~25 |
+| `story/_starterStory.js` | Starter story on first setup: `maybeCreateStarterStory`, `claimStarterStory` (atomic claim on the `cfgStarterStoryId` marker row), `pickStarterGroundRules`, `buildStarterStoryInput`. See `docs/plans/PLAN-starter-story.md` | ~150 |
+| `story/_starterOpening.js` | `seedStarterOpening`: the stranger's writer row, ended Turn 1 and confirmed entry, inside CreateStory's transaction | ~40 |
 | `job-runner.js` | Background job polling and execution | ~250 |
 | `deploy.js` | CLI deploy, run on every bot start: migrations, config sync, command registration, hub post sync (FAQ + privacy policy + gated broadcast) | ~125 |
 | `sync-config.js` | Syncs SQL config files into the database; `setupOnlyKeys` excludes per-guild/system-singleton keys (e.g. `cfgPrivacyPolicyMessageId`) that are written programmatically, never by file sync | — |
@@ -215,7 +218,8 @@ story-scoped question. Written via `logGuildEvent()` (above), never inline.
 | `guild_left` | `index.js` — `Events.GuildDelete` |
 | `setup_opened` | `commands/_storyadminSetup.js` — `handleSetup`; `detail: { isOwner, hasManageGuild }` |
 | `setup_saved` | `commands/_storyadminSetup.js` — `handleSetupSave`, after config is persisted; `detail: { isFirstSetup, isOwner }` |
-| `story_created` | `storybot.js` — `CreateStory`, after its transaction commits |
+| `story_created` | `storybot.js` — `CreateStory`, after its transaction commits (not for the starter story) |
+| `starter_story_created` | `storybot.js` — `CreateStory` with the `starter` option, after commit. Kept separate so the starter story doesn't count as an admin making a story |
 | `writer_joined` | `story/join.js` — `handleJoinConfirm`, after its transaction commits. Only fires for the standalone join flow, not the creator's own auto-join inside `CreateStory` — the funnel question is "did a second person join," which `story_created` doesn't already answer |
 | `turn_finalized` | `story/_writeFinalize.js` — `doFinalizeEntry`, after its transaction commits (covers both call sites in `_writeFinalize.js`, since both route through this one function) |
 

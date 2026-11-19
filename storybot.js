@@ -1,4 +1,4 @@
-import { getConfigValue, log, logGuildEvent } from './utilities.js';
+import { getConfigValue, log, logGuildEvent, replaceTemplateVariables } from './utilities.js';
 import { ChannelType } from 'discord.js';
 import { STORY_STATUS, TURN_STATUS, JOB_STATUS, WRITER_STATUS, STORY_MODE } from './constants.js';
 import { postStoryFeedCreationAnnouncement, postStoryFeedActivationAnnouncement } from './announcements.js';
@@ -6,6 +6,8 @@ import { resolveFeedChannelId, isRestricted } from './story/_metadata.js';
 import { checkStoryDelay } from './story/_delay.js';
 import { PickNextWriter, NextTurn, postStoryThreadActivity } from './story/_turn.js';
 import { updateStoryStatusMessage, buildThreadTitle } from './story/_storyStatus.js';
+import { postThreadEntry } from './story/_entryRenderer.js';
+import { seedStarterOpening } from './story/_starterOpening.js';
 
 export { checkStoryDelay } from './story/_delay.js';
 export { PickNextWriter, NextTurn, postStoryThreadActivity, deleteThreadAndAnnouncement, skipActiveTurn } from './story/_turn.js';
@@ -27,7 +29,7 @@ export function getActiveThreadId(story) {
 /**
  * CreateStory function with explicit transaction handling
  */
-export async function CreateStory(connection, interaction, storyInput) {
+export async function CreateStory(connection, interaction, storyInput, { starter = null } = {}) {
   log(`CreateStory: entry title="${storyInput.storyTitle}"`, { show: false, guildName: interaction?.guild?.name });
   const guild_id = interaction.guild.id;
   const txn = await connection.getConnection();
@@ -115,29 +117,52 @@ export async function CreateStory(connection, interaction, storyInput) {
       [storyThread.id, storyId]
     );
 
-    // Step 5: Add creator as first writer
+    // Step 5 (starter story only): the made-up stranger joins first, so it is the creator while
+    // it is in the story, and its opening entry goes in as Turn 1, already ended. A real turn
+    // started through NextTurn would open a turn thread and DM the bot's own account.
+    let strangerWriterId = null;
+    if (starter) {
+      strangerWriterId = await seedStarterOpening(txn, storyId, interaction.client.user.id, starter);
+      log(`CreateStory: starter story ${storyId} seeded with stranger writer ${strangerWriterId}`, { show: false, guildName: interaction?.guild?.name });
+    }
+
+    // Step 6: Add the person who clicked as a writer (the creator, or for the starter story the
+    // admin whose setup save created it)
     const writerResult = await StoryJoin(txn, interaction, storyInput, storyId);
 
     if (!writerResult.success) {
       throw new Error(writerResult.error);
     }
 
-    // Step 6: Start first turn if story is active (no delay)
+    // Step 7: Start the first turn if story is active (no delay). Announcement is deferred so the
+    // thread's opening lines can go in order after commit (postStoryThreadOpening).
+    let turnResult = null;
     if (storyStatus === STORY_STATUS.ACTIVE) {
-      const firstWriterId = await PickNextWriter(txn, storyId);
+      const firstWriterId = starter ? writerResult.storyWriterId : await PickNextWriter(txn, storyId);
       if (!firstWriterId) {
         throw new Error('No writer available to start the first turn');
       }
-      const turnResult = await NextTurn(txn, interaction, firstWriterId);
+      turnResult = await NextTurn(txn, interaction, firstWriterId, { deferAnnouncement: true });
       if (!turnResult.success) {
         throw new Error(turnResult.error);
       }
     }
 
+    // Step 8 (starter story only): the stranger leaves once Turn 2 has started. Marked left the
+    // same way a departing writer is, so turn picking, writer counts and checkIsCreator all skip
+    // it, and the admin becomes the creator as the earliest active writer.
+    if (starter) {
+      await txn.execute(
+        `UPDATE story_writer SET sw_status = ?, left_at = NOW() WHERE story_writer_id = ?`,
+        [WRITER_STATUS.LEFT, strangerWriterId]
+      );
+    }
+
     // Commit transaction
     await txn.commit();
 
-    await logGuildEvent(connection, guild_id, 'story_created');
+    // The starter story gets its own event, so it doesn't count as an admin making a story
+    await logGuildEvent(connection, guild_id, starter ? 'starter_story_created' : 'story_created');
 
     // The creator is the story's first writer — add them to the story thread the same way
     // handleJoinConfirm adds joiners
@@ -148,17 +173,15 @@ export async function CreateStory(connection, interaction, storyInput) {
       );
 
     // Post story creation announcement after commit so writer count is visible
-    await postStoryFeedCreationAnnouncement(connection, storyId, interaction);
+    await postStoryFeedCreationAnnouncement(connection, storyId, interaction, { creatorName: starter?.strangerName ?? null });
 
-    // Post initial status message (NextTurn already posted one if story is active;
-    // this covers delayed stories where no turn has started yet)
-    if (storyStatus !== STORY_STATUS.ACTIVE) {
-      updateStoryStatusMessage(connection, interaction.guild, storyId)
-        .catch(err => log(`CreateStory: updateStoryStatusMessage failed for story ${storyId}: ${err?.stack ?? err}`, { show: true, guildName: interaction?.guild?.name }));
-    }
+    postStoryThreadOpening(connection, interaction, storyId, storyThread, {
+      creatorName: writerResult.displayName, turnResult, starter,
+    });
 
     return {
       success: true,
+      storyId,
       message: `✅ **Story "${storyInput.storyTitle}" created successfully!**\n${writerResult.confirmationMessage}`
     };
 
@@ -173,6 +196,47 @@ export async function CreateStory(connection, interaction, storyInput) {
     };
   } finally {
     txn.release();
+  }
+}
+
+/**
+ * The story thread's opening lines, posted in order after CreateStory commits. Not awaited by
+ * CreateStory, so the /story add reply doesn't wait on Discord, but sequential inside so the
+ * lines land in order: the status post (and creator tip) first, then the creator's join line,
+ * then the first turn's start line.
+ *
+ * Every story now gets the creator's join line (LeeAnn, 2026-11-19). Before, only the Join
+ * button's confirm step posted one, so creators never had one.
+ *
+ * The starter story adds the stranger's Turn 1 start line before the join line, its entry after
+ * it, and the stranger's exit line last, after the admin's Turn 2 start line.
+ */
+async function postStoryThreadOpening(connection, interaction, storyId, storyThread, { creatorName, turnResult, starter }) {
+  const guild = interaction.guild;
+  try {
+    await updateStoryStatusMessage(connection, guild, storyId);
+
+    const keys = ['txtStoryThreadWriterJoin'];
+    if (starter) keys.push('txtStoryThreadTurnStartSlow', 'txtStarterStoryStrangerLeaves', 'cfgHubInviteUrl');
+    const cfg = await getConfigValue(connection, keys, guild.id);
+
+    if (starter) {
+      await storyThread.send(replaceTemplateVariables(cfg.txtStoryThreadTurnStartSlow, { turn_number: 1, writer_name: starter.strangerName }));
+    }
+    await storyThread.send(replaceTemplateVariables(cfg.txtStoryThreadWriterJoin, { writer_name: creatorName }));
+    if (starter) {
+      // Same author line format as every other posted entry (story/_writeFinalize.js)
+      await postThreadEntry(storyThread, starter.entryText, `Turn 1 — ${starter.strangerName}`, null);
+    }
+
+    if (turnResult?.announce) await turnResult.announce(connection);
+
+    if (starter) {
+      await storyThread.send(replaceTemplateVariables(cfg.txtStarterStoryStrangerLeaves, { hubInviteUrl: cfg.cfgHubInviteUrl }));
+    }
+    log(`postStoryThreadOpening: opening posted for story ${storyId} in thread ${storyThread.id}${starter ? ' (starter story)' : ''}`, { show: false, guildName: guild?.name });
+  } catch (error) {
+    log(`postStoryThreadOpening failed for story ${storyId} thread ${storyThread?.id}: ${error?.stack ?? error}`, { show: true, guildName: guild?.name });
   }
 }
 
@@ -257,7 +321,8 @@ export async function StoryJoin(connection, interaction, storyInput, storyId) {
     return {
       success: true,
       confirmationMessage,
-      storyWriterId
+      storyWriterId,
+      displayName
     };
 
   } catch (error) {

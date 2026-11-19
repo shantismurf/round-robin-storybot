@@ -10,6 +10,7 @@ import { MessageFlags } from 'discord.js';
 import { getConfigValue, log, replaceTemplateVariables, logGuildEvent } from '../utilities.js';
 import { cancelPendingRoundupJobs, scheduleNextRoundup } from '../story/roundup.js';
 import { pendingSetupData, buildSetupPanel, STAGED_FIELDS, hasTier1Access } from './_storyadminSetup.js';
+import { maybeCreateStarterStory } from '../story/_starterStory.js';
 
 export async function handleSetupSave(connection, interaction) {
   const state = pendingSetupData.get(interaction.user.id);
@@ -271,4 +272,9 @@ export async function handleSetupSave(connection, interaction) {
   // separate ephemeral follow-up rather than overwriting the panel with it.
   await interaction.editReply(buildSetupPanel(state, state.cfg, { interactive: false, tier1Visible: canEditTier1, activeTab: state.activeSetupTab }));
   await interaction.followUp({ content: saved.join('\n'), flags: MessageFlags.Ephemeral });
+
+  // After the summary, so a slow or failed starter story never holds up or breaks the setup
+  // result. Only a first setup creates one (or a later save retrying a first attempt that could
+  // not run) -- see story/_starterStory.js.
+  await maybeCreateStarterStory(connection, interaction, { isFirstSetup, feedPermsOk });
 }

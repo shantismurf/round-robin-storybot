@@ -10,6 +10,14 @@ work — see [plans/PLAN-sequencing-and-priorities.md](plans/PLAN-sequencing-and
 
 # Pending
 
+- **Story thread announcements update** — LeeAnn, 2026-11-19. The activity log (added in `31753fc`, March 2026) posts turn start, skip, timeout, writer join and admin removal to the story thread. Add the relevant status changes it misses:
+  - a writer leaving on their own (no reason on record for its absence)
+  - a writer pausing or unpausing (changes the turn rotation)
+  - a pen name change (changes how they're credited)
+  - the story pausing or resuming (today only the turn thread, thread title and the current writer hear about it)
+  Privacy and notification setting changes stay unannounced. All new text is config, written by LeeAnn. The creator's join line at story creation shipped with the starter story (2026-11-19), whose stranger also has its own exit line (`txtStarterStoryStrangerLeaves`), so a general "left the story" line is still to do.
+- **Join button tells an existing writer only "✅ Joined"** — reported by LeeAnn 2026-11-19: clicking Join on her own new story didn't say she was already in. `validateJoinEligibility()` (`story/join.js:65`) returns `txtMemberStatusJoined` ("✅ Joined", a status label) as the already-joined error, so it reads like a success. `txtAlreadyJoined` ("You have already joined this story!") exists and is what `StoryJoin()` uses. Likely fix: use that key here.
+- **Starter story on first setup** — built, PR open, needs a live test on a fresh server with the new bot after the 2026-11-20 switch. See [plans/PLAN-starter-story.md](plans/PLAN-starter-story.md).
 - **Turn orphan cleanup back on after the bot application move** — `ORPHAN_CLEANUP_PAUSED` in `utilities.js` is `true` since 2026-11-13 so the move to the new app (switch 2026-11-20) can't close stories. Set it back to `false` once every server that is staying has the new bot. Until then a server that really uninstalls keeps its stories open, and its jobs retry every 6 hours.
 - **Turn on Coolify auto-deploy** — merges to `main` don't go live until someone clicks Redeploy (`docs/reference/HOSTING.md`, "Deploys are manual"). On 2026-11-13 that left a week of merged fixes undeployed without anyone noticing.
 - **Staging bot and Claude Code on the VM** — setup steps for LeeAnn, then a seed/reset script. See [plans/PLAN-staging-and-agent-on-vm.md](plans/PLAN-staging-and-agent-on-vm.md).
