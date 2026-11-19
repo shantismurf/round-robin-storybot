@@ -4,11 +4,15 @@ import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// --config <file> picks another config, e.g. --config config.old.json to log in as the old bot
-// after the 2026-11-20 switch (its token stays valid until 2026-11-22). Default: config.json.
-const configArg = process.argv.indexOf('--config');
-const configFile = configArg !== -1 ? process.argv[configArg + 1] : 'config.json';
-const config = JSON.parse(readFileSync(resolve(__dirname, configFile), 'utf8'));
+// Run from the app root inside the bot's container: node helper/adminmsg.js
+// --config <file> picks another config file (relative to the app root, or absolute).
+// Default: the app root's config.json, the same one the running bot uses.
+const argValue = (flag) => {
+  const i = process.argv.indexOf(flag);
+  return i !== -1 ? process.argv[i + 1] : null;
+};
+const configFile = argValue('--config') ?? 'config.json';
+const config = JSON.parse(readFileSync(resolve(__dirname, '..', configFile), 'utf8'));
 
 const USER_IDS = [
 /*redacted*/
@@ -26,6 +30,10 @@ If you have questions, or anything doesn't look right, come find me in the [Roun
 ~Shantismurf`;
 
 const SEND = process.argv.includes('--send');
+// --ids 123,456 sends to these user ids instead of USER_IDS, so the list can be passed on the
+// command line in a container where the file can't be edited.
+const idsArg = argValue('--ids');
+const recipients = idsArg ? idsArg.split(',').map((s) => s.trim()).filter(Boolean) : USER_IDS;
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -34,7 +42,7 @@ client.once('clientReady', async () => {
 
   if (SEND) {
     // One DM per person, even if they own several servers
-    for (const userId of [...new Set(USER_IDS)]) {
+    for (const userId of [...new Set(recipients)]) {
       try {
         const user = await client.users.fetch(userId);
         await user.send(MESSAGE);
@@ -49,13 +57,17 @@ client.once('clientReady', async () => {
     console.log('\n--- Current message ---\n');
     console.log(MESSAGE);
     const guilds = [...client.guilds.cache.values()];
+    const ownerIds = new Set();
     console.log(`\n--- Server owners, ${guilds.length} servers (USER_IDS format) ---\n`);
     for (const guild of guilds) {
       const owner = await guild.fetchOwner().catch(() => null);
       const id = owner?.user?.id ?? 'unknown';
       const username = owner?.user?.username ?? 'unknown';
       console.log(`'${id}', // ${username} (${guild.name}, ${guild.id})`);
+      if (owner?.user?.id) ownerIds.add(owner.user.id);
     }
+    console.log(`\n--- Unique owner ids, ready for --ids (remove your own) ---\n`);
+    console.log([...ownerIds].join(','));
     console.log('');
   }
 
