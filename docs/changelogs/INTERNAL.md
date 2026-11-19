@@ -30,6 +30,8 @@ Open and deliberately not in 3.10.0 or 3.10.1: the emoji on the remaining 44 but
 which stay as they are until there is a style plan -- see the `Create style_roadmap.md` section
 of `docs/TODO.md`.
 
+- `helper/adminmsg.js` never messages LeeAnn or geodebreaker (George, a test server owner): an `EXCLUDE_IDS` set filters both the printed owner list and `--send` (2026-11-19, no bump, helper only).
+
 ## 3.11.0 — 2026-11-19
 
 Provenance: written alongside the work.
