@@ -30,6 +30,10 @@ Open and deliberately not in 3.10.0 or 3.10.1: the emoji on the remaining 44 but
 which stay as they are until there is a style plan -- see the `Create style_roadmap.md` section
 of `docs/TODO.md`.
 
+- **The starter story's exit line is an embed with a coloured border** (LeeAnn, 2026-11-19,
+  after testing 3.11.0), so it stands apart from the turn lines. New key
+  `cfgStarterStoryLeavesColor` (`#9B59B6`) in `config_onboarding.sql`.
+
 ## 3.11.0 — 2026-11-19
 
 Provenance: written alongside the work.
