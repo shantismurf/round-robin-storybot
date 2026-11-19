@@ -40,9 +40,10 @@ On the first `/storyadmin setup` save on a server, after the setup summary has b
    story and start your own adventure!").
 6. The feed announcement names the stranger as creator, not the admin.
 
-Ground Rules preselected (`cfgStarterStoryGroundRules`): Respect Other Writers' Choices and
-Conflict, Not Contempt, each only if the server still has it. An admin can rename or remove rules
-in setup, so a missing one is skipped and logged.
+Ground Rules (`cfgStarterStoryGroundRules`): all of the server's rules, set to `all` on
+2026-11-19 after LeeAnn's live test, because the rules show prominently in the thread and should
+match the server's. It first picked Respect Other Writers' Choices and Conflict, Not Contempt. A
+slug list still works, and a missing slug is skipped and logged.
 
 ## Decisions
 

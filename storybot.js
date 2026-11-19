@@ -1,5 +1,5 @@
 import { getConfigValue, log, logGuildEvent, replaceTemplateVariables } from './utilities.js';
-import { ChannelType } from 'discord.js';
+import { ChannelType, EmbedBuilder } from 'discord.js';
 import { STORY_STATUS, TURN_STATUS, JOB_STATUS, WRITER_STATUS, STORY_MODE } from './constants.js';
 import { postStoryFeedCreationAnnouncement, postStoryFeedActivationAnnouncement } from './announcements.js';
 import { resolveFeedChannelId, isRestricted } from './story/_metadata.js';
@@ -217,7 +217,7 @@ async function postStoryThreadOpening(connection, interaction, storyId, storyThr
     await updateStoryStatusMessage(connection, guild, storyId);
 
     const keys = ['txtStoryThreadWriterJoin'];
-    if (starter) keys.push('txtStoryThreadTurnStartSlow', 'txtStarterStoryStrangerLeaves', 'cfgHubInviteUrl');
+    if (starter) keys.push('txtStoryThreadTurnStartSlow', 'txtStarterStoryStrangerLeaves', 'txtStarterStoryHelpLine', 'cfgStarterStoryLeavesColor', 'cfgHubInviteUrl');
     const cfg = await getConfigValue(connection, keys, guild.id);
 
     if (starter) {
@@ -232,7 +232,19 @@ async function postStoryThreadOpening(connection, interaction, storyId, storyThr
     if (turnResult?.announce) await turnResult.announce(connection);
 
     if (starter) {
-      await storyThread.send(replaceTemplateVariables(cfg.txtStarterStoryStrangerLeaves, { hubInviteUrl: cfg.cfgHubInviteUrl }));
+      // An embed with a coloured border, so the stranger's exit stands apart from the turn lines
+      // (LeeAnn, 2026-11-19). The colour is '#RRGGBB', which EmbedBuilder accepts as is.
+      const exitEmbed = new EmbedBuilder()
+        .setDescription(cfg.txtStarterStoryStrangerLeaves);
+      if (/^#[0-9a-f]{6}$/i.test(cfg.cfgStarterStoryLeavesColor)) {
+        exitEmbed.setColor(cfg.cfgStarterStoryLeavesColor);
+      } else {
+        log(`postStoryThreadOpening: cfgStarterStoryLeavesColor missing or unparseable (got ${JSON.stringify(cfg.cfgStarterStoryLeavesColor)}), exit embed sent with no border colour`, { show: true, guildName: guild?.name });
+      }
+      await storyThread.send({ embeds: [exitEmbed] });
+      // The help line stays plain text: a Hub invite link only shows Discord's invite card when
+      // it is in message content, never inside an embed, and LeeAnn wants the card (2026-11-19).
+      await storyThread.send(replaceTemplateVariables(cfg.txtStarterStoryHelpLine, { hubInviteUrl: cfg.cfgHubInviteUrl }));
     }
     log(`postStoryThreadOpening: opening posted for story ${storyId} in thread ${storyThread.id}${starter ? ' (starter story)' : ''}`, { show: false, guildName: guild?.name });
   } catch (error) {

@@ -59,6 +59,19 @@ Provenance: written alongside the work.
   the app root's `config.json` so it runs inside the bot's container, takes `--ids` and `--config`,
   and sends one DM per owner.
 
+### Changed after testing
+Follow-ups from LeeAnn's live test on 2026-11-19, folded into 3.11.0 with no bump because 3.11.0
+had not been announced yet:
+
+- **The starter story's exit line is an embed with a coloured border** (LeeAnn, 2026-11-19,
+  after testing 3.11.0), so it stands apart from the turn lines. New key
+  `cfgStarterStoryLeavesColor` (`#9B59B6`). The help line under it moved to its own key,
+  `txtStarterStoryHelpLine`, and stays plain text, because the Hub invite card LeeAnn likes only
+  renders for links in message content, not inside an embed.
+- **The starter story uses all of the server's Ground Rules** (LeeAnn, 2026-11-19, after testing:
+  the rules show prominently in the thread, so they should match the server's).
+  `cfgStarterStoryGroundRules` is now `all`; a comma-separated slug list still works.
+
 ## 3.10.2 — 2026-11-14
 
 Provenance: written alongside the work.
