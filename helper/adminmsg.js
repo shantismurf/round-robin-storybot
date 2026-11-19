@@ -4,23 +4,24 @@ import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const config = JSON.parse(readFileSync(resolve(__dirname, 'config.json'), 'utf8'));
+// --config <file> picks another config, e.g. --config config.old.json to log in as the old bot
+// after the 2026-11-20 switch (its token stays valid until 2026-11-22). Default: config.json.
+const configArg = process.argv.indexOf('--config');
+const configFile = configArg !== -1 ? process.argv[configArg + 1] : 'config.json';
+const config = JSON.parse(readFileSync(resolve(__dirname, configFile), 'utf8'));
 
 const USER_IDS = [
 /*redacted*/
 ];
 
-const MESSAGE = `Hello Server Admins!
+const MESSAGE = `Hi! This is Shantismurf, the developer of Round Robin StoryBot, sending you a one-time direct message through the bot.
 
-This is the bot's developer sending you a one-time direct message through the app. 
+The bot is moving to a new Discord application, and the copy on your server stops working on <t:1795190400:F>. To keep your stories going, please reinvite the bot with this link:
+https://discord.com/oauth2/authorize?client_id=1570551318202949743&permissions=2252195219237888&scope=bot%20applications.commands
 
-First off — thanks for installing the bot, and apologies that this took so long! The original message was supposed to go out weeks ago, but there were a few technical hiccups. There was an issue that was preventing the storyadmin setup process from running, so several of you have the bot installed, but have been unable to configure it. That issue is resolved now, so you can now run setup to get started!
+Nothing is lost. Your stories, entries, writers and settings will all be there when the new bot arrives. After you add it, open \`/storyadmin setup\` and press Save once so it picks up its channel permissions. Then you can remove the old bot.
 
-I also wanted to invite you to join the [Round Robin Storybot Hub server](https://discord.gg/hKH9G5XFpJ).  I wanted to have a central place where bot users could contact me (and vice versa). I promise I won't send messages like this unless there's a really critical issue, like not being able to configure the system! :sweat_smile:
-
-The good news is that a *lot* has been built in the last few weeks, and Round Robin StoryBot is now at v2.5 with a whole bunch of new features including story metadata, optional restricted channels for mature works, and a collaborative story tagging system! The full changelog can be found on the Hub server.
-
-Thanks for being an early adopter of the bot, and happy writing!
+If you have questions, or anything doesn't look right, come find me in the [Round Robin Storybot Hub](https://discord.gg/hKH9G5XFpJ). Sorry for the bother, and thanks for writing with us!
 
 ~Shantismurf`;
 
@@ -32,7 +33,8 @@ client.once('clientReady', async () => {
   console.log(`Logged in as ${client.user.tag}`);
 
   if (SEND) {
-    for (const userId of USER_IDS) {
+    // One DM per person, even if they own several servers
+    for (const userId of [...new Set(USER_IDS)]) {
       try {
         const user = await client.users.fetch(userId);
         await user.send(MESSAGE);
@@ -46,14 +48,13 @@ client.once('clientReady', async () => {
   } else {
     console.log('\n--- Current message ---\n');
     console.log(MESSAGE);
-    console.log('\n--- Server owners (USER_IDS format) ---\n');
-
     const guilds = [...client.guilds.cache.values()];
+    console.log(`\n--- Server owners, ${guilds.length} servers (USER_IDS format) ---\n`);
     for (const guild of guilds) {
       const owner = await guild.fetchOwner().catch(() => null);
       const id = owner?.user?.id ?? 'unknown';
       const username = owner?.user?.username ?? 'unknown';
-      console.log(`'${id}', // ${username} (${guild.name})`);
+      console.log(`'${id}', // ${username} (${guild.name}, ${guild.id})`);
     }
     console.log('');
   }
