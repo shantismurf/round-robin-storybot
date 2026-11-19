@@ -32,7 +32,9 @@ of `docs/TODO.md`.
 
 - **The starter story's exit line is an embed with a coloured border** (LeeAnn, 2026-11-19,
   after testing 3.11.0), so it stands apart from the turn lines. New key
-  `cfgStarterStoryLeavesColor` (`#9B59B6`) in `config_onboarding.sql`.
+  `cfgStarterStoryLeavesColor` (`#9B59B6`). The help line under it moved to its own key,
+  `txtStarterStoryHelpLine`, and stays plain text, because the Hub invite card LeeAnn likes only
+  renders for links in message content, not inside an embed.
 
 ## 3.11.0 — 2026-11-19
 
