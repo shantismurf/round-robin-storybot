@@ -122,6 +122,9 @@ asks.
 1. **How many writers before turns start?** The bot's entry doesn't count as a writer. If the
    target is 1, the first person to join gets a turn alone, which is the NEO MIRACLE situation
    again. Recommended: **2**.
+   **Decided 2026-11-19: 2.** LeeAnn expects most servers to delete the starter story. Its job
+   is to introduce the flow of the bot in a friendly, engaging way, not to become a real story,
+   so deleting it should stay easy and the setup summary line can say how.
 2. **Whose name is on it?** The author line on the entry and the "created by" on the feed
    announcement. The bot's server display name, or a name you choose in config?
 3. **Content of the opening**: title, entry, and whether it gets a summary, tags or Ground
