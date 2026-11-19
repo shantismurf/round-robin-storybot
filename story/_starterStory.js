@@ -27,13 +27,17 @@ const MARKER_KEY = 'cfgStarterStoryId';
 export const STARTER_MARKER = Object.freeze({ PENDING: 'pending', CREATING: 'creating' });
 
 /**
- * Which of the wanted Ground Rules (comma-separated slugs, from cfgStarterStoryGroundRules) the
- * server still has. An admin can rename or remove rules in setup, so a wanted rule that is gone
- * is skipped rather than stored as a slug that resolves to nothing.
+ * Which Ground Rules the starter story gets. cfgStarterStoryGroundRules is either 'all', every
+ * rule the server has (LeeAnn, 2026-11-19: the rules show prominently in the thread, so they
+ * should match the server's), or comma-separated slugs. An admin can rename or remove rules in
+ * setup, so a wanted slug that is gone is skipped rather than stored as one that resolves to
+ * nothing.
  */
 export function pickStarterGroundRules(wantedCsv, vocabularyRules) {
+  const haveSlugs = vocabularyRules.map((r) => slugifyGroundRuleLabel(r.label));
+  if ((wantedCsv ?? '').trim().toLowerCase() === 'all') return { picked: haveSlugs, missing: [] };
   const wanted = (wantedCsv ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-  const have = new Set(vocabularyRules.map((r) => slugifyGroundRuleLabel(r.label)));
+  const have = new Set(haveSlugs);
   return {
     picked: wanted.filter((slug) => have.has(slug)),
     missing: wanted.filter((slug) => !have.has(slug)),

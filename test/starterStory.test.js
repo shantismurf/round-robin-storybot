@@ -28,6 +28,12 @@ describe('pickStarterGroundRules', () => {
     assert.deepEqual(missing, ['conflict-not-contempt']);
   });
 
+  test("'all' picks every rule the server has, in its order", () => {
+    const { picked, missing } = pickStarterGroundRules('all', VOCAB);
+    assert.deepEqual(picked, ['anything-goes', 'respect-other-writers-choices', 'conflict-not-contempt']);
+    assert.deepEqual(missing, []);
+  });
+
   test('an empty wanted list picks nothing', () => {
     assert.deepEqual(pickStarterGroundRules('', VOCAB), { picked: [], missing: [] });
   });

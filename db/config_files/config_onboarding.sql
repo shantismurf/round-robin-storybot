@@ -11,4 +11,4 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('txtStarterStoryStrangerLeaves', '*A gust of wind bursts in through the shutters, blowing out the candle and flipping the pages of the book rapidly. The barman curses and forces the window shut again, then relights the wick. When the flame steadies, the corner booth is empty. Only a note remains, tucked under the quill in that same looping hand:*\n\n**"Take up the pen, or delete this story and start your own adventure!"**', 'en', 1),
 ('txtStarterStoryHelpLine', '-# Add a new story with `/story add`. To delete this story, use `/storyadmin delete`. Help can always be found on the [Round Robin Hub Server](<[hubInviteUrl]>).', 'en', 1),
 ('cfgStarterStoryLeavesColor', '#9B59B6', 'en', 1),
-('cfgStarterStoryGroundRules', 'respect-other-writers-choices,conflict-not-contempt', 'en', 1);
+('cfgStarterStoryGroundRules', 'all', 'en', 1);
