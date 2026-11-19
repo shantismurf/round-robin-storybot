@@ -14,6 +14,10 @@ const argValue = (flag) => {
 const configFile = argValue('--config') ?? 'config.json';
 const config = JSON.parse(readFileSync(resolve(__dirname, '..', configFile), 'utf8'));
 
+// Never messaged, whatever the list says: LeeAnn herself, and geodebreaker (George), who owns
+// a test server (LeeAnn, 2026-11-19).
+const EXCLUDE_IDS = new Set(['426071848342781963', '1064581614589460551']);
+
 const USER_IDS = [
 /*redacted*/
 ];
@@ -33,7 +37,8 @@ const SEND = process.argv.includes('--send');
 // --ids 123,456 sends to these user ids instead of USER_IDS, so the list can be passed on the
 // command line in a container where the file can't be edited.
 const idsArg = argValue('--ids');
-const recipients = idsArg ? idsArg.split(',').map((s) => s.trim()).filter(Boolean) : USER_IDS;
+const recipients = (idsArg ? idsArg.split(',').map((s) => s.trim()).filter(Boolean) : USER_IDS)
+  .filter((id) => !EXCLUDE_IDS.has(id));
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -64,9 +69,9 @@ client.once('clientReady', async () => {
       const id = owner?.user?.id ?? 'unknown';
       const username = owner?.user?.username ?? 'unknown';
       console.log(`'${id}', // ${username} (${guild.name}, ${guild.id})`);
-      if (owner?.user?.id) ownerIds.add(owner.user.id);
+      if (owner?.user?.id && !EXCLUDE_IDS.has(owner.user.id)) ownerIds.add(owner.user.id);
     }
-    console.log(`\n--- Unique owner ids, ready for --ids (remove your own) ---\n`);
+    console.log(`\n--- Unique owner ids, ready for --ids (excluded ids already left out) ---\n`);
     console.log([...ownerIds].join(','));
     console.log('');
   }

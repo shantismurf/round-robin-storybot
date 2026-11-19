@@ -30,6 +30,13 @@ Open and deliberately not in 3.10.0 or 3.10.1: the emoji on the remaining 44 but
 which stay as they are until there is a style plan -- see the `Create style_roadmap.md` section
 of `docs/TODO.md`.
 
+- `helper/adminmsg.js` never messages LeeAnn or geodebreaker (George, a test server owner): an `EXCLUDE_IDS` set filters both the printed owner list and `--send` (2026-11-19, no bump, helper only).
+- **A new server's first 30 minutes of logs are posted to Hub #logs** (LeeAnn, 2026-11-19, no
+  bump: internal). She reads a new server's first minutes to see how an admin finds their way,
+  and Coolify drops runtime logs on every Redeploy. New `logCapture.js`. When the bot joins a
+  server, every production log line naming it (by name or id) is collected, then posted as one
+  code block, or a .txt attachment when long. Kept in memory, so a restart mid-window loses it.
+
 ## 3.11.0 — 2026-11-19
 
 Provenance: written alongside the work.

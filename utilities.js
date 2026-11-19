@@ -2,7 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import mysql from 'mysql2/promise';
-import { MessageFlags } from 'discord.js';
+import { MessageFlags, AttachmentBuilder } from 'discord.js';
+import { captureLogLine } from './logCapture.js';
 import { STORY_STATUS, TURN_STATUS, JOB_STATUS, WRITER_STATUS, ENTRY_STATUS } from './constants.js';
 
 export function loadConfig() {
@@ -212,6 +213,28 @@ function postToHubChannel(message) {
 }
 
 /**
+ * Posts a server's first-minutes log capture (logCapture.js) to the Hub #logs channel: a code
+ * block when it fits in one message, otherwise a header with the lines attached as a .txt file.
+ */
+export async function postFirstMinutesCapture(guildId, guildName, lines, minutes) {
+  if (!_hubLogClient || !_hubLogChannelId) return;
+  const header = `🕒 First ${minutes} minutes: **${guildName ?? 'unknown'}** (${guildId}), ${lines.length} log lines`;
+  const body = lines.join('\n') || '(no log lines)';
+  try {
+    const channel = await _hubLogClient.channels.fetch(_hubLogChannelId);
+    const inline = `${header}\n\`\`\`\n${body}\n\`\`\``;
+    if (inline.length <= 2000) {
+      await channel.send(inline);
+    } else {
+      const file = new AttachmentBuilder(Buffer.from(body, 'utf8'), { name: `first-${minutes}-min-${guildId}.txt` });
+      await channel.send({ content: header, files: [file] });
+    }
+  } catch (error) {
+    process.stdout.write(`${formattedDate()}: postFirstMinutesCapture failed for guild ${guildId}: ${error?.stack ?? error}\n`);
+  }
+}
+
+/**
  * Unified Dynamic Logger
  * Detects content type and renders strings, tables, or deep objects.
  * Usage:
@@ -251,6 +274,14 @@ export function log(content, { show = false, guildName = null, hub = false } = {
   } else {
     process.stdout.write(timestamp);
     renderItem(content);
+  }
+
+  // A new server's first minutes are collected for the Hub (logCapture.js). Production lines
+  // only, the same ones the runtime log shows.
+  if (show) {
+    const text = typeof content === 'string' ? content
+      : Array.isArray(content) ? String(content.find(i => typeof i === 'string') ?? '[data]') : '[data]';
+    captureLogLine(`${timestamp}${text}`, guildName);
   }
 
   // Post to hub log channel if explicitly flagged or message matches error patterns
