@@ -4,6 +4,7 @@ import { CreateStory } from '../storybot.js';
 import { getMetaCfg, buildStoryPanel, buildPanelTabRow, buildMetadataModal, buildTagsModal, buildStoryInfoModal } from './_metadataModals.js';
 import { parseGroundRulesText, effectiveGroundRulesText } from './_groundRules.js';
 import { STORY_MODE } from '../constants.js';
+import { STORY_DEFAULTS } from './_storyDefaults.js';
 
 // Temporary storage for story add session state
 export const pendingStoryData = new Map();
@@ -59,20 +60,9 @@ export async function handleAddStory(connection, interaction) {
       groundRules: [],
       ratingsFilter: ratingsFilter === '1',
       storyTitle: null,
-      storyMode: 0,
-      storyTurnPrivacy: 0,
-      turnLength: 24,
-      timeoutReminder: 50,
+      ...STORY_DEFAULTS,
       displayName: interaction.member?.displayName || interaction.user.displayName,
       penName: (await getPreviousPenName(connection, interaction.user.id)) || interaction.member?.displayName || interaction.user.displayName,
-      keepPrivate: 0,
-      notifications: 1,
-      delayHours: null,
-      delayWriters: null,
-      orderType: 1,
-      showAuthors: 1,
-      maxWriters: null,
-      rating: 'NR',
       warnings: [],
       mainPairing: '',
       otherRelationships: '',

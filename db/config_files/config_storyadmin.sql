@@ -3,6 +3,7 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('txtStoryCloseConfirm', 'Are you sure you want to close **[story_title]**?', 'en', 1),
 ('btnCloseConfirm', 'Close Story', 'en', 1),
 ('txtStoryClosedPublic', '📕 **[story_title]** is now complete! Thank you to all [writer_count] writer(s) who participated — [turn_count] turns and ~[word_count] words. Use the buttons below to export the full story.', 'en', 1),
+('txtStoryFeedCreatedTitle', '# 📚 New Story Created by [creator_name]: "[story_title]" [rating_badge]', 'en', 1),
 ('txtStoryFeedClosed', '🎉 **Congratulations to the writers of [story_title]!** The story has concluded with [turn_count] turns and ~[word_count] words. Thank you to all [writer_count] writer(s)!', 'en', 1),
 ('txtSetupPanelTitle', 'Round Robin StoryBot Setup', 'en', 1),
 ('txtSetupRequiredAdmin', 'Welcome to the Round Robin StoryBot! Before you can start writing collaborative stories with your community, you''ll need to create a channel that you want the stories to post in, and run `/storyadmin setup` to add it to the system.\n\nThat''s the only requirement, but there are other things you may want to set up first:\n\n* a **Media/Image channel** enables image embeds in longer story entries (best if it''s a private channel), and\n* a **Story Admin role** defines who can manage all of your stories and writers.\n\nThese and other server setup options can be edited at any time, as needed. If you have any questions, please join the [Round Robin Storybot Hub server]([hubInviteUrl]). I''m happy to help!', 'en', 1),
