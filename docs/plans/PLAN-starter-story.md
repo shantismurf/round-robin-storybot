@@ -130,6 +130,7 @@ asks.
    figure who sets the scene, configures the turns and picks the Ground Rules, and members join
    like characters joining a D&D party. That way the opening teaches the bot while being the
    kind of thing people want to continue.
+   Title candidates she floated: "The Fellowship of the Pen", "The Fellowship of the Story".
    Practical notes: 1,000 words is about 5,500 to 6,000 characters. The `story.max_entry_length`
    column (default 5,000) is not read anywhere in the code, so nothing blocks that length, and
    `postThreadEntry()` already splits a long entry into pages. Open sub-question: if the opening ends mid-scene, should the next writer pick up
