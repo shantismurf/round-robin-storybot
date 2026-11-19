@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits, Collection, Events, MessageFlags } from 'discord.js';
 import { updateStoryStatusMessage } from './story/_storyStatus.js';
-import { loadConfig, DB, getConfigValue, getSetupRequiredMessage, setTestMode, log, setHubLogClient, closeOrphanedGuildStories, createFailureThrottle, logGuildEvent } from './utilities.js';
+import { loadConfig, DB, getConfigValue, getSetupRequiredMessage, setTestMode, log, setHubLogClient, closeOrphanedGuildStories, createFailureThrottle, logGuildEvent, postFirstMinutesCapture } from './utilities.js';
+import { startFirstMinutesCapture, FIRST_MINUTES_CAPTURE_MINUTES } from './logCapture.js';
 import { STORY_STATUS } from './constants.js';
 import { main as deploy } from './deploy.js';
 import { startJobRunner, scheduleOnboardingReminders } from './job-runner.js';
@@ -163,6 +164,9 @@ async function main() {
     refreshAllStatusMessages(connection, client);
   });
   client.on(Events.GuildCreate, async guild => {
+    // Started before the first log line so the capture includes it
+    startFirstMinutesCapture(guild.id, guild.name, (id, name, lines) =>
+      postFirstMinutesCapture(id, name, lines, FIRST_MINUTES_CAPTURE_MINUTES));
     log(`Bot added to guild ${guild.name} (${guild.id})`, { show: true, hub: true });
     await logGuildEvent(connection, guild.id, 'guild_joined');
     await scheduleOnboardingReminders(connection, guild.id, guild.joinedAt).catch(err =>
