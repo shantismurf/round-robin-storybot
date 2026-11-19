@@ -20,7 +20,7 @@ const USER_IDS = [
 
 const MESSAGE = `Hi! This is Shantismurf, the developer of Round Robin StoryBot, sending you a one-time direct message through the bot.
 
-The bot is moving to a new Discord application, and the copy on your server stops working on <t:1795190400:F>. To keep your stories going, please reinvite the bot with this link:
+The bot is moving to a new Discord application, and the copy on your server stops working on <t:1795276800:F>. To keep your stories going, please reinvite the bot with this link:
 https://discord.com/oauth2/authorize?client_id=1570551318202949743&permissions=2252195219237888&scope=bot%20applications.commands
 
 Nothing is lost. Your stories, entries, writers and settings will all be there when the new bot arrives. After you add it, open \`/storyadmin setup\` and press Save once so it picks up its channel permissions. Then you can remove the old bot.
