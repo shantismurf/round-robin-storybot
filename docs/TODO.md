@@ -109,6 +109,7 @@ Check for Missing or outdated info:
 
 - Roundup needs to show a system stat summary, then each active story in a block with selected metadata, then paused or delayed stories listed with title only
 - user input needed for final formatting
+- **Explore a "did you know" list in the roundup** — LeeAnn, 2026-11-22. A rotating list of things the bot can do, shown in the weekly roundup post so writers find features they haven't tried. Idea only; not designed yet.
 
 ---
 
