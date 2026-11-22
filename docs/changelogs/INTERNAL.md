@@ -37,6 +37,18 @@ of `docs/TODO.md`.
   server, every production log line naming it (by name or id) is collected, then posted as one
   code block, or a .txt attachment when long. Kept in memory, so a restart mid-window loses it.
 
+## 3.11.1 — 2026-11-22
+
+Provenance: written alongside the work.
+
+### Fixed
+- **Status posts written by the old bot are replaced, not left stale** (2026-11-22, reported by
+  LeeAnn the morning after the bot application move). A bot can only edit its own messages, so
+  `updateStoryStatusMessage()` fetched the old bot's post, failed to edit it, and logged an error
+  every time. It now posts and pins a fresh status post, unpins the old one, and skips the creator
+  tip, which that story already had. Earlier notes said these would self-heal by reposting. They
+  didn't, because the fetch succeeds and only the edit fails.
+
 ## 3.11.0 — 2026-11-19
 
 Provenance: written alongside the work.
