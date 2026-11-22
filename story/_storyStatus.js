@@ -365,6 +365,16 @@ export async function updateStoryStatusMessage(connection, guild, storyId) {
       message = await storyThread.messages.fetch(story.status_message_id).catch(() => null);
     }
 
+    // A bot can only edit its own messages. Status posts written by the old bot application
+    // (before the 2026-11-21 move) are replaced with a fresh post instead, and the old one is
+    // unpinned so the thread shows one status post.
+    let replacedForeignPost = null;
+    if (message && message.author?.id !== guild.client.user.id) {
+      log(`updateStoryStatusMessage: status post ${message.id} for story ${storyId} belongs to another bot (${message.author?.id}), replacing it`, { show: true, guildName: guild?.name });
+      replacedForeignPost = message;
+      message = null;
+    }
+
     if (message) {
       await message.edit({ embeds, components });
     } else {
@@ -374,8 +384,12 @@ export async function updateStoryStatusMessage(connection, guild, storyId) {
         `UPDATE story SET status_message_id = ? WHERE story_id = ?`,
         [newMsg.id, storyId]
       );
-      // Post creator tip immediately after the first status embed so it's always message #2
-      const creatorTip = await getConfigValue(connection, 'txtStoryThreadCreatorTip', story.guild_id).catch(() => null);
+      if (replacedForeignPost) {
+        await replacedForeignPost.unpin().catch(err => log(`updateStoryStatusMessage: could not unpin old status post ${replacedForeignPost.id} for story ${storyId}: ${err.message}`, { show: true, guildName: guild?.name }));
+      }
+      // Post creator tip immediately after the first status embed so it's always message #2.
+      // Not when replacing an old bot's post: that story already had its tip.
+      const creatorTip = replacedForeignPost ? null : await getConfigValue(connection, 'txtStoryThreadCreatorTip', story.guild_id).catch(() => null);
       if (creatorTip) {
         const tipMsg = replaceTemplateVariables(creatorTip, { story_id: story.guild_story_id });
         await storyThread.send(tipMsg).catch(err => log(`updateStoryStatusMessage: creator tip post failed for story ${storyId}: ${err?.stack ?? err}`, { show: true, guildName: guild?.name }));
