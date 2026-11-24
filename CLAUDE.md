@@ -5,7 +5,15 @@
 - **No Assumptions:** Regularly ask the user for context rather than chasing assumptions. Don't assume the user didn't restart the process or change a system variable if things aren't adding up - ASK.
 - **Docs before speculation:** Before investigating an issue, check `docs/reference/system_roadmap.md` and the relevant docs first. If you find no paper trail in the docs or code, state that clearly rather than hallucinating a theory.
 - **Commit plan docs before ending a session:** Any implementation plan drafted during a chat session (design decisions, file/function lists, build order) must be committed to `docs/plans/` — with a Status/Created/Last Updated header — before the session is considered done. A plan that exists only in an uploaded or local chat file is not discoverable by a future session and will get lost.
-- **Reuse before you write:** Check for existing logic before implementing. Extract reusable code to shared helpers and modules. Search for existing config values that can be repurposed before creating new keys. Keep files under 500 lines.
+- **Plan checklist:** every plan includes these sections before it goes to LeeAnn for approval. Each one points to the rule it applies.
+  1. **User-facing text:** every new or changed string, its config key and proposed wording (see Config & Localization Rules).
+  2. **Logging:** a table of each event, its tier and what it logs (see Logging Rules).
+  3. **Reuse:** existing helpers and config keys searched for, and what was reused (see Reuse before you write).
+  4. **Data:** migrations and backfills, noting no semicolons in SQL comments and that startup steps before login never reach Hub #logs (see MariaDB).
+  5. **Docs and tests:** which roadmaps, help keys and tests change (see System Documentation, Testing).
+  6. **Version:** proposed number and reasoning (see Versioning Policy).
+  7. **File sizes:** files that grow past 500 lines, and whether each has more than one job.
+- **Reuse before you write:** Check for existing logic before implementing. Extract reusable code to shared helpers and modules. Search for existing config values that can be repurposed before creating new keys. A file over 500 lines is a prompt to check whether it does more than one job; if so, split it by job, not just to get under the number.
 - **No hard-coded text:** All user-facing text must be displayed for and approved by the user unless they provided the exact text already.
 - **No AskUserQuestion popups:** Never use the AskUserQuestion tool in this repo. It covers too much of the interface and forces a decision before the user has had a chance to read preceding findings. Ask clarifying questions in plain response text instead, and wait for a normal reply.
 
@@ -29,7 +37,7 @@
 ## Critical Program Standards
 - **Zero Hardcoding:** Never hard-code user-facing text. Labels, buttons, and prompts must be dynamic.
 - **High-resolution Logging:** Exhaustive traceability is required to debug the restricted server environment.
-- **Reuse & Modularize:** Export logic to shared helpers to avoid redundancy. Break up files if they significantly exceed 500 lines.
+- **Reuse & Modularize:** Export logic to shared helpers to avoid redundancy. Past 500 lines, split a file by job if it has more than one (see Reuse before you write).
 - **Versioning:** Maintain the version number in `package.json` per the Versioning Policy below.
 - **Maintain Documentation:** Always sync roadmaps with code changes.
 
