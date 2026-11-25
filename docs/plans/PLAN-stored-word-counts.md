@@ -1,6 +1,6 @@
 # Plan: stored entry word counts and one save path
 
-Status: Approved 2026-11-25, built on PR #105 as 3.12.0, awaiting merge and Redeploy
+Status: Merged 2026-11-25 as 3.12.0 (PR #105, squash 998d50c), awaiting Redeploy and a live check
 Created: 2026-11-24
 Last Updated: 2026-11-25
 
