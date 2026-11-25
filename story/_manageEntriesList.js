@@ -45,7 +45,7 @@ export async function fetchStoryEntries(connection, storyId, offset, limit, { au
       se.story_entry_id,
       se.entry_status,
       LEFT(se.content, 50) AS preview,
-      LENGTH(se.content) - LENGTH(REPLACE(se.content, ' ', '')) + 1 AS word_count,
+      COALESCE(se.word_count, 0) AS word_count,
       sw.discord_display_name AS writer_name,
       ${turnNumberSubquery({ statusCount: statuses.length })} AS turn_number
     FROM story_entry se

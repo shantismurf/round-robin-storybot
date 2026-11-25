@@ -106,7 +106,7 @@ export async function updateStoryStatusMessage(connection, guild, storyId) {
 
     // Entry stats — count confirmed entries, words, and inline images
     const [confirmedEntries] = await connection.execute(
-      `SELECT se.content, t.story_writer_id FROM story_entry se
+      `SELECT se.content, se.word_count, t.story_writer_id FROM story_entry se
        JOIN turn t ON se.turn_id = t.turn_id
        JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
        WHERE sw.story_id = ? AND se.entry_status = ?`,
@@ -119,12 +119,8 @@ export async function updateStoryStatusMessage(connection, guild, storyId) {
     for (const e of confirmedEntries) {
       const images = extractImageUrls(e.content);
       imageCount += images.length;
-      // Strip the image URLs before counting words so they don't inflate the count. Only the
-      // URLs — a [caption](url) link keeps its caption, which is prose the writer wrote and
-      // has always counted toward the total.
-      let textOnly = e.content;
-      for (const url of images) textOnly = textOnly.split(url).join('');
-      wordCount += textOnly.trim().split(/\s+/).filter(w => w.length > 0).length;
+      // Stored at save time by story/_entryContent.js. The text is still read for the image count.
+      wordCount += Number(e.word_count ?? 0);
     }
 
     const ratingBadgeCfgKey = ratingBadgeKey(story.rating ?? 'NR');

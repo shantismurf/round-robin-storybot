@@ -1,6 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags, EmbedBuilder, StringSelectMenuBuilder, LabelBuilder } from 'discord.js';
 import { getConfigValue, log, sanitizeModalInput, resolveStoryId, chunkEntryContent, restoreChunkEdges, splitAtParagraphs, checkIsAdmin, checkIsCreator, replaceTemplateVariables, EDIT_PAGE_LIMIT } from '../utilities.js';
-import { postThreadEntry } from './_entryRenderer.js';
+import { postEntryToThread } from './_entryRenderer.js';
 import { resolveMentionsToPlainText } from './_entryMarkup.js';
 import { pendingReadData, pendingEditData } from './_state.js';
 import { buildReadEmbed } from './read.js';
@@ -15,6 +15,8 @@ import {
   EDIT_FILE_CONFIG_KEYS, buildFileRoundTripButtons, buildImportModal,
   handleExportFile, handleImportModalSubmit, handleImportConfirm,
 } from './_editFileRoundTrip.js';
+import { countWords } from './_wordCount.js';
+import { updateEntryContent } from './_entryContent.js';
 
 export { pendingEditData };
 
@@ -52,6 +54,19 @@ export const EDIT_PANEL_CONFIG_KEYS = [
   'txtEditHistoryChangeTitle', 'txtEditHistoryChangeBy',
   'txtEditHistoryWriterChanged', 'txtEditHistoryMoved',
 ];
+
+// Keeps an open /story read session's numbers current after an edit, without re-counting the
+// whole story: the total moves by the difference between the old and new text, and every page
+// of the edited entry shows its new count. The saved row's word_count was set by
+// updateEntryContent(), so a fresh /story read gives the same figure.
+function applyReadSessionWordDelta(session, entryId, newContent) {
+  const newWords = countWords(newContent);
+  const oldWords = countWords(session.contentMap.get(entryId) ?? '');
+  session.wordCount = (session.wordCount ?? 0) + newWords - oldWords;
+  for (const p of session.pages ?? []) {
+    if (p.storyEntryId == entryId) p.entryWordCount = newWords;
+  }
+}
 
 async function handleEdit(connection, interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -941,14 +956,9 @@ async function handleEditModalSubmit(connection, interaction) {
   const txn = await connection.getConnection();
   await txn.beginTransaction();
   try {
-    await txn.execute(
-      `INSERT INTO story_entry_edit (entry_id, content, edited_by, edited_by_name) VALUES (?, ?, ?, ?)`,
-      [state.entryId, currentContent, userId, editorName]
-    );
-    await txn.execute(
-      `UPDATE story_entry SET content = ? WHERE story_entry_id = ?`,
-      [newContent, state.entryId]
-    );
+    await updateEntryContent(txn, state.entryId, newContent, {
+      editor: { id: userId, name: editorName }, previousContent: currentContent, guildName: interaction?.guild?.name,
+    });
     await txn.commit();
   } catch (err) {
     await txn.rollback();
@@ -962,9 +972,8 @@ async function handleEditModalSubmit(connection, interaction) {
     // Refresh the read embed in place with updated content; no edit embed shown.
     const session = pendingReadData.get(userId);
     if (session) {
+      applyReadSessionWordDelta(session, state.entryId, newContent);
       session.contentMap.set(state.entryId, newContent);
-      session.wordCount = Array.from(session.contentMap.values())
-        .reduce((total, c) => total + c.trim().split(/\s+/).filter(w => w.length > 0).length, 0);
       const readPage = session.pages[session.currentPage];
       if (readPage) {
         const freshChunks = chunkEntryContent(newContent);
@@ -1013,9 +1022,8 @@ async function handleEditModalSubmit(connection, interaction) {
   // Keep the read session current so navigation shows fresh content (multi-chunk read-path edits)
   const readSession = pendingReadData.get(userId);
   if (readSession) {
+    applyReadSessionWordDelta(readSession, state.entryId, newContent);
     readSession.contentMap.set(state.entryId, newContent);
-    readSession.wordCount = Array.from(readSession.contentMap.values())
-      .reduce((total, c) => total + c.trim().split(/\s+/).filter(w => w.length > 0).length, 0);
     const freshReadChunks = splitAtParagraphs(newContent);
     const entryPages = readSession.pages.filter(p => p.storyEntryId == state.entryId);
     entryPages.forEach((p, i) => { if (freshReadChunks[i] !== undefined) p.content = freshReadChunks[i]; });
@@ -1049,7 +1057,7 @@ async function handleRepostEntry(connection, interaction) {
   try {
     const [rows] = await connection.execute(
       `SELECT se.content, se.created_at, sw.discord_display_name, sw.discord_user_id AS original_author_id,
-              s.story_thread_id, s.restricted_thread_id, s.rating, s.show_authors, s.scene_break_divider,
+              s.story_id, s.story_thread_id, s.restricted_thread_id, s.rating, s.show_authors, s.scene_break_divider,
               ${turnNumberSubquery()} AS turn_number,
               (SELECT see.edited_at FROM story_entry_edit see WHERE see.entry_id = se.story_entry_id ORDER BY see.edited_at DESC LIMIT 1) AS last_edited_at,
               (SELECT see.edited_by FROM story_entry_edit see WHERE see.entry_id = se.story_entry_id ORDER BY see.edited_at DESC LIMIT 1) AS last_editor_id
@@ -1093,14 +1101,14 @@ async function handleRepostEntry(connection, interaction) {
       showEdited = !isGrace;
     }
 
-    const authorLine = show_authors
-      ? `Turn ${turn_number} — ${discord_display_name}${showEdited ? ' (edited)' : ''}`
-      : null;
 
     if (storyThread.locked) await storyThread.setLocked(false);
     if (storyThread.archived) await storyThread.setArchived(false);
     log(`handleRepostEntry: posting entry to thread ${activeThreadId}, content length=${content.length}`, { show: true, guildName: interaction?.guild?.name });
-    await postThreadEntry(storyThread, content, authorLine, scene_break_divider);
+    await postEntryToThread(connection, storyThread, {
+      content, storyId: rows[0].story_id, turnNumber: turn_number, writerName: discord_display_name, showAuthors: !!show_authors,
+      edited: showEdited, sceneBreakDivider: scene_break_divider, guildId: interaction.guild.id,
+    });
 
     const userId = interaction.user.id;
     const readSession = pendingReadData.get(userId);

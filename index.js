@@ -5,6 +5,7 @@ import { startFirstMinutesCapture, FIRST_MINUTES_CAPTURE_MINUTES } from './logCa
 import { STORY_STATUS } from './constants.js';
 import { main as deploy } from './deploy.js';
 import { startJobRunner, scheduleOnboardingReminders } from './job-runner.js';
+import { backfillEntryWordCounts } from './story/_entryContent.js';
 import fs from 'fs';
 
 const DB_STARTUP_POLL_INTERVAL_MS = 30 * 1000;
@@ -160,6 +161,8 @@ async function main() {
     log(`✅ Bot online — v${version} on ${client.guilds.cache.size} server(s)`, { show: true, hub: true });
     log('Round Robin StoryBot engine initialized', { show: true });
     await loadCommands('./commands');
+    // After login so its summary reaches Hub #logs, before the status refresh so totals are whole.
+    await backfillEntryWordCounts(connection);
     startJobRunner(connection, client).catch(err => log(`startJobRunner failed: ${err?.stack ?? err}`, { show: true }));
     refreshAllStatusMessages(connection, client);
   });

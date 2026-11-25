@@ -14,6 +14,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'disc
 import { getConfigValue, log, replaceTemplateVariables } from '../utilities.js';
 import { fetchStoryForExport, buildExportFilename } from './_exportData.js';
 import { STORY_STATUS } from '../constants.js';
+import { sumStoredWords } from './_entryContent.js';
 
 // The per-entry delimiter. Deliberately NOT a config value: it is a structural token the
 // importer has to parse, so a guild editing its wording would break import rather than
@@ -102,7 +103,7 @@ export async function generateEntriesTextExport(connection, storyId, guildId, { 
     };
   }
 
-  const wordCount = entries.reduce((total, e) => total + e.content.trim().split(/\s+/).filter(Boolean).length, 0);
+  const wordCount = sumStoredWords(entries);
   const turnCount = entries[entries.length - 1].turn_number;
 
   // txtOpen/txtClosed are the existing status words, reused rather than a new pair of keys.

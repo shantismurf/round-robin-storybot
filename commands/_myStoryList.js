@@ -85,12 +85,12 @@ async function fetchStoriesForView(connection, userId, guildId, view) {
     SELECT s.story_id, s.guild_story_id, s.title, s.story_status, s.mode,
            sw.sw_status as writer_status,
            COUNT(DISTINCT t.turn_id) as my_turn_count,
-           COALESCE(SUM(LENGTH(se.content) - LENGTH(REPLACE(se.content, ' ', '')) + 1), 0) as my_word_count,
+           COALESCE(SUM(se.word_count), 0) as my_word_count,
            (SELECT COUNT(DISTINCT t3.turn_id) FROM turn t3
             JOIN story_writer sw3 ON t3.story_writer_id = sw3.story_writer_id
             JOIN story_entry se3 ON se3.turn_id = t3.turn_id AND se3.entry_status = ?
             WHERE sw3.story_id = s.story_id) as total_turn_count,
-           COALESCE((SELECT SUM(LENGTH(se2.content) - LENGTH(REPLACE(se2.content, ' ', '')) + 1)
+           COALESCE((SELECT SUM(se2.word_count)
             FROM story_entry se2
             JOIN turn t2 ON se2.turn_id = t2.turn_id
             JOIN story_writer sw2 ON t2.story_writer_id = sw2.story_writer_id

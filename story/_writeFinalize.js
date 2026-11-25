@@ -2,11 +2,12 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlag
 import { getConfigValue, log, replaceTemplateVariables, checkIsAdmin, logGuildEvent } from '../utilities.js';
 import { PickNextWriter, NextTurn, deleteThreadAndAnnouncement, endTurnGuarded } from './_turn.js';
 import { getActiveThreadId } from '../storybot.js';
-import { buildEntryPages, buildEntryEmbed, postThreadEntry, stepImagePage } from './_entryRenderer.js';
+import { buildEntryPages, buildEntryEmbed, postEntryToThread, stepImagePage, ENTRY_FOOTER_KEYS } from './_entryRenderer.js';
 import { resolveMentionsToPlainText } from './_entryMarkup.js';
 import { pendingPreviewData } from './_state.js';
 import { TURN_STATUS, ENTRY_STATUS } from '../constants.js';
 import { confirmedEntryCountSubquery, nextEntryOrder } from './_entryOrder.js';
+import { insertEntry } from './_entryContent.js';
 
 // Build entry content from the writer's turn-thread posts, in posting order. Shared by the
 // finalize preview and the confirm write so the preview always shows what will be saved.
@@ -59,7 +60,7 @@ export function buildPreviewEmbed(userId, pageIndex, confirmRow) {
     extraButtons: [confirmRow],
     guildId: session.guildId,
     imagePageIndex: session.imagePageIndex ?? 0,
-    footerTemplate: session.lblEntryFooter,
+    footerTemplates: session.footerTemplates,
   });
 }
 
@@ -76,23 +77,25 @@ export async function handleFinalizeEntry(connection, interaction) {
     let turnInfo, writerId;
     if (isAdmin) {
       const [rows] = await connection.execute(
-        `SELECT t.turn_id, t.thread_id, sw.discord_user_id, s.scene_break_divider
+        `SELECT t.turn_id, t.thread_id, sw.discord_user_id, s.scene_break_divider,
+                ${confirmedEntryCountSubquery()} + 1 AS turn_number
          FROM turn t
          JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
          JOIN story s ON sw.story_id = s.story_id
          WHERE sw.story_id = ? AND t.turn_status = ? AND t.thread_id = ?`,
-        [storyId, TURN_STATUS.ACTIVE, interaction.channel.id]
+        [ENTRY_STATUS.CONFIRMED, storyId, TURN_STATUS.ACTIVE, interaction.channel.id]
       );
       turnInfo = rows;
       writerId = rows[0]?.discord_user_id;
     } else {
       const [rows] = await connection.execute(
-        `SELECT t.turn_id, t.thread_id, sw.discord_user_id, s.scene_break_divider
+        `SELECT t.turn_id, t.thread_id, sw.discord_user_id, s.scene_break_divider,
+                ${confirmedEntryCountSubquery()} + 1 AS turn_number
          FROM turn t
          JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
          JOIN story s ON sw.story_id = s.story_id
          WHERE sw.story_id = ? AND t.turn_status = ? AND sw.discord_user_id = ?`,
-        [storyId, TURN_STATUS.ACTIVE, interaction.user.id]
+        [ENTRY_STATUS.CONFIRMED, storyId, TURN_STATUS.ACTIVE, interaction.user.id]
       );
       turnInfo = rows;
       writerId = interaction.user.id;
@@ -149,14 +152,14 @@ export async function handleFinalizeEntry(connection, interaction) {
       .replace(/^#{1,3} (.+)$/gm, '**$1**')
       .replace(/^-# (.+)$/gm, '*$1*');
 
-    const [txtFinalizeConfirm, btnFinalizeConfirm, btnCancel, lblEntryFooter] = await Promise.all([
+    const [txtFinalizeConfirm, btnFinalizeConfirm, btnCancel, footerTemplates] = await Promise.all([
       getConfigValue(connection, 'txtFinalizeConfirm', guildId),
       getConfigValue(connection, 'btnFinalizeConfirm', guildId),
       getConfigValue(connection, 'btnCancel', guildId),
-      getConfigValue(connection, 'lblEntryFooter', guildId),
+      getConfigValue(connection, ENTRY_FOOTER_KEYS, guildId),
     ]);
 
-    const pages = buildEntryPages(previewContent, { turnNumber: '—', writerName: null, showAuthors: false, storyEntryId: null, sceneBreakDivider: turnInfo[0].scene_break_divider });
+    const pages = buildEntryPages(previewContent, { turnNumber: turnInfo[0].turn_number, writerName: null, showAuthors: false, storyEntryId: null, sceneBreakDivider: turnInfo[0].scene_break_divider });
     const confirmRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`story_finalize_confirm_${storyId}`)
@@ -176,7 +179,7 @@ export async function handleFinalizeEntry(connection, interaction) {
       guildId,
       writerId: String(writerId),
       title: txtFinalizeConfirm,
-      lblEntryFooter,
+      footerTemplates,
       // message id -> resolved text, consumed by doFinalizeEntry instead of re-resolving.
       resolvedMessages,
     });
@@ -348,11 +351,10 @@ export async function doFinalizeEntry(connection, interaction, storyId, writerId
       // holding for its Restore. Inside this transaction, so two finalizes cannot both read the
       // same maximum.
       const entryOrder = await nextEntryOrder(txn, storyId);
-      await txn.execute(
-        `INSERT INTO story_entry (turn_id, content, entry_status, entry_order, created_at)
-         VALUES (?, ?, ?, ?, NOW())`,
-        [turn.turn_id, entryContent, ENTRY_STATUS.CONFIRMED, entryOrder]
-      );
+      await insertEntry(txn, {
+        turnId: turn.turn_id, content: entryContent, status: ENTRY_STATUS.CONFIRMED, entryOrder,
+        guildName: interaction?.guild?.name,
+      });
       const nextWriterId = await PickNextWriter(txn, storyId);
       nextTurnResult = nextWriterId
         ? await NextTurn(txn, interaction, nextWriterId, { deferAnnouncement: true })
@@ -397,8 +399,10 @@ export async function doFinalizeEntry(connection, interaction, storyId, writerId
       const storyThread = await interaction.guild.channels.fetch(activeThreadId);
       if (storyThread.locked) await storyThread.setLocked(false).catch(() => {});
       if (storyThread.archived) await storyThread.setArchived(false).catch(() => {});
-      const authorLine = show_authors ? `Turn ${turn_number} — ${discord_display_name}` : null;
-      await postThreadEntry(storyThread, entryContent, authorLine, scene_break_divider);
+      await postEntryToThread(connection, storyThread, {
+        content: entryContent, storyId, turnNumber: turn_number, writerName: discord_display_name,
+        showAuthors: !!show_authors, sceneBreakDivider: scene_break_divider, guildId: interaction.guild.id,
+      });
       log(`doFinalizeEntry: entry posted to story thread ${activeThreadId} as turn ${turn_number}`, { show: true, guildName: interaction?.guild?.name });
     } catch (embedError) {
       log(`doFinalizeEntry: failed to post entry to story thread: ${embedError}`, { show: true, guildName: interaction?.guild?.name });

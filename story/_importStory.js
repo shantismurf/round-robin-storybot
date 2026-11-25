@@ -34,6 +34,7 @@ import { ENTRY_CONTENT_BYTE_LIMIT } from './_editFileRoundTrip.js';
 import { resolveMentionsToPlainText } from './_entryMarkup.js';
 import { ENTRY_STATUS } from '../constants.js';
 import { pendingImportData } from './_state.js';
+import { updateEntryContent } from './_entryContent.js';
 
 // Two of these belong to the single-entry round trip rather than to this flow: the file field's
 // label and the nothing-changed line are text LeeAnn had already written there, and she asked for
@@ -346,14 +347,10 @@ export async function applyStoryImport(connection, interaction, staged) {
   try {
     for (const row of plan.rows) {
       if (row.contentChanged) {
-        await txn.execute(
-          `INSERT INTO story_entry_edit (entry_id, content, edited_by, edited_by_name) VALUES (?, ?, ?, ?)`,
-          [row.entryId, row.previousContent, editorId, editorName]
-        );
-        await txn.execute(
-          `UPDATE story_entry SET content = ? WHERE story_entry_id = ?`,
-          [row.content, row.entryId]
-        );
+        await updateEntryContent(txn, row.entryId, row.content, {
+          editor: { id: editorId, name: editorName }, previousContent: row.previousContent,
+          guildName: interaction?.guild?.name,
+        });
       }
 
       if (row.removed) {

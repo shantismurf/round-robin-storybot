@@ -1,7 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
 import { getConfigValue, log, replaceTemplateVariables, checkIsAdmin, checkIsCreator } from '../utilities.js';
 import { PickNextWriter, NextTurn, postStoryThreadActivity, endTurnThread, endTurnGuarded, deleteThreadAndAnnouncement } from './_turn.js';
-import { postThreadEntry } from './_entryRenderer.js';
+import { postEntryToThread } from './_entryRenderer.js';
 import { TURN_STATUS, JOB_STATUS, ENTRY_STATUS } from '../constants.js';
 import { turnNumberSubquery } from './_entryOrder.js';
 
@@ -40,10 +40,12 @@ export async function handleViewLastEntry(connection, interaction) {
     if (rows.length === 0) return;
 
     const { content, discord_display_name, show_authors, scene_break_divider, turn_number } = rows[0];
-    const authorLine = show_authors ? `Turn ${turn_number} — ${discord_display_name}` : null;
     if (interaction.channel.locked) await interaction.channel.setLocked(false).catch(() => {});
     if (interaction.channel.archived) await interaction.channel.setArchived(false).catch(() => {});
-    await postThreadEntry(interaction.channel, content, authorLine, scene_break_divider);
+    await postEntryToThread(connection, interaction.channel, {
+      content, storyId, turnNumber: turn_number, writerName: discord_display_name,
+      showAuthors: !!show_authors, sceneBreakDivider: scene_break_divider, guildId: interaction.guild.id,
+    });
 
   } catch (error) {
     log(`Error in handleViewLastEntry: ${error}`, { show: true, guildName: interaction?.guild?.name });

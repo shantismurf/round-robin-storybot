@@ -99,5 +99,10 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('lblPageJumpPlaceholder', 'Page [page] of [total]', 'en', 1),
 ('lblPageJumpOption', 'Page [page]', 'en', 1),
 ('lblPageJumpOptionTurn', 'Page [page] — Turn [turn]{? ([writer])?}', 'en', 1),
--- Shared entry footer template (story/_entryRenderer.js buildEntryEmbed — read, write preview, finalize preview)
-('lblEntryFooter', 'Turn [turn]{? — [writer]?}{? (part [part]/[partCount], ~[entryWords] words)?} · Page [page] of [total]{? · ~[storyWords] words total?}', 'en', 1);
+-- Shared entry footer (story/_entryRenderer.js buildEntryFooter) used by /story read, both previews and story thread posts.
+-- lblEntryFooterStory fills [storyPart] in lblEntryFooter. Part shows only for a split entry, page only in /story read.
+('lblEntryAuthor', 'Turn [turn] · [writer]{? [edited]?}', 'en', 1),
+('txtEntryEditedMark', '(edited)', 'en', 1),
+('txtEntryEditedBy', '*edited by [editor] · [edited_at]*', 'en', 1),
+('lblEntryFooter', 'Turn [turn]{? · [writer]?} · Entry: {?part [part] of [partCount], ?}[entryWords] total words{? · Story: [storyPart]?}', 'en', 1),
+('lblEntryFooterStory', '{?page [page] of [total], ?}[storyWords] total words', 'en', 1);

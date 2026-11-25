@@ -5,10 +5,11 @@ import { isRestricted, ratingBadgeKey } from './_metadata.js';
 import { pendingReadData, lastReadPage, pendingEditData } from './_state.js';
 import { buildEditMessage, buildEntryModal, EDIT_PANEL_CONFIG_KEYS } from './edit.js';
 import { handleEntriesTextExportButton } from './_exportText.js';
-import { buildEntryEmbed, buildEntryPages, stepImagePage } from './_entryRenderer.js';
+import { buildEntryEmbed, buildEntryPages, stepImagePage, ENTRY_FOOTER_KEYS } from './_entryRenderer.js';
 import { withFreshAttachmentUrls } from './_exportImages.js';
 import { WRITER_STATUS, ENTRY_STATUS } from '../constants.js';
 import { turnNumberSubquery, entryOrderSort } from './_entryOrder.js';
+import { sumStoredWords } from './_entryContent.js';
 
 export { pendingReadData, lastReadPage };
 
@@ -24,18 +25,22 @@ export function buildPages(entries, showAuthors, editInfoMap = new Map(), hasAny
         turnNumber: row.turn_number,
         writerName: row.discord_display_name,
         parts: [],
+        words: 0,
         storyEntryId: row.story_entry_id,
         originalAuthorId: String(row.original_author_id),
         createdAt: row.created_at
       });
     }
-    turnMap.get(row.turn_number).parts.push(row.content.trim());
+    const turn = turnMap.get(row.turn_number);
+    turn.parts.push(row.content.trim());
+    turn.words += Number(row.word_count ?? 0);
   }
   for (const turn of turnMap.values()) {
     const fullContent = turn.parts.join('\n\n');
     const entryPages = buildEntryPages(fullContent, {
       turnNumber: turn.turnNumber,
       writerName: turn.writerName,
+      entryWords: turn.words,
       showAuthors,
       storyEntryId: turn.storyEntryId,
       editInfo: editInfoMap.get(turn.storyEntryId) ?? null,
@@ -165,7 +170,8 @@ export function buildReadEmbed(session, pageIndex) {
     storyThreadId: session.storyThreadId,
     guildId: session.guildId,
     imagePageIndex: session.imagePageIndex ?? 0,
-    footerTemplate: session.lblEntryFooter,
+    footerTemplates: session.footerTemplates,
+    txtEntryEditedBy: session.footerTemplates?.txtEntryEditedBy,
     storyWordCount: session.wordCount,
   });
 
@@ -219,7 +225,7 @@ if (isConfigured) {
 
 
     const [entries] = await connection.execute(
-      `SELECT se.content, se.story_entry_id, se.created_at, sw.discord_user_id AS original_author_id,
+      `SELECT se.content, se.word_count, se.story_entry_id, se.created_at, sw.discord_user_id AS original_author_id,
               ${turnNumberSubquery()} AS turn_number,
               sw.discord_display_name
        FROM story_entry se
@@ -290,7 +296,7 @@ if (isConfigured) {
       [storyId]
     );
 
-    const [btnSubmitTagRead, btnViewProposedTags, btnManageTags, ratingBadgeDisplay, btnExportNoBreaks, btnExportWithBreaks, btnExportForEditing, btnEditOpen, lblPageJumpPlaceholder, lblPageJumpOptionTurn, lblEntryFooter] = await Promise.all([
+    const [btnSubmitTagRead, btnViewProposedTags, btnManageTags, ratingBadgeDisplay, btnExportNoBreaks, btnExportWithBreaks, btnExportForEditing, btnEditOpen, lblPageJumpPlaceholder, lblPageJumpOptionTurn, footerTemplates] = await Promise.all([
       getConfigValue(connection, 'btnSubmitTagRead', guildId),
       getConfigValue(connection, 'btnViewProposedTags', guildId),
       getConfigValue(connection, 'btnManageTags', guildId),
@@ -301,10 +307,10 @@ if (isConfigured) {
       getConfigValue(connection, 'btnEditOpen', guildId),
       getConfigValue(connection, 'lblPageJumpPlaceholder', guildId),
       getConfigValue(connection, 'lblPageJumpOptionTurn', guildId),
-      getConfigValue(connection, 'lblEntryFooter', guildId),
+      getConfigValue(connection, [...ENTRY_FOOTER_KEYS, 'txtEntryEditedBy'], guildId),
     ]);
 
-    const wordCount = entries.reduce((total, e) => total + e.content.trim().split(/\s+/).length, 0);
+    const wordCount = sumStoredWords(entries);
     // Stored image links are signed and expire ~24h after issue — show fresh ones. Display copy
     // only: contentMap above keeps the stored content for the edit session.
     const freshContent = await withFreshAttachmentUrls(interaction.client?.rest, entries.map(e => e.content), { guildName: interaction.guild?.name });
@@ -322,7 +328,7 @@ if (isConfigured) {
       pendingTagCount: Number(pendingTagCount),
       btnSubmitTagRead, btnViewProposedTags, btnManageTags,
       btnExportNoBreaks, btnExportWithBreaks, btnExportForEditing, btnEditOpen,
-      lblPageJumpPlaceholder, lblPageJumpOptionTurn, lblEntryFooter,
+      lblPageJumpPlaceholder, lblPageJumpOptionTurn, footerTemplates,
       storyThreadId: story.story_thread_id, imagePageIndex: 0
     };
     pendingReadData.set(interaction.user.id, session);

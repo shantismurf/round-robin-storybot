@@ -30,11 +30,65 @@ Open and deliberately not in 3.10.0 or 3.10.1: the emoji on the remaining 44 but
 which stay as they are until there is a style plan -- see the `Create style_roadmap.md` section
 of `docs/TODO.md`.
 
-- **Fixed: admin Skip and Reassign no longer delete the turn thread outright** (2026-11-23,
-  proposed 3.11.2, awaiting sign-off). `skipActiveTurn()` deleted the thread at once, so a
-  writer's draft was lost; LeeAnn lost an entry this way. It now uses `endTurnThread()` like
+## 3.12.0 — 2026-11-25
+
+Provenance: written alongside the work. Plan: [PLAN-stored-word-counts.md](../plans/PLAN-stored-word-counts.md).
+
+### Added
+- **Each entry stores its own word count** (migration 028, `story_entry.word_count INT NULL`).
+  Word counts were worked out in 12 places, four different ways, so the status post,
+  `/story read`, `/mystory list` and the roundup could show different numbers for the same
+  story. Now the count is taken once, when the text is saved, and every total is a sum of the
+  column. NULL means "not counted yet".
+- **Startup backfill** (`backfillEntryWordCounts()` in `story/_entryContent.js`), run in the
+  `ClientReady` handler in `index.js` rather than in `deploy.js`, because anything deploy.js logs
+  happens before login and never reaches Hub #logs. It counts NULL rows in batches of 500 and
+  posts its summary to Hub #logs. It runs on every start and does nothing once every row has a
+  count, so it also repairs any row a future bug leaves uncounted. It counts every entry status,
+  so a restored entry already has its number.
+- **`story/_entryContent.js`, the one place entry text is written.** `insertEntry()` and
+  `updateEntryContent()` save the text with its count (and, for edits, the history copy in
+  `story_entry_edit`). All 8 save paths use them: finalize, quick mode's first save and its
+  rewrite, edit save, version restore, the file round trip, story import and the starter story.
+  `getStoryWordCount()` and `sumStoredWords()` give totals. Writing `INSERT INTO story_entry` or
+  `UPDATE story_entry SET content` anywhere else would leave that entry out of every total.
+- **Story total on story thread posts.** The last message of each posted entry now ends with
+  the story's word total, read after the save commits.
+- Config: `lblEntryFooterStory` (the Story half of the footer), `lblEntryAuthor` (the thread
+  post's author line, which was hardcoded in 5 files), `txtEntryEditedMark`, `txtEntryEditedBy`
+  (was a hardcoded line in `buildEntryEmbed`), `txtPreviewExpiresLine` (was a hardcoded
+  "⏰ Expires:" in the quick mode reminder DM, now shared with the preview's stats field).
+
+### Changed
+- **One word counter, AO3's rules** (`story/_wordCount.js` `countWords()`, ported from ficfeed's
+  `commands/wordcount.js`). Runs of letters, digits and marks are words, each Chinese, Japanese
+  or Thai character counts as one, apostrophes and hyphens join words, `--` is a dash. Image
+  links are dropped (captions kept) and `[[break]]` lines are skipped. A translation tooltip
+  counts both its halves, as AO3 counts the HTML it becomes. Replaces three drifting formulas
+  and the SQL space-counting estimates.
+- **One footer everywhere an entry is shown** (`buildEntryFooter()` in `story/_entryRenderer.js`,
+  `lblEntryFooter`): `/story read`, the finalize and quick previews and story thread posts, e.g.
+  "Turn 5 · Ana · Entry: part 2 of 2, 512 total words · Story: page 14 of 20, 9,800 total words".
+  "Part" is a piece of one entry and shows only when an entry is split. "Page" is a screen of the
+  whole story and shows only in `/story read`. Previews show the real turn number. Every thread
+  post goes through `postEntryToThread()`.
+- The quick preview's stats field is now the character count plus the expiry line
+  (`txtEntryStatsTemplate` keeps only `Characters: [char_count]/4000`). The words moved to the
+  footer.
+- Totals read the stored column: status post, `/story read`, both exports, close stats and the
+  feed post, `/mystory list` (mine and total), the Manage Entries list and the weekly roundup.
+  The "~" before the roundup's word count is gone, since the number is now exact.
+- An open `/story read` session updates its totals after an edit by the change in words, not by
+  recounting the story.
+
+### Fixed
+- **Admin Skip and Reassign no longer delete the turn thread outright** (2026-11-23).
+  `skipActiveTurn()` deleted the thread at once, so a writer's draft was lost. LeeAnn lost an
+  entry this way. It now uses `endTurnThread()` like
   Pass, writer Skip and timeout: a thread with the writer's messages is kept 24 hours with a
   Delete Now button, an empty one is deleted.
+
+### Internal (from Unreleased, no user-facing change)
 - `helper/adminmsg.js` never messages LeeAnn or geodebreaker (George, a test server owner): an `EXCLUDE_IDS` set filters both the printed owner list and `--send` (2026-11-19, no bump, helper only).
 - **A new server's first 30 minutes of logs are posted to Hub #logs** (LeeAnn, 2026-11-19, no
   bump: internal). She reads a new server's first minutes to see how an admin finds their way,

@@ -113,6 +113,8 @@ describe('seedStarterOpening', () => {
     assert.equal(writerId, 70);
     assert.deepEqual(conn.calls[0].params, [45, 'bot-id', 'The Hooded Stranger', 'The Hooded Stranger']);
     assert.deepEqual(conn.calls[1].params, [70, TURN_STATUS.ENDED]);
-    assert.deepEqual(conn.calls[3].params, [500, 'Once...', ENTRY_STATUS.CONFIRMED, 1]);
+    // Saved through insertEntry(), so the entry carries its word count (the last param) like any other.
+    assert.match(conn.calls[3].sql, /INSERT INTO story_entry .*word_count/);
+    assert.deepEqual(conn.calls[3].params, [500, 'Once...', ENTRY_STATUS.CONFIRMED, 1, 1]);
   });
 });

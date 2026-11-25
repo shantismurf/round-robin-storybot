@@ -9,6 +9,7 @@ import { pendingEditData } from './_state.js';
 import { ENTRY_STATUS, EDIT_CHANGE_TYPE } from '../constants.js';
 import { buildEditMessageForState } from './edit.js';
 import { promoteToPanel } from './_editPanelReply.js';
+import { updateEntryContent } from './_entryContent.js';
 
 // A history row is either a content version or a structural change (migration 027): a reorder or
 // a writer change, discriminated by change_type, with NULL meaning "content version" because that
@@ -178,14 +179,10 @@ async function handleRestoreExecute(connection, interaction, editId) {
     const [current] = await txn.execute(
       `SELECT content FROM story_entry WHERE story_entry_id = ?`, [state.entryId]
     );
-    await txn.execute(
-      `INSERT INTO story_entry_edit (entry_id, content, edited_by, edited_by_name) VALUES (?, ?, ?, ?)`,
-      [state.entryId, current[0].content, interaction.user.id, editorName]
-    );
-    await txn.execute(
-      `UPDATE story_entry SET content = ?, entry_status = ? WHERE story_entry_id = ?`,
-      [histRows[0].content, ENTRY_STATUS.CONFIRMED, state.entryId]
-    );
+    await updateEntryContent(txn, state.entryId, histRows[0].content, {
+      editor: { id: interaction.user.id, name: editorName }, previousContent: current[0].content,
+      status: ENTRY_STATUS.CONFIRMED, guildName: interaction?.guild?.name,
+    });
     await txn.commit();
   } catch (err) {
     await txn.rollback();
