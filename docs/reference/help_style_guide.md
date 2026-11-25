@@ -1,6 +1,6 @@
 # Help Files Style Guide
 
-Last Updated: 2026-10-22
+Last Updated: 2026-11-24
 
 The style standard for help content: the twelve pages defined by `PAGE_DEFS` in `faq.js` and
 written in `db/config_files/config_help.sql`. One source serves `/story help`, `/mystory help`,
@@ -121,3 +121,17 @@ Story Commands 📖→📁, Your Dashboard 📅 and 🗂️→🎛️, Story Cre
 on a page title and `🛠️` on one are now unused in the help and free for a new topic.
 
 Nothing in the help now shares an emoji across two topics except the `🚦` pair above.
+
+## Terms
+
+Words that mean one specific thing in user-facing text (help, UI labels, footers). Use them the
+same way everywhere.
+
+| Term | Means | Settled |
+|---|---|---|
+| turn | The numbered slot a writer fills. The number is always a turn number ("turn 12"), never an "entry number", because it comes from the turn sequence and prints beside the author name in the published work. | LeeAnn 2026-10-22 |
+| entry | The text a writer submitted for a turn. Right for the object itself ("Delete Entry", "your entry"), just not for its number. | LeeAnn 2026-10-22 |
+| part | A piece of one entry. An entry longer than one Discord embed (about 4,000 characters) is split into parts: "part 2 of 2". Only shown when an entry is actually split. | LeeAnn 2026-11-24 |
+| page | One screen of the whole story in `/story read`. Each page shows one part of one entry, so a story with 12 entries, two of them split, has 14 pages. Only shown in paged story views. | LeeAnn 2026-11-24 |
+| total words | Always the whole entry or the whole story, never just the part on screen. "total" stays in the footer for that reason. | LeeAnn 2026-11-24 |
+| word count | Counted the way AO3 counts, so the bot's numbers match a story posted there: runs of letters and digits, hyphenated words and contractions count once, Chinese, Japanese and Thai count per character, and both halves of a translation tooltip count. Image links and scene-break markers are not counted. | LeeAnn 2026-11-24 (planned, not built yet) |
