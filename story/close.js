@@ -7,6 +7,7 @@ import { getActiveThreadId } from '../storybot.js';
 import { STORY_STATUS, WRITER_STATUS, ENTRY_STATUS, TURN_STATUS, STORY_MODE } from '../constants.js';
 import { buildCloseExportRow, EXPORT_ROW_CONFIG_KEYS, handleEntriesTextExportButton } from './_exportText.js';
 import { turnNumberSubquery, entryOrderSort } from './_entryOrder.js';
+import { sumStoredWords } from './_entryContent.js';
 
 // Direct stats query — independent of export generation, since export is now a manual, optional
 // step after close. Exported for story/_manageClose.js, which needs the same numbers for the
@@ -17,7 +18,7 @@ export async function getStoryStats(connection, storyId) {
     [storyId, WRITER_STATUS.ACTIVE]
   );
   const [entryRows] = await connection.execute(
-    `SELECT se.content,
+    `SELECT se.word_count,
             ${turnNumberSubquery()} as turn_number
      FROM story_entry se
      JOIN turn t ON se.turn_id = t.turn_id
@@ -27,7 +28,7 @@ export async function getStoryStats(connection, storyId) {
     [ENTRY_STATUS.CONFIRMED, storyId, ENTRY_STATUS.CONFIRMED]
   );
   const turnCount = entryRows.length ? entryRows[entryRows.length - 1].turn_number : 0;
-  const wordCount = entryRows.reduce((total, e) => total + e.content.trim().split(/\s+/).length, 0);
+  const wordCount = sumStoredWords(entryRows);
   return { turnCount, wordCount, writerCount: writerRows[0].writerCount };
 }
 

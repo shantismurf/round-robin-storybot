@@ -2,10 +2,11 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBu
 import { getConfigValue, log, replaceTemplateVariables, resolveStoryId, validateStoryAccess, validateActiveWriter } from '../utilities.js';
 import { PickNextWriter, NextTurn, endTurnGuarded } from './_turn.js';
 import { getActiveThreadId } from '../storybot.js';
-import { buildEntryPages, buildEntryEmbed, postThreadEntry } from './_entryRenderer.js';
+import { buildEntryPages, buildEntryEmbed, postEntryToThread, ENTRY_FOOTER_KEYS } from './_entryRenderer.js';
 import { resolveMentionsToPlainText } from './_entryMarkup.js';
 import { TURN_STATUS, ENTRY_STATUS, STORY_MODE } from '../constants.js';
-import { turnNumberSubquery, nextEntryOrderForEntry } from './_entryOrder.js';
+import { turnNumberSubquery, nextEntryOrderForEntry, confirmedEntryCountSubquery } from './_entryOrder.js';
+import { insertEntry, updateEntryContent } from './_entryContent.js';
 
 export const pendingReminderTimeouts = new Map();
 
@@ -90,10 +91,10 @@ export async function handleWriteModalSubmit(connection, interaction) {
   let entryId = null;
   try {
     const [turnInfo] = await connection.execute(`
-      SELECT t.turn_id FROM turn t
+      SELECT t.turn_id, ${confirmedEntryCountSubquery()} + 1 AS turn_number FROM turn t
       JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
       WHERE sw.story_id = ? AND sw.discord_user_id = ? AND t.turn_status = ?
-    `, [storyId, interaction.user.id, TURN_STATUS.ACTIVE]);
+    `, [ENTRY_STATUS.CONFIRMED, storyId, interaction.user.id, TURN_STATUS.ACTIVE]);
 
     if (turnInfo.length === 0) {
       throw new Error('No active turn found');
@@ -106,18 +107,15 @@ export async function handleWriteModalSubmit(connection, interaction) {
     `, [currentTurnId, ENTRY_STATUS.PENDING, ENTRY_STATUS.DISCARDED]);
 
     if (pendingEntry.length > 0) {
-      await connection.execute(`
-        UPDATE story_entry SET content = ?, entry_status = ?, created_at = NOW()
-        WHERE story_entry_id = ?
-      `, [content, ENTRY_STATUS.PENDING, pendingEntry[0].story_entry_id]);
+      await updateEntryContent(connection, pendingEntry[0].story_entry_id, content, {
+        status: ENTRY_STATUS.PENDING, resetCreatedAt: true, guildName: interaction?.guild?.name,
+      });
       entryId = String(pendingEntry[0].story_entry_id);
     } else {
-      const [result] = await connection.execute(`
-        INSERT INTO story_entry (turn_id, content, entry_status)
-        VALUES (?, ?, ?)
-      `, [currentTurnId, content, ENTRY_STATUS.PENDING]);
-
-      entryId = String(result.insertId);
+      const newId = await insertEntry(connection, {
+        turnId: currentTurnId, content, status: ENTRY_STATUS.PENDING, guildName: interaction?.guild?.name,
+      });
+      entryId = String(newId);
     }
 
     const timeoutMinutes = parseInt(await getConfigValue(connection, 'cfgEntryTimeoutMinutes', guildId)) || 10;
@@ -129,14 +127,16 @@ export async function handleWriteModalSubmit(connection, interaction) {
       [storyId]
     );
 
-    const previewPayload = await createPreviewEmbed(connection, content, guildId, expiryTimestamp, entryId, storyRow?.scene_break_divider ?? null);
+    const previewPayload = await createPreviewEmbed(connection, content, guildId, expiryTimestamp, entryId, storyRow?.scene_break_divider ?? null, turnInfo[0].turn_number);
     await interaction.editReply(previewPayload);
 
     const reminderTimeout = setTimeout(async () => {
       pendingReminderTimeouts.delete(entryId);
       try {
         const user = await interaction.client.users.fetch(interaction.user.id);
-        await user.send(`${await getConfigValue(connection, 'txtDMReminder', guildId)}\n\n${await getConfigValue(connection, 'txtRecoveryInstructions', guildId)}\n\n⏰ Expires: ${expiryTimestamp}`);
+        const dmCfg = await getConfigValue(connection, ['txtDMReminder', 'txtRecoveryInstructions', 'txtPreviewExpires', 'txtPreviewExpiresLine'], guildId);
+        const expiresLine = replaceTemplateVariables(dmCfg.txtPreviewExpiresLine, { expires_label: dmCfg.txtPreviewExpires, expires: expiryTimestamp });
+        await user.send(`${dmCfg.txtDMReminder}\n\n${dmCfg.txtRecoveryInstructions}\n\n${expiresLine}`);
       } catch (error) {
         log(`Could not send DM reminder to user ${interaction.user.username}`, { show: false, guildName: interaction?.guild?.name });
       }
@@ -237,8 +237,10 @@ export async function confirmEntry(connection, entryId, interaction) {
       const storyThread = await interaction.guild.channels.fetch(activeThreadId);
       if (storyThread.locked) await storyThread.setLocked(false).catch(() => {});
       if (storyThread.archived) await storyThread.setArchived(false).catch(() => {});
-      const authorLine = show_authors ? `Turn ${turn_number} — ${discord_display_name}` : null;
-      await postThreadEntry(storyThread, content, authorLine, scene_break_divider);
+      await postEntryToThread(connection, storyThread, {
+        content, storyId: story_id, turnNumber: turn_number, writerName: discord_display_name,
+        showAuthors: !!show_authors, sceneBreakDivider: scene_break_divider, guildId: interaction.guild.id,
+      });
     } catch (threadError) {
       log(`Failed to post entry to story thread: ${threadError}`, { show: true, guildName: interaction?.guild?.name });
     }
@@ -282,18 +284,26 @@ export async function discardEntry(connection, entryId, interaction) {
   }
 }
 
-export async function createPreviewEmbed(connection, content, guildId, discordTimestamp, entryId, sceneBreakDivider = null) {
-  const [title, expiresLabel, statsLabel, statsTemplate, btnSubmit, btnDiscard] = await Promise.all([
+export async function createPreviewEmbed(connection, content, guildId, discordTimestamp, entryId, sceneBreakDivider = null, turnNumber = null) {
+  const [title, expiresLabel, statsLabel, statsTemplate, expiresLineTemplate, btnSubmit, btnDiscard, footerTemplates] = await Promise.all([
     getConfigValue(connection, 'txtPreviewTitle', guildId),
     getConfigValue(connection, 'txtPreviewExpires', guildId),
     getConfigValue(connection, 'lblEntryStats', guildId),
     getConfigValue(connection, 'txtEntryStatsTemplate', guildId),
+    getConfigValue(connection, 'txtPreviewExpiresLine', guildId),
     getConfigValue(connection, 'btnSubmit', guildId),
     getConfigValue(connection, 'btnDiscard', guildId),
+    getConfigValue(connection, ENTRY_FOOTER_KEYS, guildId),
   ]);
 
-  const wordCount = content.split(/\s+/).filter(w => w.length > 0).length;
-  const statsText = replaceTemplateVariables(statsTemplate, { char_count: content.length, word_count: wordCount });
+  // Word count lives in the shared entry footer now. This field carries what only matters while
+  // writing: the character limit and when the preview expires (timestamps render in fields but
+  // not in footers).
+  // The expiry line is its own key so the reminder DM above uses the same wording.
+  const statsText = [
+    replaceTemplateVariables(statsTemplate, { char_count: content.length }),
+    replaceTemplateVariables(expiresLineTemplate, { expires_label: expiresLabel, expires: discordTimestamp }),
+  ].join('\n');
 
   const statsRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -306,7 +316,7 @@ export async function createPreviewEmbed(connection, content, guildId, discordTi
       .setStyle(ButtonStyle.Danger)
   );
 
-  const pages = buildEntryPages(content, { turnNumber: '—', writerName: null, showAuthors: false, storyEntryId: entryId, sceneBreakDivider });
+  const pages = buildEntryPages(content, { turnNumber, writerName: null, showAuthors: false, storyEntryId: entryId, sceneBreakDivider });
   const page = pages[0];
 
   const result = buildEntryEmbed(page, {
@@ -317,10 +327,11 @@ export async function createPreviewEmbed(connection, content, guildId, discordTi
     extraButtons: [statsRow],
     guildId,
     imagePageIndex: 0,
+    footerTemplates,
   });
 
   if (result.embeds[0]) {
-    result.embeds[0].setFooter({ text: `${expiresLabel}: ${discordTimestamp} · ${statsText}` });
+    result.embeds[0].addFields({ name: statsLabel, value: statsText });
   }
 
   return result;

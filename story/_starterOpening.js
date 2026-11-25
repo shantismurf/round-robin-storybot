@@ -7,6 +7,7 @@
  */
 import { TURN_STATUS, ENTRY_STATUS } from '../constants.js';
 import { nextEntryOrder } from './_entryOrder.js';
+import { insertEntry } from './_entryContent.js';
 
 /**
  * Adds the made-up stranger as the story's first writer and writes its opening entry as Turn 1,
@@ -30,11 +31,7 @@ export async function seedStarterOpening(txn, storyId, botUserId, { strangerName
   );
 
   const entryOrder = await nextEntryOrder(txn, storyId);
-  await txn.execute(
-    `INSERT INTO story_entry (turn_id, content, entry_status, entry_order, created_at)
-     VALUES (?, ?, ?, ?, NOW())`,
-    [turnResult.insertId, entryText, ENTRY_STATUS.CONFIRMED, entryOrder]
-  );
+  await insertEntry(txn, { turnId: turnResult.insertId, content: entryText, status: ENTRY_STATUS.CONFIRMED, entryOrder });
 
   return writerId;
 }

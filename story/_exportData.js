@@ -27,7 +27,7 @@ export async function fetchStoryForExport(connection, storyId, guildId) {
   // story_entry_id is selected for the text export's per-entry delimiters; the HTML export
   // ignores it.
   const [entries] = await connection.execute(
-    `SELECT se.story_entry_id, se.content, se.created_at, sw.discord_display_name, sw.pen_name,
+    `SELECT se.story_entry_id, se.content, se.word_count, se.created_at, sw.discord_display_name, sw.pen_name,
             ${turnNumberSubquery()} as turn_number
      FROM story_entry se
      JOIN turn t ON se.turn_id = t.turn_id

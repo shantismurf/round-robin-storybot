@@ -21,8 +21,8 @@
  */
 
 import { ENTRY_STATUS } from '../constants.js';
+import { countWords } from './_wordCount.js';
 
-const wordCount = text => String(text ?? '').trim().split(/\s+/).filter(Boolean).length;
 
 // A writer name as a key: case and surrounding space are the two differences a word processor
 // introduces on its own, and neither should read as a reassignment.
@@ -241,8 +241,8 @@ export function planStoryImport({ current, blocks, exportedAt, writers, contentB
       fromPosition,
       toPosition,
       writerName: newWriter?.name ?? entry.writerName,
-      fromWords: wordCount(entry.content),
-      toWords: wordCount(block.content),
+      fromWords: countWords(entry.content),
+      toWords: countWords(block.content),
       content: block.content,
       previousContent: entry.content,
       contentChanged,
@@ -271,7 +271,7 @@ export function planStoryImport({ current, blocks, exportedAt, writers, contentB
       fromPosition: positionsNow.get(id) ?? null,
       toPosition: null,
       writerName: entry.writerName,
-      fromWords: wordCount(entry.content),
+      fromWords: countWords(entry.content),
       toWords: 0,
       content: null,
       previousContent: entry.content,

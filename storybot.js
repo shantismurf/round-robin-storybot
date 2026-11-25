@@ -6,7 +6,7 @@ import { resolveFeedChannelId, isRestricted } from './story/_metadata.js';
 import { checkStoryDelay } from './story/_delay.js';
 import { PickNextWriter, NextTurn, postStoryThreadActivity } from './story/_turn.js';
 import { updateStoryStatusMessage, buildThreadTitle } from './story/_storyStatus.js';
-import { postThreadEntry } from './story/_entryRenderer.js';
+import { postEntryToThread } from './story/_entryRenderer.js';
 import { seedStarterOpening } from './story/_starterOpening.js';
 
 export { checkStoryDelay } from './story/_delay.js';
@@ -225,8 +225,10 @@ async function postStoryThreadOpening(connection, interaction, storyId, storyThr
     }
     await storyThread.send(replaceTemplateVariables(cfg.txtStoryThreadWriterJoin, { writer_name: creatorName }));
     if (starter) {
-      // Same author line format as every other posted entry (story/_writeFinalize.js)
-      await postThreadEntry(storyThread, starter.entryText, `Turn 1 — ${starter.strangerName}`, null);
+      // Same author line and footer as every other posted entry (story/_entryRenderer.js)
+      await postEntryToThread(connection, storyThread, {
+        content: starter.entryText, storyId, turnNumber: 1, writerName: starter.strangerName, showAuthors: true, guildId: guild.id,
+      });
     }
 
     if (turnResult?.announce) await turnResult.announce(connection);

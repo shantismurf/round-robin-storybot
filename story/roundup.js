@@ -46,9 +46,7 @@ export async function generateRoundupStats(connection, guildId) {
   );
 
   const [[{ wordSum }]] = await connection.execute(
-    `SELECT COALESCE(SUM(
-       LENGTH(se.content) - LENGTH(REPLACE(se.content, ' ', '')) + 1
-     ), 0) AS wordSum
+    `SELECT COALESCE(SUM(se.word_count), 0) AS wordSum
      FROM story_entry se
      JOIN turn t ON se.turn_id = t.turn_id
      JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id

@@ -31,6 +31,8 @@ import { buildExportFilename } from './_exportData.js';
 import { resolveMentionsToPlainText } from './_entryMarkup.js';
 import { turnNumberSubquery } from './_entryOrder.js';
 import { ENTRY_STATUS } from '../constants.js';
+import { countWords } from './_wordCount.js';
+import { updateEntryContent } from './_entryContent.js';
 
 // Every config key this module reads. Exported for the same reason EDIT_PANEL_CONFIG_KEYS is:
 // openEditSession fetches the panel's keys in one query and must not keep a second list.
@@ -58,7 +60,6 @@ export const ENTRY_CONTENT_BYTE_LIMIT = 65000;
 // what this guard avoids.
 const MAX_UPLOAD_BYTES = 256 * 1024;
 
-const wordCount = text => text.trim().split(/\s+/).filter(Boolean).length;
 
 /**
  * The story and writer facts a one-entry export needs, read fresh rather than from the panel
@@ -115,7 +116,7 @@ export function buildSingleEntryExport(entry, exportedAt = new Date()) {
       ext: 'txt',
     }),
     turnNumber: entry.turn_number,
-    wordCount: wordCount(entry.content),
+    wordCount: countWords(entry.content),
   };
 }
 
@@ -331,8 +332,8 @@ export async function handleImportModalSubmit(connection, interaction, state) {
   // change turn 12", and 12 is what the panel header, the file and the History panel all show.
   const body = replaceTemplateVariables(cfg.txtEditImportConfirm, {
     turn_id: String(state.turnNumber),
-    from_words: wordCount(state.currentContent).toLocaleString(),
-    to_words: wordCount(resolved).toLocaleString(),
+    from_words: countWords(state.currentContent).toLocaleString(),
+    to_words: countWords(resolved).toLocaleString(),
   });
   // The conflict line rides on the same confirmation rather than opening a second one, and names
   // the button under it by substituting that button's own label -- so the two cannot disagree.
@@ -354,7 +355,7 @@ export async function handleImportModalSubmit(connection, interaction, state) {
       .setStyle(ButtonStyle.Success)
   );
 
-  log(`handleImportModalSubmit: entry ${state.entryId} staged from ${attachment.name} (${wordCount(state.currentContent)} -> ${wordCount(resolved)} words, conflict=${conflictAt ?? 'none'})`, { show: true, guildName });
+  log(`handleImportModalSubmit: entry ${state.entryId} staged from ${attachment.name} (${countWords(state.currentContent)} -> ${countWords(resolved)} words, conflict=${conflictAt ?? 'none'})`, { show: true, guildName });
   await interaction.followUp({ embeds: [embed], components: [row], flags: MessageFlags.Ephemeral });
 }
 
@@ -381,14 +382,9 @@ export async function handleImportConfirm(connection, interaction, state, buildP
   const txn = await connection.getConnection();
   await txn.beginTransaction();
   try {
-    await txn.execute(
-      `INSERT INTO story_entry_edit (entry_id, content, edited_by, edited_by_name) VALUES (?, ?, ?, ?)`,
-      [state.entryId, previousContent, interaction.user.id, editorName]
-    );
-    await txn.execute(
-      `UPDATE story_entry SET content = ? WHERE story_entry_id = ?`,
-      [staged.content, state.entryId]
-    );
+    await updateEntryContent(txn, state.entryId, staged.content, {
+      editor: { id: interaction.user.id, name: editorName }, previousContent, guildName,
+    });
     await txn.commit();
   } catch (err) {
     await txn.rollback();

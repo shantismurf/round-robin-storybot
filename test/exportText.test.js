@@ -152,7 +152,8 @@ describe('generateEntriesTextExport', () => {
   });
 
   test('reports counts and a filename, and flags an empty story instead of writing one', async () => {
-    const result = await read(story(), [{}, {}], [entry(41, 1, 'one two three'), entry(42, 4, 'four five')]);
+    // The total is the sum of each entry's stored word_count (story/_entryContent.js), not a recount.
+    const result = await read(story(), [{}, {}], [entry(41, 1, 'one two three', { word_count: 3 }), entry(42, 4, 'four five', { word_count: 2 })]);
     assert.equal(result.hasEntries, true);
     assert.equal(result.entryCount, 2);
     assert.equal(result.turnCount, 4);

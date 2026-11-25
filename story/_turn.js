@@ -583,24 +583,20 @@ export async function buildSyntheticContext(client, guildId) {
 }
 
 /**
- * skipActiveTurn — ends a turn as a skip, cancels its pending jobs, and deletes its thread.
- * Shared by handleSkip and handleReassign so the skip logic lives in one place.
+ * skipActiveTurn — ends a turn as a skip, cancels its pending jobs, and ends its thread.
+ * Shared by the admin Skip and Reassign turn actions so the skip logic lives in one place.
+ * The thread goes through endTurnThread, like every other way a turn ends: if the writer
+ * has written in it, it is kept for 24 hours so their draft is not lost. It used to be
+ * deleted outright, which cost a writer their entry (2026-11-23).
  */
-export async function skipActiveTurn(connection, guild, turnId, threadId) {
-  log(`skipActiveTurn: entry turnId=${turnId} threadId=${threadId}`, { show: false, guildName: guild?.name });
+export async function skipActiveTurn(connection, guild, turnId, threadId, writerDiscordUserId) {
+  log(`skipActiveTurn: entry turnId=${turnId} threadId=${threadId} writer=${writerDiscordUserId}`, { show: false, guildName: guild?.name });
   const ended = await endTurnGuarded(connection, turnId);
   if (!ended) {
     log(`skipActiveTurn: turn ${turnId} already ended — skipping thread cleanup and turn advance`, { show: true, guildName: guild?.name });
     return false;
   }
-  if (threadId) {
-    try {
-      const thread = await guild.channels.fetch(threadId);
-      if (thread) await deleteThreadAndAnnouncement(thread);
-    } catch (err) {
-      log(`Could not delete turn thread on skip: ${err}`, { show: true, guildName: guild?.name });
-    }
-  }
+  await endTurnThread(connection, guild, threadId, writerDiscordUserId, guild.id);
   return true;
 }
 

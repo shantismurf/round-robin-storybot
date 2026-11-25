@@ -8,6 +8,7 @@ import { STORY_STATUS, STORY_MODE } from '../constants.js';
 import { collectImageUrls, refreshAttachmentUrls, buildImageStore, buildImageDataBlock, emojiUrl } from './_exportImages.js';
 import { ANCHOR_IMAGE_RE, BANG_IMAGE_RE } from './_imageUrls.js';
 import { fetchStoryForExport, buildExportFilename } from './_exportData.js';
+import { sumStoredWords } from './_entryContent.js';
 
 // Renders an embedded image (data-storybot-img id, filled by the loader script at the
 // bottom of the export) or a visible placeholder span when the image couldn't be embedded.
@@ -150,7 +151,7 @@ export async function generateStoryExport(connection, storyId, guildId, guild = 
     return { hasEntries: false, title: story.title, turnCount: 0, wordCount: 0, writerCount, buffer: null, filename: null };
   }
 
-  const wordCount = entries.reduce((total, e) => total + e.content.trim().split(/\s+/).length, 0);
+  const wordCount = sumStoredWords(entries);
   const turnCount = entries[entries.length - 1].turn_number;
 
   const cfg = await getConfigValue(connection, [

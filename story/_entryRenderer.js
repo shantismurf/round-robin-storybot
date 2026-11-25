@@ -6,14 +6,18 @@
  *   buildEntryEmbed()  — renders one page into { embeds, components }
  *
  * Non-interactive display (permanent thread/channel posts):
+ *   postEntryToThread() — author line + footer from config, then postThreadEntry()
  *   postThreadEntry()  — sends one message per chunk (and per image) to a channel, safe for any entry length
+ *   buildEntryFooter() — the shared lblEntryFooter text, used by both kinds of display
  */
 
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
-import { splitAtParagraphs, replaceTemplateVariables, log } from '../utilities.js';
+import { splitAtParagraphs, replaceTemplateVariables, log, getConfigValue } from '../utilities.js';
 import { applyEntryMarkup } from './_entryMarkup.js';
 import { withFreshAttachmentUrls } from './_exportImages.js';
 import { IMAGE_LINK_RE, extractImageUrls, isSafeImageUrl } from './_imageUrls.js';
+import { countWords } from './_wordCount.js';
+import { getStoryWordCount } from './_entryContent.js';
 
 const IMAGES_PER_PAGE = 4;
 
@@ -29,14 +33,18 @@ const IMAGES_PER_PAGE = 4;
  * Split one entry's content into page objects compatible with buildEntryEmbed.
  *
  * @param {string} content
- * @param {{ turnNumber, writerName, showAuthors, storyEntryId, editInfo, sceneBreakDivider }} meta
+ * @param {{ turnNumber, writerName, entryWords, showAuthors, storyEntryId, editInfo, sceneBreakDivider }} meta
+ *   entryWords: the entry's stored word_count. Omit it for a preview, whose text is not saved
+ *   yet, and the text is counted live.
  * @returns {Array} pages
  */
-export function buildEntryPages(content, { turnNumber, writerName, showAuthors, storyEntryId, editInfo = null, sceneBreakDivider = null } = {}) {
+export function buildEntryPages(content, { turnNumber, writerName, entryWords = null, showAuthors, storyEntryId, editInfo = null, sceneBreakDivider = null } = {}) {
+  // Word count for the whole entry (all chunks combined), the same figure on every page of a
+  // split entry. Saved entries pass their stored count. A preview counts the raw text live, before
+  // markup turns a [[break]] into divider text.
+  const entryWordCount = entryWords ?? countWords(content);
   content = applyEntryMarkup(content, { dividerText: sceneBreakDivider, target: 'discord' });
   const chunks = splitAtParagraphs(content);
-  // Word count for the whole entry (all chunks combined) — same figure shown on every page of a split entry.
-  const entryWordCount = content.trim().split(/\s+/).filter(Boolean).length;
   return chunks.map((chunk, i) => ({
     turnNumber,
     writerName: showAuthors ? writerName : null,
@@ -53,22 +61,80 @@ export function buildEntryPages(content, { turnNumber, writerName, showAuthors, 
   }));
 }
 
+// The config keys every footer needs. Callers fetch these together and pass the result as
+// `templates` (to buildEntryFooter, or as footerTemplates on a buildEntryEmbed session).
+export const ENTRY_FOOTER_KEYS = ['lblEntryFooter', 'lblEntryFooterStory'];
+
+/**
+ * buildEntryFooter — the one footer every entry view uses, so /story read, the finalize and
+ * quick mode previews, and story thread posts all read the same way:
+ *   "Turn 5 · Ana · Entry: part 2 of 2, 512 total words · Story: page 14 of 20, 9,800 total words"
+ * lblEntryFooter holds the turn, writer and Entry part. lblEntryFooterStory fills its
+ * [storyPart] token. Each optional block is left out by omitting its token: writer (show_authors
+ * off), part (entry not split), page (not the paged story view), Story (no story total, as in
+ * a preview).
+ *
+ * @param {{ lblEntryFooter: string, lblEntryFooterStory: string }} templates  ENTRY_FOOTER_KEYS values
+ */
+export function buildEntryFooter(templates, { turnNumber, writerName = null, entryWords, part = null, partCount = null, page = null, totalPages = null, storyWords = null }) {
+  const tokens = { turn: String(turnNumber), entryWords: Number(entryWords ?? 0).toLocaleString() };
+  if (writerName) tokens.writer = writerName;
+  if (partCount > 1) { tokens.part = String(part); tokens.partCount = String(partCount); }
+  if (storyWords !== null && storyWords !== undefined) {
+    const storyTokens = { storyWords: Number(storyWords).toLocaleString() };
+    if (page !== null && page !== undefined && totalPages !== null && totalPages !== undefined) {
+      storyTokens.page = String(page);
+      storyTokens.total = String(totalPages);
+    }
+    tokens.storyPart = replaceTemplateVariables(templates.lblEntryFooterStory, storyTokens);
+  }
+  return replaceTemplateVariables(templates.lblEntryFooter, tokens);
+}
+
+/**
+ * postEntryToThread — posts a finished entry to a story thread with the shared author line
+ * (lblEntryAuthor, only when the story shows authors) and the shared footer on its last
+ * message, including the story's word total. Every thread post of an entry goes through here:
+ * finalize, quick mode submit, View Last Entry, the edit repost and the starter story.
+ *
+ * Call it after the entry's save is committed, so the story total includes it. The entry's own
+ * count is worked out from the text being posted, which is the same countWords() figure
+ * updateEntryContent()/insertEntry() stored for it.
+ */
+export async function postEntryToThread(connection, channel, { content, storyId, turnNumber, writerName, showAuthors, edited = false, sceneBreakDivider = null, guildId }) {
+  const guildName = channel?.guild?.name;
+  const cfg = await getConfigValue(connection, ['lblEntryAuthor', 'txtEntryEditedMark', ...ENTRY_FOOTER_KEYS], guildId);
+  const authorTokens = { turn: String(turnNumber), writer: writerName };
+  if (edited) authorTokens.edited = cfg.txtEntryEditedMark;
+  const authorLine = showAuthors ? replaceTemplateVariables(cfg.lblEntryAuthor, authorTokens) : null;
+  const storyWords = await getStoryWordCount(connection, storyId, { guildName });
+  const footerText = buildEntryFooter(cfg, {
+    turnNumber,
+    writerName: showAuthors ? writerName : null,
+    entryWords: countWords(content),
+    storyWords,
+  });
+  log(`postEntryToThread: story ${storyId} turn ${turnNumber} to thread ${channel?.id}, footer "${footerText}"`, { show: false, guildName });
+  await postThreadEntry(channel, content, authorLine, sceneBreakDivider, footerText);
+}
+
 /**
  * Render a page and navigation buttons into { embeds, components }.
  *
  * @param {object} page        — one element from buildEntryPages()
- * @param {object} session     — { title, pageIndex, totalPages, imagePageIndex, guildId, storyThreadId, context, extraButtons, footerTemplate, storyWordCount }
+ * @param {object} session     — { title, pageIndex, totalPages, imagePageIndex, guildId, storyThreadId, context, extraButtons, footerTemplates, txtEntryEditedBy, storyWordCount }
  *   context: 'read' | 'preview' | 'view'  — selects which customId prefix to use for nav buttons
  *   extraButtons: ActionRowBuilder[]       — injected rows appended after the nav row (e.g. Confirm/Cancel)
- *   footerTemplate: string|undefined       — lblEntryFooter config value; footer is omitted if not supplied (caller sets its own)
- *   storyWordCount: number|undefined       — whole-story word count; only read.js has this, so [storyWords] is optional in the template
+ *   footerTemplates: object|undefined      — the ENTRY_FOOTER_KEYS config values; footer is omitted if not supplied
+ *   txtEntryEditedBy: string|undefined     — the edited-by line under an edited entry (read only)
+ *   storyWordCount: number|undefined       — whole-story word count; only read.js has this, so the Story block is optional
  */
 export function buildEntryEmbed(page, session) {
-  const { title, pageIndex, totalPages, context = 'read', extraButtons = [], storyThreadId, guildId, footerTemplate, storyWordCount } = session;
+  const { title, pageIndex, totalPages, context = 'read', extraButtons = [], storyThreadId, guildId, footerTemplates, txtEntryEditedBy, storyWordCount } = session;
 
   let description = page.content;
-  if (page.editInfo) {
-    description += `\n\n*edited by ${page.editInfo.editedByName} · ${page.editInfo.editedAt}*`;
+  if (page.editInfo && txtEntryEditedBy) {
+    description += `\n\n${replaceTemplateVariables(txtEntryEditedBy, { editor: page.editInfo.editedByName, edited_at: page.editInfo.editedAt })}`;
   }
 
   const imageUrls = page.imageUrls ?? [];
@@ -84,18 +150,19 @@ export function buildEntryEmbed(page, session) {
     .setDescription(description)
     .setColor(0x5865f2);
 
-  if (footerTemplate) {
-    const footerTokens = {
-      turn: String(page.turnNumber),
-      part: String(page.partIndex),
-      partCount: String(page.partCount),
-      entryWords: page.entryWordCount.toLocaleString(),
-      page: String(pageIndex + 1),
-      total: String(totalPages),
-    };
-    if (page.writerName) footerTokens.writer = page.writerName;
-    if (storyWordCount !== undefined && storyWordCount !== null) footerTokens.storyWords = storyWordCount.toLocaleString();
-    embed.setFooter({ text: replaceTemplateVariables(footerTemplate, footerTokens) });
+  if (footerTemplates) {
+    embed.setFooter({ text: buildEntryFooter(footerTemplates, {
+      turnNumber: page.turnNumber,
+      writerName: page.writerName,
+      entryWords: page.entryWordCount,
+      part: page.partIndex,
+      partCount: page.partCount,
+      // Story pages only mean something in the paged story view. In a preview the only pages
+      // are the entry's own parts, which the part block already shows.
+      page: context === 'read' ? pageIndex + 1 : null,
+      totalPages: context === 'read' ? totalPages : null,
+      storyWords: storyWordCount,
+    }) });
   }
 
   if (imageSlice.length > 0) embed.setURL(groupUrl);
@@ -207,7 +274,7 @@ function attachmentFileName(url) {
  * @param {string|null} authorLine — e.g. "Turn 3 — Dragonborn"; null if show_authors is false
  * @param {string|null} sceneBreakDivider — story's Scene Break Divider text, or null if unset
  */
-export async function postThreadEntry(channel, content, authorLine = null, sceneBreakDivider = null) {
+export async function postThreadEntry(channel, content, authorLine = null, sceneBreakDivider = null, footerText = null) {
   content = applyEntryMarkup(content, { dividerText: sceneBreakDivider, target: 'discord' });
   const guildName = channel?.guild?.name;
   let segments = splitAtImages(content);
@@ -219,30 +286,39 @@ export async function postThreadEntry(channel, content, authorLine = null, scene
   }
   log(`postThreadEntry: posting to ${channel?.id} — ${segments.length} segment(s), ${imageCount} image(s)`, { show: false, guildName });
 
-  let first = true;
+  // Build every message first so the footer can go on the last one.
+  const posts = [];
   for (const seg of segments) {
     if (seg.type === 'image') {
       const name = attachmentFileName(seg.url);
       const embed = new EmbedBuilder().setImage(`attachment://${name}`);
       if (seg.caption && seg.caption !== name) embed.setDescription(seg.caption);
-      if (first && authorLine) embed.setAuthor({ name: authorLine });
-      try {
-        await channel.send({ embeds: [embed], files: [new AttachmentBuilder(seg.freshUrl, { name })] });
-      } catch (error) {
-        // Fall back to the link as text so the entry is never missing a piece.
-        log(`postThreadEntry failed to attach image ${name} in ${channel?.id}, posting link instead: ${error?.stack ?? error}`, { show: true, guildName });
-        const fallback = new EmbedBuilder().setDescription(seg.raw);
-        if (first && authorLine) fallback.setAuthor({ name: authorLine });
-        await channel.send({ embeds: [fallback] });
-      }
-      first = false;
+      posts.push({ embed, image: { seg, name } });
       continue;
     }
     for (const chunk of splitAtParagraphs(seg.text, 3800)) {
-      const embed = new EmbedBuilder().setDescription(chunk);
-      if (first && authorLine) embed.setAuthor({ name: authorLine });
-      await channel.send({ embeds: [embed] });
-      first = false;
+      posts.push({ embed: new EmbedBuilder().setDescription(chunk) });
+    }
+  }
+  if (posts.length === 0) return;
+  if (authorLine) posts[0].embed.setAuthor({ name: authorLine });
+  if (footerText) posts[posts.length - 1].embed.setFooter({ text: footerText });
+
+  for (const [i, post] of posts.entries()) {
+    if (!post.image) {
+      await channel.send({ embeds: [post.embed] });
+      continue;
+    }
+    const { seg, name } = post.image;
+    try {
+      await channel.send({ embeds: [post.embed], files: [new AttachmentBuilder(seg.freshUrl, { name })] });
+    } catch (error) {
+      // Fall back to the link as text so the entry is never missing a piece.
+      log(`postThreadEntry failed to attach image ${name} in ${channel?.id}, posting link instead: ${error?.stack ?? error}`, { show: true, guildName });
+      const fallback = new EmbedBuilder().setDescription(seg.raw);
+      if (i === 0 && authorLine) fallback.setAuthor({ name: authorLine });
+      if (i === posts.length - 1 && footerText) fallback.setFooter({ text: footerText });
+      await channel.send({ embeds: [fallback] });
     }
   }
 }

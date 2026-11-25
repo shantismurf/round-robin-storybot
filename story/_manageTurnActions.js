@@ -57,7 +57,7 @@ export async function handleTurnActionButton(connection, interaction, manageStat
     if (customId === 'story_manage_ta_skip') {
     log(`handleTurnActionButton: skip — fetching active turn for story ${storyId}`, { show: false, guildName: interaction?.guild?.name });
     const [activeTurnRows] = await connection.execute(
-      `SELECT t.turn_id, t.thread_id, sw.discord_display_name
+      `SELECT t.turn_id, t.thread_id, sw.discord_user_id, sw.discord_display_name
        FROM turn t JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
        WHERE sw.story_id = ? AND t.turn_status = ?`,
       [storyId, TURN_STATUS.ACTIVE]
@@ -127,7 +127,7 @@ export async function handleTurnActionButton(connection, interaction, manageStat
       [storyId, TURN_STATUS.ENDED]
     );
     const [activeTurnRows] = await connection.execute(
-      `SELECT t.turn_id, t.thread_id, sw.story_writer_id, sw.discord_display_name as current_writer_name
+      `SELECT t.turn_id, t.thread_id, sw.story_writer_id, sw.discord_user_id, sw.discord_display_name as current_writer_name
        FROM turn t JOIN story_writer sw ON t.story_writer_id = sw.story_writer_id
        WHERE sw.story_id = ? AND t.turn_status = ?`,
       [storyId, TURN_STATUS.ACTIVE]
@@ -212,7 +212,7 @@ export async function handleTurnActionConfirm(connection, interaction) {
     if (action === 'skip') {
       const { activeTurn } = pending;
       log(`handleTurnActionConfirm: skip confirmed by ${interaction.user.username} — turnId=${activeTurn.turn_id} writer="${activeTurn.discord_display_name}" story=${storyId}`, { show: true, guildName: interaction?.guild?.name });
-      const ended = await skipActiveTurn(connection, interaction.guild, activeTurn.turn_id, activeTurn.thread_id);
+      const ended = await skipActiveTurn(connection, interaction.guild, activeTurn.turn_id, activeTurn.thread_id, activeTurn.discord_user_id);
       if (!ended) {
         log(`handleTurnActionConfirm: skip no-op — turn ${activeTurn.turn_id} already ended for story ${storyId}`, { show: true, guildName: interaction?.guild?.name });
         await interaction.editReply({ content: await getConfigValue(connection, 'txtWriteTurnEnded', guildId), components: [] });
@@ -234,7 +234,7 @@ export async function handleTurnActionConfirm(connection, interaction) {
     } else if (action === 'reassign') {
       const { activeTurn, prevWriter } = pending;
       log(`handleTurnActionConfirm: reassign confirmed by ${interaction.user.username} — story ${storyId} prevWriter="${prevWriter.discord_display_name}" (${prevWriter.story_writer_id}) currentWriter="${activeTurn.current_writer_name}"`, { show: true, guildName: interaction?.guild?.name });
-      const ended = await skipActiveTurn(connection, interaction.guild, activeTurn.turn_id, activeTurn.thread_id);
+      const ended = await skipActiveTurn(connection, interaction.guild, activeTurn.turn_id, activeTurn.thread_id, activeTurn.discord_user_id);
       if (!ended) {
         log(`handleTurnActionConfirm: reassign no-op — turn ${activeTurn.turn_id} already ended for story ${storyId}`, { show: true, guildName: interaction?.guild?.name });
         await interaction.editReply({ content: await getConfigValue(connection, 'txtWriteTurnEnded', guildId), components: [] });
