@@ -157,12 +157,12 @@ export async function generateStoryExport(connection, storyId, guildId, guild = 
   const cfg = await getConfigValue(connection, [
     ...ratingCodes.map(ratingLabelKey),
     ...warningOptions,
-    'txtExportCompletedLabel', 'txtExportUpdatedLabel',
+    'txtExportCompletedLabel', 'txtUpdated',
     'txtExportModeQuick', 'txtExportModeSlow', 'txtExportModeNormal',
     'txtExportLblDynamic', 'txtExportLblRating', 'txtExportLblWarnings',
     'txtExportLblRelationship', 'txtExportLblAdditionalRelationships',
     'txtExportLblCharacters', 'txtExportLblTags',
-    'txtExportLblStarted', 'txtExportLblWriters', 'txtExportLblExported',
+    'txtStarted', 'txtExportLblWriters', 'txtExportLblExported',
     'txtExportNoteBody', 'txtExportStatsLine', 'txtExportImageUnavailable',
     'cfgExportImageMaxBytes', 'cfgExportImageTotalBytes', 'cfgExportImageResizeWidth',
     'txtExportPlaceholderUser', 'txtExportPlaceholderChannel', 'txtExportPlaceholderRole',
@@ -190,7 +190,7 @@ export async function generateStoryExport(connection, storyId, guildId, guild = 
   const fmt = d => new Date(d).toISOString().slice(0, 10);
   const publishedDate = fmt(story.created_at);
   const isClosed = story.story_status === STORY_STATUS.CLOSED;
-  const secondDateLabel = isClosed ? cfg.txtExportCompletedLabel : cfg.txtExportUpdatedLabel;
+  const secondDateLabel = isClosed ? cfg.txtExportCompletedLabel : cfg.txtUpdated;
   const secondDate = isClosed && story.closed_at ? fmt(story.closed_at) : fmt(entries[entries.length - 1].created_at);
   // One instant for the in-file date and the filename, so they cannot disagree.
   const exportedAt = new Date();
@@ -319,7 +319,7 @@ export async function generateStoryExport(connection, storyId, guildId, guild = 
 <body>
   <div class="meta-block">
     <h1>${story.title}</h1>
-    <div class="meta-stats">${cfg.txtExportLblStarted}: ${publishedDate} &nbsp; ${secondDateLabel}: ${secondDate}</div>
+    <div class="meta-stats">${cfg.txtStarted}: ${publishedDate} &nbsp; ${secondDateLabel}: ${secondDate}</div>
     <div class="meta-stats">${replaceTemplateVariables(cfg.txtExportStatsLine, { story_num: story.guild_story_id, mode: modeLabel, turn_count: turnCount, word_count: wordCount.toLocaleString() })}</div>
     <div class="meta"><span class="meta-label">${cfg.txtExportLblWriters}: ${writersList}</span></div>
     ${ao3MetaLines}
