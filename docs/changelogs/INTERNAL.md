@@ -26,6 +26,17 @@ the thing you will search for later is the old name.
 
 ## Unreleased
 
+### Changed
+- **"Started", "Updated" and "Closed" are generic keys now.** The status post and the export
+  share `txtStarted` and `txtUpdated` (new, in `config_system.sql`), and the status post's Closed
+  field uses the existing `txtClosed`. No wording changes.
+
+### Removed
+- `lblStatusStarted`, `txtStatusFooterUpdated` (added in 3.12.1), `txtExportLblStarted`,
+  `txtExportUpdatedLabel` and `lblStatusClosed` -- each duplicated a simple word that now has
+  one generic key (CLAUDE.md "Reuse before you write"). Their DB rows are left behind unused,
+  since config sync does not delete keys.
+
 Open and deliberately not in 3.10.0 or 3.10.1: the emoji on the remaining 44 button labels,
 which stay as they are until there is a style plan -- see the `Create style_roadmap.md` section
 of `docs/TODO.md`.

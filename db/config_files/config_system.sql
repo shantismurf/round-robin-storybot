@@ -3,6 +3,8 @@ INSERT INTO config (config_key, config_value, language_code, guild_id) VALUES
 ('txtYes', 'Yes', 'en', 1),
 ('txtNo', 'No', 'en', 1),
 ('txtOr', 'or', 'en', 1),
+('txtStarted', 'Started', 'en', 1),
+('txtUpdated', 'Updated', 'en', 1),
 ('txtOn', 'On', 'en', 1),
 ('txtOff', 'Off', 'en', 1),
 ('txtNone', 'None', 'en', 1),

@@ -136,8 +136,8 @@ export async function updateStoryStatusMessage(connection, guild, storyId) {
       'txtStatusReminderSuffix', 'txtStatusNoEntries', 'txtStatusEntryStats',
       'lblStatusStatus', 'lblStatusMode', 'lblStatusWriterOrder',
       'lblStatusTurnLength', 'lblStatusWriters', 'lblStatusShowAuthors',
-      'lblStatusCurrentTurn', 'lblStatusNextWriter', 'lblStatusEntries', 'lblStatusWriterList', 'lblStatusInactiveHeading', 'lblStatusClosed',
-      'lblStatusStarted', 'txtStatusFooterUpdated',
+      'lblStatusCurrentTurn', 'lblStatusNextWriter', 'lblStatusEntries', 'lblStatusWriterList', 'lblStatusInactiveHeading',
+      'txtStarted', 'txtUpdated',
       'lblMetaRating', 'lblMetaMainRelationship', 'lblMetaOtherRelationships', 'lblMetaWarnings', 'lblMetaCharacters', 'lblMetaTags',
       'lblMetaDynamic', 'lblMetaGroundRules', 'cfgGroundRulesColor', 'cfgGroundRules', 'txtGroundRulesDefaultVocabulary',
       'txtStatusWriterListMore',
@@ -296,7 +296,7 @@ export async function updateStoryStatusMessage(connection, guild, storyId) {
       )
       // Discord renders the timestamp itself after the footer text ("Updated • Today at 9:41 AM"),
       // in each viewer's own time zone -- a <t:> token would not render in a footer.
-      .setFooter({ text: cfg.txtStatusFooterUpdated })
+      .setFooter({ text: cfg.txtUpdated })
       .setTimestamp();
 
     if (story.summary) embed.setDescription(story.summary);
@@ -309,10 +309,10 @@ export async function updateStoryStatusMessage(connection, guild, storyId) {
     // width, so Started opens a fresh row and Closed sits beside it. Started is hidden while a
     // story is Delayed -- created_at is not when it starts, and the Status box already says when.
     if (story.story_status !== STORY_STATUS.DELAYED && story.created_at) {
-      embed.addFields({ name: cfg.lblStatusStarted, value: discordTimestamp(new Date(story.created_at).getTime(), 'D'), inline: true });
+      embed.addFields({ name: cfg.txtStarted, value: discordTimestamp(new Date(story.created_at).getTime(), 'D'), inline: true });
     }
     if (story.story_status === STORY_STATUS.CLOSED && story.closed_at) {
-      embed.addFields({ name: cfg.lblStatusClosed, value: discordTimestamp(new Date(story.closed_at).getTime(), 'D'), inline: true });
+      embed.addFields({ name: cfg.txtClosed, value: discordTimestamp(new Date(story.closed_at).getTime(), 'D'), inline: true });
     }
 
     const activeThreadId = getActiveThreadId(story);
