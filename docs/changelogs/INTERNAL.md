@@ -30,6 +30,21 @@ Open and deliberately not in 3.10.0 or 3.10.1: the emoji on the remaining 44 but
 which stay as they are until there is a style plan -- see the `Create style_roadmap.md` section
 of `docs/TODO.md`.
 
+## 3.12.1 — 2026-11-26
+
+Provenance: written alongside the work.
+
+### Added
+- **Status post shows when the story started.** A `Started` field (`lblStatusStarted`, from
+  `story.created_at`) sits on the last row, with `Closed` beside it once a story is closed.
+  Hidden while a story is Delayed, since `created_at` is not its start and the Status box
+  already says when it starts.
+- **Status post footer is labelled.** The bare update timestamp now reads "Updated • <time>"
+  (`txtStatusFooterUpdated`).
+
+### Changed
+- The Closed field's date is built with `discordTimestamp()` instead of an inline `<t:...:D>`.
+
 ## 3.12.0 — 2026-11-25
 
 Provenance: written alongside the work. Plan: [PLAN-stored-word-counts.md](../plans/PLAN-stored-word-counts.md).

@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
-import { getConfigValue, log, replaceTemplateVariables, trimTrailingEmoji } from '../utilities.js';
+import { getConfigValue, log, replaceTemplateVariables, trimTrailingEmoji, discordTimestamp } from '../utilities.js';
 import { ratingCodes, ratingBadgeKey, warningOptions, dynamicOptions, formatWarnings, isStoryJoinable } from './_metadata.js';
 import { resolveGroundRules, parseGroundRulesText, effectiveGroundRulesText, buildGroundRulesEmbed } from './_groundRules.js';
 import { getActiveThreadId } from '../storybot.js';
@@ -137,6 +137,7 @@ export async function updateStoryStatusMessage(connection, guild, storyId) {
       'lblStatusStatus', 'lblStatusMode', 'lblStatusWriterOrder',
       'lblStatusTurnLength', 'lblStatusWriters', 'lblStatusShowAuthors',
       'lblStatusCurrentTurn', 'lblStatusNextWriter', 'lblStatusEntries', 'lblStatusWriterList', 'lblStatusInactiveHeading', 'lblStatusClosed',
+      'lblStatusStarted', 'txtStatusFooterUpdated',
       'lblMetaRating', 'lblMetaMainRelationship', 'lblMetaOtherRelationships', 'lblMetaWarnings', 'lblMetaCharacters', 'lblMetaTags',
       'lblMetaDynamic', 'lblMetaGroundRules', 'cfgGroundRulesColor', 'cfgGroundRules', 'txtGroundRulesDefaultVocabulary',
       'txtStatusWriterListMore',
@@ -293,6 +294,9 @@ export async function updateStoryStatusMessage(connection, guild, storyId) {
         ...metadataFields,
         { name: cfg.lblStatusWriterList,  value: writerListValue,                                                             inline: false }
       )
+      // Discord renders the timestamp itself after the footer text ("Updated • Today at 9:41 AM"),
+      // in each viewer's own time zone -- a <t:> token would not render in a footer.
+      .setFooter({ text: cfg.txtStatusFooterUpdated })
       .setTimestamp();
 
     if (story.summary) embed.setDescription(story.summary);
@@ -301,9 +305,14 @@ export async function updateStoryStatusMessage(connection, guild, storyId) {
     // field they were a quoted comma list of labels and the descriptions were never shown at all.
     const embeds = [embed];
     if (groundRules.length) embeds.push(buildGroundRulesEmbed(cfg, groundRules));
+    // Started and Closed share the last row (LeeAnn, 2026-11-26): the writer list above is full
+    // width, so Started opens a fresh row and Closed sits beside it. Started is hidden while a
+    // story is Delayed -- created_at is not when it starts, and the Status box already says when.
+    if (story.story_status !== STORY_STATUS.DELAYED && story.created_at) {
+      embed.addFields({ name: cfg.lblStatusStarted, value: discordTimestamp(new Date(story.created_at).getTime(), 'D'), inline: true });
+    }
     if (story.story_status === STORY_STATUS.CLOSED && story.closed_at) {
-      const closedTimestamp = `<t:${Math.floor(new Date(story.closed_at).getTime() / 1000)}:D>`;
-      embed.addFields({ name: cfg.lblStatusClosed, value: closedTimestamp, inline: true });
+      embed.addFields({ name: cfg.lblStatusClosed, value: discordTimestamp(new Date(story.closed_at).getTime(), 'D'), inline: true });
     }
 
     const activeThreadId = getActiveThreadId(story);
