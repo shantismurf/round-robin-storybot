@@ -12,7 +12,7 @@ import fs from 'fs';
 import { formattedDate } from './utilities.js';
 import path from 'path';
 
-function parseConfigEntries(sql) {
+export function parseConfigEntries(sql) {
   const entries = [];
   // Match each VALUES row: ('key', 'value', 'lang', guild_id)
   // Handles both '' (SQL standard) and \' (MySQL extension) escapes inside strings
@@ -28,21 +28,42 @@ function parseConfigEntries(sql) {
   }
   return entries;
 }
+// Every row declared across db/config_files/*.sql, keyed by file. Shared with helper/cleanup.js.
+export function readConfigFileEntries(configDir = './db/config_files') {
+  const files = fs.readdirSync(configDir).filter(f => f.endsWith('.sql'));
+  const fileEntriesByFile = new Map();
+  for (const file of files) {
+    fileEntriesByFile.set(file, parseConfigEntries(fs.readFileSync(path.join(configDir, file), 'utf8')));
+  }
+  return fileEntriesByFile;
+}
+
+// A cfg setting a server saved for itself (any guild but 1) never appears in a config file, so
+// it isn't an orphan. Leftover cfg rows on the guild 1 default are still reported.
+export function isServerSavedSetting(row) {
+  return String(row.guild_id) !== '1' && row.config_key.startsWith('cfg');
+}
+
+// Which of these keys are still declared in a config file, as key -> file. helper/cleanup.js
+// uses this so a live key that lands on its delete list by mistake is skipped, not deleted.
+export function findKeysInConfigFiles(keys, fileEntriesByFile) {
+  const found = new Map();
+  for (const [file, entries] of fileEntriesByFile) {
+    for (const entry of entries) {
+      if (keys.includes(entry.config_key) && !found.has(entry.config_key)) found.set(entry.config_key, file);
+    }
+  }
+  return found;
+}
+
 export async function syncConfig(connection) {
   try {
     // Point to the folder where the config files live
     const configDir = './db/config_files';
-    const files = fs.readdirSync(configDir).filter(f => f.endsWith('.sql'));
-
-    // Parse per-file so we can track which files contributed changes
-    const fileEntriesByFile = new Map();
+    const fileEntriesByFile = readConfigFileEntries(configDir);
+    const files = [...fileEntriesByFile.keys()];
     let allFileEntries = [];
-    for (const file of files) {
-      const content = fs.readFileSync(path.join(configDir, file), 'utf8');
-      const entries = parseConfigEntries(content);
-      fileEntriesByFile.set(file, entries);
-      allFileEntries = allFileEntries.concat(entries);
-    }
+    for (const entries of fileEntriesByFile.values()) allFileEntries = allFileEntries.concat(entries);
     const fileEntries = allFileEntries;
 
     if (fileEntries.length === 0) {
@@ -147,7 +168,7 @@ export async function syncConfig(connection) {
 
     // Report anything in the DB not in the file
     const fileKeys = new Set(fileEntries.map(e => `${e.guild_id}:${e.config_key}`));
-    const extras = dbRows.filter(r => !fileKeys.has(`${r.guild_id}:${r.config_key}`));
+    const extras = dbRows.filter(r => !fileKeys.has(`${r.guild_id}:${r.config_key}`) && !isServerSavedSetting(r));
     if (extras.length > 0) {
       console.log(`\nNote: ${extras.length} key(s) in DB not found in the config files (will not be touched):`);
       extras.forEach(r => console.log(`  '${r.config_key}',`));
