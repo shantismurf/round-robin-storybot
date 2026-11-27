@@ -27,6 +27,12 @@ the thing you will search for later is the old name.
 ## Unreleased
 
 ### Changed
+- **Orphan cleanup is back on.** `ORPHAN_CLEANUP_PAUSED` in `utilities.js` is `false` again (paused
+  2026-11-13 for the bot application move). A server the bot isn't in has its open stories closed
+  and jobs cancelled, at startup, on GuildDelete, or when a job hits Unknown Guild.
+- **Reinvite links point at the new application (1575977902590267527).** The previous one,
+  1570551318202949743, was deleted by accident 2026-11-27. Updated in `broadcast.js` and
+  `helper/adminmsg.js`. The archived Hub post in `public/` keeps the old link as sent.
 - **"Started", "Updated" and "Closed" are generic keys now.** The status post and the export
   share `txtStarted` and `txtUpdated` (new, in `config_system.sql`), and the status post's Closed
   field uses the existing `txtClosed`. No wording changes.
