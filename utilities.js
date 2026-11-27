@@ -387,12 +387,11 @@ export async function getSetupRequiredMessage(connection, interaction) {
   return replaceTemplateVariables(cfg[msgKey], { hubInviteUrl: cfg.cfgHubInviteUrl });
 }
 
-// Paused for the move to a new bot application (switch scheduled 2026-11-20). While two bot
-// accounts overlap, "this bot can't see the guild" does not mean the server left: removing the
+// Paused 2026-11-13 for the move to a new bot application, turned back on 2026-11-27. While two
+// bot accounts overlap, "this bot can't see the guild" does not mean the server left: removing the
 // old bot, or a server that hasn't invited the new one yet, both look exactly like an uninstall.
-// While true, closeOrphanedGuildStories only logs. Set back to false once every server that is
-// staying has the new bot (see docs/TODO.md).
-export const ORPHAN_CLEANUP_PAUSED = true;
+// While true, closeOrphanedGuildStories only logs. Set it to true again before any future move.
+export const ORPHAN_CLEANUP_PAUSED = false;
 
 /**
  * Mark every active/paused story in a guild as closed and cancel its pending jobs.

@@ -63,7 +63,7 @@ It's been a long time between posts, so this one covers a lot! In addition to al
 # ⚠️ New Bot Install ⚠️ 
 > **Due to administrative issues, the Round Robin Storybot must be reinvited to all servers using this link:**
 > 
-> https://discord.com/oauth2/authorize?client_id=1570551318202949743&permissions=2252195219237888&scope=bot%20applications.commands
+> https://discord.com/oauth2/authorize?client_id=1575977902590267527&permissions=2252195219237888&scope=bot%20applications.commands
 > 
 > All existing data will be intact, we just need to switch over to a new app ID. If your story channels are private, open \`/storyadmin setup\` and press Save once after reinstall.
 > 

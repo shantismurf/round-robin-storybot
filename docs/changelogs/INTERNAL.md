@@ -27,6 +27,18 @@ the thing you will search for later is the old name.
 ## Unreleased
 
 ### Changed
+- **Orphan cleanup is back on.** `ORPHAN_CLEANUP_PAUSED` in `utilities.js` is `false` again (paused
+  2026-11-13 for the bot application move). A server the bot isn't in has its open stories closed
+  and jobs cancelled, at startup, on GuildDelete, or when a job hits Unknown Guild.
+- **Reinvite links point at the new application (1575977902590267527).** The previous one,
+  1570551318202949743, was deleted by accident 2026-11-27. Updated in `broadcast.js` and
+  `helper/adminmsg.js`. The archived Hub post in `public/` keeps the old link as sent.
+- **Config orphan report skips per-server settings.** sync-config's "in DB not found in the
+  config files" note no longer lists `cfg` rows saved for a guild other than 1 (`cfgGroundRules`,
+  `cfgRatingsFilter`, `cfgStarterStoryId` showed up once per server). Leftover `cfg` rows on the
+  guild 1 default are still listed.
+- **`helper/cleanup.js` won't delete a live key.** It reads `db/config_files/*.sql` first and skips,
+  by name, any listed key still declared there. 28 unused keys added to `ORPHAN_KEYS`.
 - **"Started", "Updated" and "Closed" are generic keys now.** The status post and the export
   share `txtStarted` and `txtUpdated` (new, in `config_system.sql`), and the status post's Closed
   field uses the existing `txtClosed`. No wording changes.

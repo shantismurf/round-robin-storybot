@@ -2,11 +2,13 @@
  * cleanup.js
  * Deletes config keys from the DB that no longer exist in any config_files SQL file.
  * Safe to run multiple times — only deletes keys explicitly listed below.
+ * A listed key that is still declared in a config file is skipped and named, not deleted.
  *
  * Usage: from project root, run: node helper/cleanup.js
  */
 
 import { DB, loadConfig, formattedDate } from '../utilities.js';
+import { readConfigFileEntries, findKeysInConfigFiles } from '../sync-config.js';
 
 const ORPHAN_KEYS = [
 'lblHideTurnThreads',
@@ -47,7 +49,36 @@ const ORPHAN_KEYS = [
 'lblMainPairing',
 'lblOtherRelationships',
 'lblCharacters',
-'lblDynamic'
+'lblDynamic',
+// Added 2026-11-27, checked against the code: nothing reads these.
+'btnManageUserClose',
+'txtSetupModalSaveWarning',
+'txtManageEntriesSelectWriter',
+'txtManageEntriesFilterModal',
+'lblManageEntriesFilterField',
+'txtManageEntriesFilterPlaceholder',
+'txtManageEntriesNoWriters',
+'txtManageEntriesNoMatch',
+'txtManageEntriesPreviewTitle',
+'txtManageEntriesPreviewFooter',
+'txtEditRestoreConfirmSingle',
+'txtManageUserPanelDesc',
+'txtManageEntriesMoreWriters',
+'txtManageEntriesWriterPlaceholder',
+'txtManageEntriesContinued',
+'lblStatusClosed',
+'txtManageWarningSelectInstructions',
+'lblHelp2WritingYourTurn',
+'lblHelp2WriteTranslations',
+'txtHelp2WriteTranslations',
+'txtExportUpdatedLabel',
+'txtExportLblStarted',
+'txtManageSaveWarning',
+'lblManageUnsavedChangesTitle',
+'txtManageUnsavedChangesBody',
+'txtPanelTabHelper',
+'lblHelp2SectionBreak',
+'txtHelp2SectionBreak'
 ];
 
 async function main() {
@@ -56,10 +87,20 @@ async function main() {
   const connection = await db.connect();
 
   try {
-    const placeholders = ORPHAN_KEYS.map(() => '?').join(',');
+    const stillInFiles = findKeysInConfigFiles(ORPHAN_KEYS, readConfigFileEntries());
+    for (const [key, file] of stillInFiles) {
+      console.log(`${formattedDate()}: Skipping ${key}: it is still declared in db/config_files/${file}`);
+    }
+    const keysToDelete = ORPHAN_KEYS.filter(k => !stillInFiles.has(k));
+    if (keysToDelete.length === 0) {
+      console.log(`${formattedDate()}: Every listed key is still in a config file — nothing to delete.`);
+      return;
+    }
+
+    const placeholders = keysToDelete.map(() => '?').join(',');
     const [existing] = await connection.execute(
       `SELECT config_key, guild_id FROM config WHERE config_key IN (${placeholders})`,
-      ORPHAN_KEYS
+      keysToDelete
     );
 
     if (existing.length === 0) {
@@ -74,7 +115,7 @@ async function main() {
 
     const [result] = await connection.execute(
       `DELETE FROM config WHERE config_key IN (${placeholders})`,
-      ORPHAN_KEYS
+      keysToDelete
     );
     console.log(`${formattedDate()}: Deleted ${result.affectedRows} row(s).`);
   } finally {
